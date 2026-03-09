@@ -25,6 +25,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: AnyClaw-Server/go.mod
+          cache-dependency-path: AnyClaw-Server/go.sum
 
       - name: Generate
         run: go generate ./...
@@ -50,6 +51,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: AnyClaw-API/go.mod
+          cache-dependency-path: AnyClaw-API/go.sum
 
       - name: Generate go.sum
         run: go mod tidy
