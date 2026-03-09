@@ -9,9 +9,6 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
-env:
-  GHCR: ghcr.io
-
 jobs:
   build-server:
     name: Build AnyClaw-Server
@@ -98,17 +95,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v3
-
-      - uses: docker/login-action@v3
-        with:
-          registry: ${{ env.GHCR }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: docker/login-action@v3
         with:
@@ -123,8 +113,6 @@ jobs:
           file: ./AnyClaw-Server/docker/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ${{ env.GHCR }}/${{ github.repository_owner }}/anyclaw-server:latest
-            ${{ env.GHCR }}/${{ github.repository_owner }}/anyclaw-server:${{ github.sha }}
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/anyclaw-server:latest
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/anyclaw-server:${{ github.sha }}
           cache-from: type=gha
@@ -137,17 +125,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v3
-
-      - uses: docker/login-action@v3
-        with:
-          registry: ${{ env.GHCR }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: docker/login-action@v3
         with:
@@ -162,10 +143,6 @@ jobs:
           file: ./AnyClaw-API/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ${{ env.GHCR }}/${{ github.repository_owner }}/anyclaw-api:latest
-            ${{ env.GHCR }}/${{ github.repository_owner }}/anyclaw-api:${{ github.sha }}
-            ${{ env.GHCR }}/${{ github.repository_owner }}/anyclaw-web:latest
-            ${{ env.GHCR }}/${{ github.repository_owner }}/anyclaw-web:${{ github.sha }}
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/anyclaw-api:latest
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/anyclaw-api:${{ github.sha }}
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/anyclaw-web:latest
