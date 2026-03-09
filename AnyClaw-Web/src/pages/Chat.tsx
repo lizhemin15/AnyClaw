@@ -86,13 +86,18 @@ export default function Chat() {
       }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (e) => {
       setConnected(false);
-      if (!error) setError('Connection closed');
+      if (!error) {
+        const msg = e.code === 1006 || e.code === 1011
+          ? '连接失败，宠物可能仍在启动中，请稍后重试'
+          : '连接已断开';
+        setError(msg);
+      }
     };
 
     ws.onerror = () => {
-      setError('WebSocket error');
+      setError('连接失败，请检查网络或稍后重试');
     };
 
     return () => {

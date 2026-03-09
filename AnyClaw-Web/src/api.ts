@@ -100,11 +100,18 @@ export async function createInstance(name: string): Promise<Instance> {
 }
 
 export function getWebSocketUrl(instanceId: number): string {
-  const base = API_BASE
-    ? API_BASE.replace(/^http/, 'ws')
-    : (typeof window !== 'undefined'
-        ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
-        : 'ws://localhost:8080');
+  let base: string;
+  if (API_BASE) {
+    base = API_BASE.replace(/^http/, 'ws');
+    // 页面为 HTTPS 时使用 wss，避免混合内容被拦截
+    if (typeof window !== 'undefined' && window.location.protocol === 'https:' && API_BASE.startsWith('http://')) {
+      base = API_BASE.replace(/^http:\/\//, 'wss://');
+    }
+  } else {
+    base = typeof window !== 'undefined'
+      ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
+      : 'ws://localhost:8080';
+  }
   const token = getToken();
   const url = `${base}/instances/${instanceId}/ws`;
   return token ? `${url}?token=${encodeURIComponent(token)}` : url;
