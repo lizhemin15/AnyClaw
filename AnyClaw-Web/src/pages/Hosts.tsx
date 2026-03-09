@@ -235,8 +235,8 @@ export default function Hosts() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">SSH 认证方式</label>
-                <div className="flex gap-4 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">SSH 认证</label>
+                <div className="flex gap-6 mb-3 p-2 bg-slate-50 rounded-lg">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"
@@ -264,7 +264,7 @@ export default function Hosts() {
                     value={form.ssh_password || ''}
                     onChange={(e) => setForm((f) => ({ ...f, ssh_password: e.target.value }))}
                     className="w-full px-4 py-3 border border-slate-300 rounded-xl"
-                    placeholder="SSH 密码"
+                    placeholder="输入 SSH 密码"
                     required={modal === 'add'}
                   />
                 ) : (
