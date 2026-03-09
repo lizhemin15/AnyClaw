@@ -65,8 +65,8 @@ func runSetupMode(cfgPath string, cfg *config.Config) {
 	r.Post("/api/setup/admin", setupHandler.CreateAdmin)
 
 	if h, err := web.SPAHandler(); err == nil {
-		r.NotFound(h)
-		r.MethodNotAllowed(h)
+		r.NotFound(func(w http.ResponseWriter, r *http.Request) { h.ServeHTTP(w, r) })
+		r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) { h.ServeHTTP(w, r) })
 	}
 
 	addr := ":" + fmt.Sprintf("%d", cfg.Port)
@@ -137,8 +137,8 @@ func runApp(cfg *config.Config, database *db.DB) {
 	r.HandleFunc("/llm/v1/chat/completions", proxy.HandleChatCompletions)
 
 	if h, err := web.SPAHandler(); err == nil {
-		r.NotFound(h)
-		r.MethodNotAllowed(h)
+		r.NotFound(func(w http.ResponseWriter, r *http.Request) { h.ServeHTTP(w, r) })
+		r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) { h.ServeHTTP(w, r) })
 	}
 
 	addr := ":" + fmt.Sprintf("%d", cfg.Port)
