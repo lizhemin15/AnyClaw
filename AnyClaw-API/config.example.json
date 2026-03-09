@@ -1,0 +1,29 @@
+{
+  "port": 8080,
+  "db_path": "anyclaw.db",
+  "jwt_secret": "change-me-in-production",
+  "api_url": "http://localhost:8080",
+  "docker_image": "anyclaw/anyclaw",
+  "key_pool": {
+    "openai": {
+      "api_key": "sk-xxx",
+      "api_base": "https://api.openai.com/v1"
+    },
+    "anthropic": {
+      "api_key": "sk-ant-xxx",
+      "api_base": "https://api.anthropic.com/v1"
+    },
+    "openrouter": {
+      "api_key": "",
+      "api_base": "https://openrouter.ai/api/v1"
+    }
+  },
+  "instance_map": {
+    "tokens": {
+      "instance-token-abc123": {
+        "instance_id": "inst-001",
+        "user_id": "user-001"
+      }
+    }
+  }
+}

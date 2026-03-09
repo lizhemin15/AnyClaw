@@ -1,0 +1,147 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"log"
+	"net/http"
+
+	"github.com/anyclaw/anyclaw-api/internal/auth"
+	"github.com/anyclaw/anyclaw-api/internal/config"
+	"github.com/anyclaw/anyclaw-api/internal/db"
+	"github.com/anyclaw/anyclaw-api/internal/hosts"
+	"github.com/anyclaw/anyclaw-api/internal/instances"
+	"github.com/anyclaw/anyclaw-api/internal/llm"
+	"github.com/anyclaw/anyclaw-api/internal/scheduler"
+	"github.com/anyclaw/anyclaw-api/internal/setup"
+	"github.com/anyclaw/anyclaw-api/internal/web"
+	"github.com/anyclaw/anyclaw-api/internal/ws"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+)
+
+func main() {
+	cfgPath := flag.String("config", "", "config file path")
+	flag.Parse()
+
+	cfg, err := config.Load(*cfgPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Setup mode: no DB configured (config path for save)
+	configPath := *cfgPath
+	if configPath == "" {
+		configPath = config.ConfigPath()
+	}
+	if cfg.DBDSN == "" {
+		runSetupMode(configPath, cfg)
+		return
+	}
+
+	database, err := db.Open(cfg.DBDSN)
+	if err != nil {
+		log.Printf("[db] connect failed: %v - running in setup mode", err)
+		runSetupMode(configPath, cfg)
+		return
+	}
+	defer database.Close()
+
+	runApp(cfg, database)
+}
+
+func runSetupMode(cfgPath string, cfg *config.Config) {
+	setupHandler := setup.New(cfgPath)
+	r := chi.NewRouter()
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+
+	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+	r.Get("/api/setup/status", setupHandler.Status)
+	r.Post("/api/setup/db", setupHandler.ConfigureDB)
+	r.Post("/api/setup/admin", setupHandler.CreateAdmin)
+
+	if h, err := web.SPAHandler(); err == nil {
+		r.NotFound(h)
+		r.MethodNotAllowed(h)
+	}
+
+	addr := ":" + fmt.Sprintf("%d", cfg.Port)
+	log.Printf("AnyClaw setup mode on %s - configure database at /setup", addr)
+	log.Fatal(http.ListenAndServe(addr, r))
+}
+
+func runApp(cfg *config.Config, database *db.DB) {
+	authSvc := auth.New(database, cfg.JWTSecret)
+	apiURL := cfg.APIURL
+	if apiURL == "" {
+		apiURL = fmt.Sprintf("http://localhost:%d", cfg.Port)
+	}
+	sched := scheduler.New(apiURL, cfg.DockerImage, database)
+	instHandler := instances.New(database, sched, apiURL)
+	hostChecker := scheduler.HostChecker{}
+	hostHandler := hosts.New(database, hostChecker)
+
+	wsHub := ws.NewHub()
+	wsHandler := ws.NewHandler(database, wsHub)
+
+	proxy := llm.New(cfg, database)
+
+	r := chi.NewRouter()
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+
+	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+	r.Get("/api/setup/status", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"configured":true}`))
+	})
+
+	r.Route("/auth", func(r chi.Router) {
+		r.Post("/register", authSvc.HandleRegister)
+		r.Post("/login", authSvc.HandleLogin)
+	})
+
+	r.Route("/me", func(r chi.Router) {
+		r.Use(authSvc.Middleware)
+		r.Get("/", authSvc.HandleMe)
+	})
+
+	r.Route("/instances", func(r chi.Router) {
+		r.Use(authSvc.Middleware)
+		r.Get("/", instHandler.List)
+		r.Post("/", instHandler.Create)
+		r.Get("/{id}/ws", wsHandler.HandleUserWS)
+		r.Get("/{id}", instHandler.Get)
+		r.Delete("/{id}", instHandler.Delete)
+	})
+
+	r.Route("/admin/hosts", func(r chi.Router) {
+		r.Use(authSvc.AdminMiddleware)
+		r.Get("/", hostHandler.List)
+		r.Post("/", hostHandler.Create)
+		r.Get("/{id}", hostHandler.Get)
+		r.Put("/{id}", hostHandler.Update)
+		r.Delete("/{id}", hostHandler.Delete)
+		r.Post("/{id}/check", hostHandler.CheckStatus)
+	})
+
+	r.Get("/containers/connect", wsHandler.HandleContainerConnect)
+
+	r.HandleFunc("/llm/v1/chat/completions", proxy.HandleChatCompletions)
+
+	if h, err := web.SPAHandler(); err == nil {
+		r.NotFound(h)
+		r.MethodNotAllowed(h)
+	}
+
+	addr := ":" + fmt.Sprintf("%d", cfg.Port)
+	log.Printf("AnyClaw-API listening on %s", addr)
+	log.Fatal(http.ListenAndServe(addr, r))
+}

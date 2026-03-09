@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 移动端优先：安全区域、触控优化 */
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
+  body {
+    @apply antialiased;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    padding-left: env(safe-area-inset-left, 0);
+    padding-right: env(safe-area-inset-right, 0);
+    padding-top: env(safe-area-inset-top, 0);
+  }
+  /* 输入框至少 16px 防止 iOS 自动缩放 */
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
+/* 触控目标最小 44px */
+@layer components {
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+  }
+}

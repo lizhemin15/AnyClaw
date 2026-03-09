@@ -1,0 +1,81 @@
+# 云端编译：Server / API / Web 全部在 GitHub Actions 中构建，无需本地环境
+name: Build All
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build-server:
+    name: Build AnyClaw-Server
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: AnyClaw-Server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: AnyClaw-Server/go.mod
+
+      - name: Build
+        run: go build -o /tmp/picoclaw ./cmd/picoclaw
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anyclaw-server
+          path: /tmp/picoclaw
+
+  build-api:
+    name: Build AnyClaw-API
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: AnyClaw-API
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: AnyClaw-API/go.mod
+
+      - name: Build
+        run: go build -o /tmp/anyclaw-api ./cmd/api
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anyclaw-api
+          path: /tmp/anyclaw-api
+
+  build-web:
+    name: Build AnyClaw-Web
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: AnyClaw-Web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL || 'http://localhost:8080' }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anyclaw-web
+          path: AnyClaw-Web/dist
