@@ -91,6 +91,10 @@ func (d *DB) migrate() error {
 	if _, err := d.Exec("ALTER TABLE instances ADD COLUMN host_id VARCHAR(255)"); err != nil && !isDuplicateColumn(err) {
 		log.Printf("[db] alter instances: %v", err)
 	}
+	// Add ssh_password for password-based auth
+	if _, err := d.Exec("ALTER TABLE hosts ADD COLUMN ssh_password TEXT"); err != nil && !isDuplicateColumn(err) {
+		log.Printf("[db] alter hosts: %v", err)
+	}
 	return nil
 }
 

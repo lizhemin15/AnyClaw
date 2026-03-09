@@ -129,7 +129,8 @@ export interface CreateHostRequest {
   addr: string;
   ssh_port?: number;
   ssh_user: string;
-  ssh_key: string;
+  ssh_key?: string;
+  ssh_password?: string;
   docker_image?: string;
   enabled?: boolean;
 }
@@ -140,6 +141,7 @@ export interface UpdateHostRequest {
   ssh_port?: number;
   ssh_user: string;
   ssh_key?: string;
+  ssh_password?: string;
   docker_image?: string;
   enabled?: boolean;
 }
@@ -152,7 +154,8 @@ export async function createHost(data: CreateHostRequest): Promise<Host> {
       addr: data.addr,
       ssh_port: data.ssh_port ?? 22,
       ssh_user: data.ssh_user,
-      ssh_key: data.ssh_key,
+      ssh_key: data.ssh_key || '',
+      ssh_password: data.ssh_password || '',
       docker_image: data.docker_image || '',
       enabled: data.enabled ?? true,
     }),
@@ -168,6 +171,7 @@ export async function updateHost(id: string, data: UpdateHostRequest): Promise<H
       ssh_port: data.ssh_port ?? 22,
       ssh_user: data.ssh_user,
       ssh_key: data.ssh_key || '',
+      ssh_password: data.ssh_password || '',
       docker_image: data.docker_image || '',
       enabled: data.enabled ?? true,
     }),

@@ -15,12 +15,14 @@ export default function Hosts() {
   const [error, setError] = useState('')
   const [modal, setModal] = useState<'add' | 'edit' | null>(null)
   const [editing, setEditing] = useState<Host | null>(null)
+  const [authType, setAuthType] = useState<'key' | 'password'>('password')
   const [form, setForm] = useState<CreateHostRequest & { id?: string }>({
     name: '',
     addr: '',
     ssh_port: 22,
     ssh_user: '',
     ssh_key: '',
+    ssh_password: '',
     docker_image: '',
     enabled: true,
   })
@@ -46,24 +48,34 @@ export default function Hosts() {
       setError('name, addr, ssh_user required')
       return
     }
-    if (modal === 'add' && !form.ssh_key.trim()) {
-      setError('ssh_key required for new host')
-      return
+    if (modal === 'add') {
+      const hasKey = authType === 'key' && form.ssh_key?.trim()
+      const hasPass = authType === 'password' && form.ssh_password?.trim()
+      if (!hasKey && !hasPass) {
+        setError(authType === 'key' ? '请填写 SSH 私钥' : '请填写 SSH 密码')
+        return
+      }
     }
     setSubmitting(true)
     setError('')
     try {
       if (modal === 'add') {
-        await createHost(form)
+        await createHost({
+          ...form,
+          ssh_key: authType === 'key' ? (form.ssh_key || '') : '',
+          ssh_password: authType === 'password' ? (form.ssh_password || '') : '',
+        })
       } else if (editing) {
         await updateHost(editing.id, {
           ...form,
-          ssh_key: form.ssh_key || undefined,
+          ssh_key: authType === 'key' ? (form.ssh_key || '') : '',
+          ssh_password: authType === 'password' ? (form.ssh_password || '') : '',
         })
       }
       setModal(null)
       setEditing(null)
-      setForm({ name: '', addr: '', ssh_port: 22, ssh_user: '', ssh_key: '', docker_image: '', enabled: true })
+      setAuthType('password')
+      setForm({ name: '', addr: '', ssh_port: 22, ssh_user: '', ssh_key: '', ssh_password: '', docker_image: '', enabled: true })
       loadHosts()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save')
@@ -102,6 +114,7 @@ export default function Hosts() {
       ssh_port: h.ssh_port,
       ssh_user: h.ssh_user,
       ssh_key: '',
+      ssh_password: '',
       docker_image: h.docker_image || '',
       enabled: h.enabled,
     })
@@ -119,7 +132,8 @@ export default function Hosts() {
           onClick={() => {
             setModal('add')
             setEditing(null)
-            setForm({ name: '', addr: '', ssh_port: 22, ssh_user: '', ssh_key: '', docker_image: '', enabled: true })
+            setAuthType('password')
+            setForm({ name: '', addr: '', ssh_port: 22, ssh_user: '', ssh_key: '', ssh_password: '', docker_image: '', enabled: true })
           }}
           className="w-full sm:w-auto px-6 py-3 bg-slate-800 text-white rounded-xl active:bg-slate-700 min-h-[48px] touch-target"
         >
@@ -221,17 +235,51 @@ export default function Hosts() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  SSH 私钥 {modal === 'edit' && '（留空则保留）'}
-                </label>
-                <textarea
-                  value={form.ssh_key}
-                  onChange={(e) => setForm((f) => ({ ...f, ssh_key: e.target.value }))}
-                  className="w-full px-4 py-3 border border-slate-300 rounded-xl font-mono"
-                  rows={4}
-                  placeholder="-----BEGIN ..."
-                  required={modal === 'add'}
-                />
+                <label className="block text-sm font-medium text-slate-700 mb-2">SSH 认证方式</label>
+                <div className="flex gap-4 mb-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="authType"
+                      checked={authType === 'password'}
+                      onChange={() => setAuthType('password')}
+                      className="w-4 h-4"
+                    />
+                    <span>账号密码</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="authType"
+                      checked={authType === 'key'}
+                      onChange={() => setAuthType('key')}
+                      className="w-4 h-4"
+                    />
+                    <span>私钥</span>
+                  </label>
+                </div>
+                {authType === 'password' ? (
+                  <input
+                    type="password"
+                    value={form.ssh_password || ''}
+                    onChange={(e) => setForm((f) => ({ ...f, ssh_password: e.target.value }))}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-xl"
+                    placeholder="SSH 密码"
+                    required={modal === 'add'}
+                  />
+                ) : (
+                  <textarea
+                    value={form.ssh_key || ''}
+                    onChange={(e) => setForm((f) => ({ ...f, ssh_key: e.target.value }))}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-xl font-mono"
+                    rows={4}
+                    placeholder="-----BEGIN ..."
+                    required={modal === 'add'}
+                  />
+                )}
+                {modal === 'edit' && (
+                  <p className="text-xs text-slate-500 mt-1">留空则保留原有认证信息</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Docker 镜像（可选）</label>

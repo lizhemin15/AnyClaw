@@ -29,6 +29,7 @@ type CreateRequest struct {
 	SSHPort     int    `json:"ssh_port"`
 	SSHUser     string `json:"ssh_user"`
 	SSHKey      string `json:"ssh_key"`
+	SSHPassword string `json:"ssh_password"`
 	DockerImage string `json:"docker_image"`
 	Enabled     bool   `json:"enabled"`
 }
@@ -38,7 +39,8 @@ type UpdateRequest struct {
 	Addr        string `json:"addr"`
 	SSHPort     int    `json:"ssh_port"`
 	SSHUser     string `json:"ssh_user"`
-	SSHKey      string `json:"ssh_key"` // empty = keep existing
+	SSHKey      string `json:"ssh_key"`      // empty = keep existing
+	SSHPassword string `json:"ssh_password"` // empty = keep existing
 	DockerImage string `json:"docker_image"`
 	Enabled     bool   `json:"enabled"`
 }
@@ -65,8 +67,12 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	req.Name = strings.TrimSpace(req.Name)
 	req.Addr = strings.TrimSpace(req.Addr)
 	req.SSHUser = strings.TrimSpace(req.SSHUser)
-	if req.Name == "" || req.Addr == "" || req.SSHUser == "" || req.SSHKey == "" {
-		http.Error(w, `{"error":"name, addr, ssh_user, ssh_key required"}`, http.StatusBadRequest)
+	if req.Name == "" || req.Addr == "" || req.SSHUser == "" {
+		http.Error(w, `{"error":"name, addr, ssh_user required"}`, http.StatusBadRequest)
+		return
+	}
+	if req.SSHKey == "" && req.SSHPassword == "" {
+		http.Error(w, `{"error":"ssh_key or ssh_password required"}`, http.StatusBadRequest)
 		return
 	}
 	if req.SSHPort <= 0 {
@@ -79,6 +85,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		SSHPort:     req.SSHPort,
 		SSHUser:     req.SSHUser,
 		SSHKey:      req.SSHKey,
+		SSHPassword: req.SSHPassword,
 		DockerImage: req.DockerImage,
 		Enabled:     req.Enabled,
 		Status:      "unknown",
@@ -123,8 +130,14 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.SSHPort > 0 {
 		host.SSHPort = req.SSHPort
 	}
-	if req.SSHKey != "" {
-		host.SSHKey = req.SSHKey
+	if req.SSHKey != "" || req.SSHPassword != "" {
+		if req.SSHKey != "" {
+			host.SSHKey = req.SSHKey
+			host.SSHPassword = ""
+		} else {
+			host.SSHPassword = req.SSHPassword
+			host.SSHKey = ""
+		}
 		if err := h.db.UpdateHost(host); err != nil {
 			http.Error(w, `{"error":"failed to update"}`, http.StatusInternalServerError)
 			return
