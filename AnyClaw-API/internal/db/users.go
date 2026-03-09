@@ -58,3 +58,23 @@ func (d *DB) GetUserByEmail(email string) (*User, error) {
 	}
 	return &u, nil
 }
+
+func (d *DB) AddUserEnergy(userID int64, amount int) error {
+	if amount <= 0 {
+		return nil
+	}
+	_, err := d.Exec("UPDATE users SET energy = energy + ? WHERE id = ?", amount, userID)
+	return err
+}
+
+func (d *DB) DeductUserEnergy(userID int64, amount int) (ok bool, err error) {
+	if amount <= 0 {
+		return true, nil
+	}
+	res, err := d.Exec("UPDATE users SET energy = energy - ? WHERE id = ? AND energy >= ?", amount, userID, amount)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
