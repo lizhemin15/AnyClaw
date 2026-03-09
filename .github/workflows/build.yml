@@ -22,6 +22,9 @@ jobs:
         with:
           go-version-file: AnyClaw-Server/go.mod
 
+      - name: Generate
+        run: go generate ./...
+
       - name: Build
         run: go build -o /tmp/picoclaw ./cmd/picoclaw
 
@@ -43,6 +46,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: AnyClaw-API/go.mod
+
+      - name: Generate go.sum
+        run: go mod tidy
 
       - name: Build
         run: go build -o /tmp/anyclaw-api ./cmd/api

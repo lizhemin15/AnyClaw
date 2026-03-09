@@ -1,6 +1,8 @@
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 
-const getToken = (): string | null => localStorage.getItem('token');
+export function getToken(): string | null {
+  return localStorage.getItem('token');
+}
 
 export function setToken(token: string): void {
   localStorage.setItem('token', token);

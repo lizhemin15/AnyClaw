@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { getMe, clearToken, isAuthenticated, type User } from './api'
+import { getMe, getSetupStatus, clearToken, isAuthenticated, type User } from './api'
 import Layout from './Layout'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -40,7 +40,7 @@ export default function App() {
 
   useEffect(() => {
     getSetupStatus()
-      .then(({ configured }) => {
+      .then(({ configured }: { configured: boolean }) => {
         setSetupRequired(!configured);
         if (!configured) {
           setLoading(false);
