@@ -95,6 +95,27 @@ func (d *DB) migrate() error {
 	if _, err := d.Exec("ALTER TABLE hosts ADD COLUMN ssh_password TEXT"); err != nil && !isDuplicateColumn(err) {
 		log.Printf("[db] alter hosts: %v", err)
 	}
+	// Energy system
+	if _, err := d.Exec("ALTER TABLE users ADD COLUMN energy INT NOT NULL DEFAULT 100"); err != nil && !isDuplicateColumn(err) {
+		log.Printf("[db] alter users: %v", err)
+	}
+	if _, err := d.Exec("ALTER TABLE instances ADD COLUMN energy INT NOT NULL DEFAULT 100"); err != nil && !isDuplicateColumn(err) {
+		log.Printf("[db] alter instances: %v", err)
+	}
+	if _, err := d.Exec("ALTER TABLE instances ADD COLUMN daily_consume INT NOT NULL DEFAULT 10"); err != nil && !isDuplicateColumn(err) {
+		log.Printf("[db] alter instances: %v", err)
+	}
+	if _, err := d.Exec("ALTER TABLE instances ADD COLUMN zero_energy_since DATETIME"); err != nil && !isDuplicateColumn(err) {
+		log.Printf("[db] alter instances: %v", err)
+	}
+	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS invitations (
+		code VARCHAR(32) PRIMARY KEY,
+		inviter_id BIGINT NOT NULL,
+		invitee_id BIGINT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		log.Printf("[db] create invitations: %v", err)
+	}
 	return nil
 }
 

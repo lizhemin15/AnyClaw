@@ -3,13 +3,16 @@ package auth
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/anyclaw/anyclaw-api/internal/db"
+	"github.com/anyclaw/anyclaw-api/internal/energy"
 )
 
 type RegisterRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	InviteCode string `json:"invite_code"`
 }
 
 type LoginRequest struct {
@@ -54,6 +57,12 @@ func (a *Auth) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, `{"error":"failed to create user"}`, http.StatusInternalServerError)
 		return
+	}
+	if req.InviteCode != "" {
+		if inviterID, err := a.db.UseInvitation(strings.TrimSpace(req.InviteCode), user.ID); err == nil {
+			_ = a.db.AddUserEnergy(user.ID, energy.InviteReward)
+			_ = a.db.AddUserEnergy(inviterID, energy.InviteReward)
+		}
 	}
 	token, err := a.CreateToken(user)
 	if err != nil {

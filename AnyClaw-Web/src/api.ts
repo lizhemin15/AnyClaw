@@ -20,6 +20,7 @@ export interface User {
   id: number;
   email: string;
   role: string;
+  energy: number;
   created_at: string;
 }
 
@@ -28,6 +29,9 @@ export interface Instance {
   user_id: number;
   name: string;
   status: string;
+  energy: number;
+  daily_consume: number;
+  zero_energy_since?: string;
   created_at: string;
 }
 
@@ -72,10 +76,10 @@ export async function login(email: string, password: string): Promise<LoginRespo
   });
 }
 
-export async function register(email: string, password: string): Promise<LoginResponse> {
+export async function register(email: string, password: string, inviteCode?: string): Promise<LoginResponse> {
   return fetchApi<LoginResponse>('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, invite_code: inviteCode || '' }),
   });
 }
 
@@ -184,6 +188,17 @@ export async function deleteHost(id: string): Promise<void> {
 
 export async function checkHostStatus(id: string): Promise<{ status: string }> {
   return fetchApi<{ status: string }>(`/admin/hosts/${id}/check`, { method: 'POST' });
+}
+
+export async function getInviteCode(): Promise<{ code: string }> {
+  return fetchApi<{ code: string }>('/energy/invite', { method: 'POST' });
+}
+
+export async function useInviteCode(code: string): Promise<{ status: string; reward: number }> {
+  return fetchApi<{ status: string; reward: number }>('/energy/invite/use', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
 }
 
 export async function getSetupStatus(): Promise<{ configured: boolean }> {

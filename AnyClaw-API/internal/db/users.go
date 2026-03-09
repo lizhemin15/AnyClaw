@@ -10,6 +10,7 @@ type User struct {
 	Email        string `json:"email"`
 	PasswordHash string `json:"-"`
 	Role         string `json:"role"`
+	Energy       int    `json:"energy"`
 	CreatedAt    string `json:"created_at"`
 }
 
@@ -31,9 +32,9 @@ func (d *DB) CreateUser(email, passwordHash, role string) (*User, error) {
 func (d *DB) GetUserByID(id int64) (*User, error) {
 	var u User
 	err := d.QueryRow(
-		"SELECT id, email, password_hash, role, created_at FROM users WHERE id = ?",
+		"SELECT id, email, password_hash, role, COALESCE(energy, 0), created_at FROM users WHERE id = ?",
 		id,
-	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Role, &u.CreatedAt)
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Role, &u.Energy, &u.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -46,9 +47,9 @@ func (d *DB) GetUserByID(id int64) (*User, error) {
 func (d *DB) GetUserByEmail(email string) (*User, error) {
 	var u User
 	err := d.QueryRow(
-		"SELECT id, email, password_hash, role, created_at FROM users WHERE email = ?",
+		"SELECT id, email, password_hash, role, COALESCE(energy, 0), created_at FROM users WHERE email = ?",
 		email,
-	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Role, &u.CreatedAt)
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Role, &u.Energy, &u.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}

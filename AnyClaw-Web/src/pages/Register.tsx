@@ -9,6 +9,7 @@ interface RegisterProps {
 export default function Register({ onRegister }: RegisterProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -17,7 +18,7 @@ export default function Register({ onRegister }: RegisterProps) {
     setError('');
     setLoading(true);
     try {
-      const res = await register(email, password);
+      const res = await register(email, password, inviteCode.trim() || undefined);
       setToken(res.access_token);
       onRegister(res.user);
     } catch (err) {
@@ -45,6 +46,19 @@ export default function Register({ onRegister }: RegisterProps) {
               autoComplete="email"
               className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent"
               placeholder="you@example.com"
+            />
+          </div>
+          <div>
+            <label htmlFor="invite" className="block text-sm font-medium text-slate-700 mb-2">
+              邀请码（可选，填写得 50 电量）
+            </label>
+            <input
+              id="invite"
+              type="text"
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value)}
+              className="w-full px-4 py-3 border border-slate-300 rounded-xl"
+              placeholder="邀请码"
             />
           </div>
           <div>

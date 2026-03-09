@@ -9,6 +9,7 @@ import (
 
 	"github.com/anyclaw/anyclaw-api/internal/auth"
 	"github.com/anyclaw/anyclaw-api/internal/db"
+	"github.com/anyclaw/anyclaw-api/internal/energy"
 	"github.com/anyclaw/anyclaw-api/internal/scheduler"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -61,9 +62,19 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = "instance"
 	}
-	token := "inst-" + uuid.New().String()
-	inst, err := h.db.CreateInstance(claims.UserID, name, token)
+	ok, err := h.db.DeductUserEnergy(claims.UserID, energy.AdoptCost)
 	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.Error(w, `{"error":"电量不足，领养需要 100 电量"}`, http.StatusBadRequest)
+		return
+	}
+	token := "inst-" + uuid.New().String()
+	inst, err := h.db.CreateInstance(claims.UserID, name, token, energy.AdoptCost)
+	if err != nil {
+		_ = h.db.AddUserEnergy(claims.UserID, energy.AdoptCost) // refund
 		http.Error(w, `{"error":"failed to create instance"}`, http.StatusInternalServerError)
 		return
 	}

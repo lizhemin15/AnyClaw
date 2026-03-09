@@ -18,6 +18,9 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
         <Link to="/" className="text-lg font-semibold text-slate-800 active:opacity-70">
           AnyClaw
         </Link>
+        {user && (
+          <span className="text-sm text-amber-600 font-medium">⚡ {user.energy ?? 0}</span>
+        )}
         <nav className="flex items-center gap-2 sm:gap-4">
           {user?.role === 'admin' && (
             <Link to="/admin/hosts" className="px-3 py-2 text-sm text-slate-600 active:bg-slate-100 rounded-lg -m-1">

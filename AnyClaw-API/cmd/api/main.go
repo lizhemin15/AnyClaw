@@ -9,6 +9,7 @@ import (
 	"github.com/anyclaw/anyclaw-api/internal/auth"
 	"github.com/anyclaw/anyclaw-api/internal/config"
 	"github.com/anyclaw/anyclaw-api/internal/db"
+	"github.com/anyclaw/anyclaw-api/internal/energy"
 	"github.com/anyclaw/anyclaw-api/internal/hosts"
 	"github.com/anyclaw/anyclaw-api/internal/instances"
 	"github.com/anyclaw/anyclaw-api/internal/llm"
@@ -87,8 +88,9 @@ func runApp(cfg *config.Config, database *db.DB) {
 
 	wsHub := ws.NewHub()
 	wsHandler := ws.NewHandler(database, wsHub)
+	energyHandler := energy.New(database)
 
-	proxy := llm.New(cfg, database)
+	proxy := llm.New(cfg, database, database)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -122,6 +124,17 @@ func runApp(cfg *config.Config, database *db.DB) {
 		r.Delete("/{id}", instHandler.Delete)
 	})
 
+	r.Route("/energy", func(r chi.Router) {
+		r.Use(authSvc.Middleware)
+		r.Post("/invite", energyHandler.InviteCode)
+		r.Post("/invite/use", energyHandler.UseInviteCode)
+	})
+	r.Route("/admin", func(r chi.Router) {
+		r.Use(authSvc.AdminMiddleware)
+		r.Post("/energy/recharge", energyHandler.Recharge)
+		r.Post("/energy/daily", energyHandler.RunDaily)
+		r.Post("/energy/users/{id}/recharge", energyHandler.AdminRechargeUser)
+	})
 	r.Route("/admin/hosts", func(r chi.Router) {
 		r.Use(authSvc.AdminMiddleware)
 		r.Get("/", hostHandler.List)
