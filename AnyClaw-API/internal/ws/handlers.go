@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/anyclaw/anyclaw-api/internal/auth"
-	"github.com/anyclaw/anyclaw-api/internal/db"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 )
