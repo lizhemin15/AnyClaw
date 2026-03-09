@@ -1,6 +1,13 @@
-package auth
+package request
 
 import "context"
+
+// Claims holds user info from JWT, stored in request context.
+type Claims struct {
+	UserID int64
+	Role   string
+	Email  string
+}
 
 type contextKey string
 

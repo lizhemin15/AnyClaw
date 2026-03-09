@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/anyclaw/anyclaw-api/internal/auth"
 	"github.com/anyclaw/anyclaw-api/internal/db"
+	"github.com/anyclaw/anyclaw-api/internal/request"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -23,7 +23,7 @@ func New(db *db.DB) *Handler {
 }
 
 func (h *Handler) Recharge(w http.ResponseWriter, r *http.Request) {
-	claims := auth.FromContext(r.Context())
+	claims := request.FromContext(r.Context())
 	if claims == nil {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
@@ -53,7 +53,7 @@ func (h *Handler) Recharge(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) InviteCode(w http.ResponseWriter, r *http.Request) {
-	claims := auth.FromContext(r.Context())
+	claims := request.FromContext(r.Context())
 	if claims == nil {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
@@ -68,7 +68,7 @@ func (h *Handler) InviteCode(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UseInviteCode(w http.ResponseWriter, r *http.Request) {
-	claims := auth.FromContext(r.Context())
+	claims := request.FromContext(r.Context())
 	if claims == nil {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
@@ -97,7 +97,7 @@ func (h *Handler) UseInviteCode(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) RunDaily(w http.ResponseWriter, r *http.Request) {
-	claims := auth.FromContext(r.Context())
+	claims := request.FromContext(r.Context())
 	if claims == nil || claims.Role != "admin" {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
@@ -112,7 +112,7 @@ func (h *Handler) RunDaily(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) AdminRechargeUser(w http.ResponseWriter, r *http.Request) {
-	claims := auth.FromContext(r.Context())
+	claims := request.FromContext(r.Context())
 	if claims == nil || claims.Role != "admin" {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return

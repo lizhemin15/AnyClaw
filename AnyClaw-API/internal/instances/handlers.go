@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/anyclaw/anyclaw-api/internal/auth"
 	"github.com/anyclaw/anyclaw-api/internal/db"
+	"github.com/anyclaw/anyclaw-api/internal/request"
 	"github.com/anyclaw/anyclaw-api/internal/energy"
 	"github.com/anyclaw/anyclaw-api/internal/scheduler"
 	"github.com/go-chi/chi/v5"
@@ -30,7 +30,7 @@ type CreateRequest struct {
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	claims := auth.FromContext(r.Context())
+	claims := request.FromContext(r.Context())
 	if claims == nil {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
@@ -48,7 +48,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	claims := auth.FromContext(r.Context())
+	claims := request.FromContext(r.Context())
 	if claims == nil {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
@@ -92,7 +92,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	claims := auth.FromContext(r.Context())
+	claims := request.FromContext(r.Context())
 	if claims == nil {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
@@ -116,7 +116,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	claims := auth.FromContext(r.Context())
+	claims := request.FromContext(r.Context())
 	if claims == nil {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return

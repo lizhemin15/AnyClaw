@@ -7,6 +7,7 @@ import (
 
 	"github.com/anyclaw/anyclaw-api/internal/db"
 	"github.com/anyclaw/anyclaw-api/internal/energy"
+	"github.com/anyclaw/anyclaw-api/internal/request"
 )
 
 type RegisterRequest struct {
@@ -106,7 +107,7 @@ func (a *Auth) HandleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Auth) HandleMe(w http.ResponseWriter, r *http.Request) {
-	claims := FromContext(r.Context())
+	claims := request.FromContext(r.Context())
 	if claims == nil {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return

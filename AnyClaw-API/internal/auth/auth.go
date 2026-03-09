@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/anyclaw/anyclaw-api/internal/db"
+	"github.com/anyclaw/anyclaw-api/internal/request"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -85,7 +86,8 @@ func (a *Auth) Middleware(next http.Handler) http.Handler {
 			http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 			return
 		}
-		ctx := WithClaims(r.Context(), claims)
+		rc := &request.Claims{UserID: claims.UserID, Role: claims.Role, Email: claims.Email}
+		ctx := request.WithClaims(r.Context(), rc)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

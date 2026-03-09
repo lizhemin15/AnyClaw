@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/anyclaw/anyclaw-api/internal/auth"
+	"github.com/anyclaw/anyclaw-api/internal/request"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 )
@@ -51,7 +51,7 @@ func (h *Handler) HandleContainerConnect(w http.ResponseWriter, r *http.Request)
 
 // HandleUserWS: user connects with Bearer JWT to /instances/:id/ws
 func (h *Handler) HandleUserWS(w http.ResponseWriter, r *http.Request) {
-	claims := auth.FromContext(r.Context())
+	claims := request.FromContext(r.Context())
 	if claims == nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
