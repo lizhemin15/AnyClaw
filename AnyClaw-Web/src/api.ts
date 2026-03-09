@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
+const API_BASE = (import.meta.env.VITE_API_URL || '').trim() || (import.meta.env.DEV ? 'http://localhost:8080' : '');
 
 export function getToken(): string | null {
   return localStorage.getItem('token');
@@ -84,7 +84,8 @@ export async function getMe(): Promise<User> {
 }
 
 export async function getInstances(): Promise<Instance[]> {
-  return fetchApi<Instance[]>('/instances');
+  const data = await fetchApi<Instance[] | null>('/instances');
+  return Array.isArray(data) ? data : [];
 }
 
 export async function createInstance(name: string): Promise<Instance> {
@@ -95,7 +96,11 @@ export async function createInstance(name: string): Promise<Instance> {
 }
 
 export function getWebSocketUrl(instanceId: number): string {
-  const base = API_BASE.replace(/^http/, 'ws');
+  const base = API_BASE
+    ? API_BASE.replace(/^http/, 'ws')
+    : (typeof window !== 'undefined'
+        ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
+        : 'ws://localhost:8080');
   const token = getToken();
   const url = `${base}/instances/${instanceId}/ws`;
   return token ? `${url}?token=${encodeURIComponent(token)}` : url;
@@ -115,7 +120,8 @@ export interface Host {
 }
 
 export async function getHosts(): Promise<Host[]> {
-  return fetchApi<Host[]>('/admin/hosts');
+  const data = await fetchApi<Host[] | null>('/admin/hosts');
+  return Array.isArray(data) ? data : [];
 }
 
 export interface CreateHostRequest {
