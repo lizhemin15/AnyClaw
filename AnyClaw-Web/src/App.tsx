@@ -7,6 +7,7 @@ import Register from './pages/Register'
 import Home from './pages/Home'
 import Chat from './pages/Chat'
 import Hosts from './pages/Hosts'
+import Energy from './pages/Energy'
 import Setup from './pages/Setup'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -121,6 +122,13 @@ export default function App() {
           <AdminRoute user={user}>
             <Layout user={user} onLogout={handleLogout}>
               <Hosts />
+            </Layout>
+          </AdminRoute>
+        } />
+        <Route path="/admin/energy" element={
+          <AdminRoute user={user}>
+            <Layout user={user} onLogout={handleLogout}>
+              <Energy />
             </Layout>
           </AdminRoute>
         } />

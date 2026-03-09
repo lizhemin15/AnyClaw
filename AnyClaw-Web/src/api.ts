@@ -197,6 +197,18 @@ export async function checkHostStatus(id: string): Promise<{ status: string }> {
   return fetchApi<{ status: string }>(`/admin/hosts/${id}/check`, { method: 'POST' });
 }
 
+export async function getAdminUsers(): Promise<User[]> {
+  const data = await fetchApi<User[] | null>('/admin/energy/users');
+  return Array.isArray(data) ? data : [];
+}
+
+export async function adminRechargeUser(userId: number, amount: number): Promise<void> {
+  await fetchApi(`/admin/energy/users/${userId}/recharge`, {
+    method: 'POST',
+    body: JSON.stringify({ amount }),
+  });
+}
+
 export async function getInviteCode(): Promise<{ code: string }> {
   return fetchApi<{ code: string }>('/energy/invite', { method: 'POST' });
 }

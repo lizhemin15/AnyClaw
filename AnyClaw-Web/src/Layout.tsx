@@ -11,6 +11,7 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
   const loc = useLocation()
   const isHome = loc.pathname === '/'
   const isHosts = loc.pathname.startsWith('/admin/hosts')
+  const isEnergy = loc.pathname.startsWith('/admin/energy')
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col pb-16 sm:pb-0">
@@ -23,9 +24,14 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
         )}
         <nav className="flex items-center gap-2 sm:gap-4">
           {user?.role === 'admin' && (
-            <Link to="/admin/hosts" className="px-3 py-2 text-sm text-slate-600 active:bg-slate-100 rounded-lg -m-1">
-              服务器
-            </Link>
+            <>
+              <Link to="/admin/energy" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isEnergy ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
+                电量
+              </Link>
+              <Link to="/admin/hosts" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isHosts ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
+                服务器
+              </Link>
+            </>
           )}
           {user && (
             <span className="hidden sm:inline text-sm text-slate-500 truncate max-w-[120px]">{user.email}</span>
@@ -51,13 +57,22 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
           <span className="text-xs mt-0.5">首页</span>
         </Link>
         {user?.role === 'admin' && (
-          <Link
-            to="/admin/hosts"
-            className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isHosts ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
-          >
-            <span className="text-lg">🖥️</span>
-            <span className="text-xs mt-0.5">服务器</span>
-          </Link>
+          <>
+            <Link
+              to="/admin/energy"
+              className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isEnergy ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
+            >
+              <span className="text-lg">⚡</span>
+              <span className="text-xs mt-0.5">电量</span>
+            </Link>
+            <Link
+              to="/admin/hosts"
+              className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isHosts ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
+            >
+              <span className="text-lg">🖥️</span>
+              <span className="text-xs mt-0.5">服务器</span>
+            </Link>
+          </>
         )}
       </nav>
     </div>

@@ -44,6 +44,25 @@ func (d *DB) GetUserByID(id int64) (*User, error) {
 	return &u, nil
 }
 
+func (d *DB) ListUsers() ([]*User, error) {
+	rows, err := d.Query(
+		"SELECT id, email, role, COALESCE(energy, 0), created_at FROM users ORDER BY id ASC",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []*User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(&u.ID, &u.Email, &u.Role, &u.Energy, &u.CreatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, &u)
+	}
+	return list, nil
+}
+
 func (d *DB) GetUserByEmail(email string) (*User, error) {
 	var u User
 	err := d.QueryRow(

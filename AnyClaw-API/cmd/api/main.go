@@ -131,6 +131,7 @@ func runApp(cfg *config.Config, database *db.DB) {
 	})
 	r.Route("/admin", func(r chi.Router) {
 		r.Use(authSvc.AdminMiddleware)
+		r.Get("/energy/users", energyHandler.ListUsers)
 		r.Post("/energy/recharge", energyHandler.Recharge)
 		r.Post("/energy/daily", energyHandler.RunDaily)
 		r.Post("/energy/users/{id}/recharge", energyHandler.AdminRechargeUser)

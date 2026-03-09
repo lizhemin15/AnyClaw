@@ -3,13 +3,14 @@ package instances
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/anyclaw/anyclaw-api/internal/db"
-	"github.com/anyclaw/anyclaw-api/internal/request"
 	"github.com/anyclaw/anyclaw-api/internal/energy"
+	"github.com/anyclaw/anyclaw-api/internal/request"
 	"github.com/anyclaw/anyclaw-api/internal/scheduler"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -78,13 +79,19 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to create instance"}`, http.StatusInternalServerError)
 		return
 	}
+	log.Printf("[instances] created instance id=%d name=%q, starting container in background", inst.ID, name)
 	go func() {
 		containerID, hostID, err := h.scheduler.Run(context.Background(), inst.ID, token)
 		if err != nil {
+			log.Printf("[instances] scheduler.Run failed for instance %d: %v", inst.ID, err)
 			_ = h.db.UpdateInstanceStatus(inst.ID, "error")
 			return
 		}
-		_ = h.db.UpdateInstanceContainer(inst.ID, containerID, hostID)
+		if err := h.db.UpdateInstanceContainer(inst.ID, containerID, hostID); err != nil {
+			log.Printf("[instances] UpdateInstanceContainer failed for %d: %v", inst.ID, err)
+			return
+		}
+		log.Printf("[instances] instance %d container started: %s on host %s", inst.ID, containerID, hostID)
 	}()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)

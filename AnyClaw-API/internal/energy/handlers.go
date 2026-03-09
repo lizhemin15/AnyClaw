@@ -111,6 +111,24 @@ func (h *Handler) RunDaily(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "deleted": n})
 }
 
+func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	claims := request.FromContext(r.Context())
+	if claims == nil || claims.Role != "admin" {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	list, err := h.db.ListUsers()
+	if err != nil {
+		http.Error(w, `{"error":"failed"}`, http.StatusInternalServerError)
+		return
+	}
+	if list == nil {
+		list = []*db.User{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(list)
+}
+
 func (h *Handler) AdminRechargeUser(w http.ResponseWriter, r *http.Request) {
 	claims := request.FromContext(r.Context())
 	if claims == nil || claims.Role != "admin" {

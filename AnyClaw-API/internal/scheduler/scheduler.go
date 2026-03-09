@@ -34,6 +34,7 @@ func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string) (co
 		return "", "", fmt.Errorf("list hosts: %w", err)
 	}
 	if len(list) == 0 {
+		log.Printf("[scheduler] no enabled hosts in DB - add a host at /admin/hosts with enabled=true")
 		return "", "", fmt.Errorf("no enabled hosts configured")
 	}
 	host := list[0]
@@ -41,6 +42,8 @@ func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string) (co
 	if image == "" {
 		image = s.defaultImg
 	}
+	log.Printf("[scheduler] instance %d: using host %q (%s:%d), image=%s, apiURL=%s",
+		instanceID, host.Name, host.Addr, host.SSHPort, image, s.apiURL)
 	cmd := fmt.Sprintf("docker run -d -e ANYCLAW_API_URL='%s' -e ANYCLAW_INSTANCE_ID=%d -e ANYCLAW_TOKEN='%s' %s",
 		s.apiURL, instanceID, token, image)
 	out, err := runSSH(host, cmd)
