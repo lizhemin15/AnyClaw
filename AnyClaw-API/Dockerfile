@@ -3,6 +3,8 @@ WORKDIR /app
 COPY AnyClaw-Web/package.json AnyClaw-Web/package-lock.json* ./
 RUN npm install
 COPY AnyClaw-Web/ .
+ARG CACHE_BUST
+RUN echo "Build: ${CACHE_BUST:-dev}"
 ENV VITE_API_URL=
 RUN npm run build
 

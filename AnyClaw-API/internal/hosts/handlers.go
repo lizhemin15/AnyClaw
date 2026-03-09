@@ -133,10 +133,13 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.SSHKey != "" || req.SSHPassword != "" {
 		if req.SSHKey != "" {
 			host.SSHKey = req.SSHKey
-			host.SSHPassword = ""
 		} else {
-			host.SSHPassword = req.SSHPassword
 			host.SSHKey = ""
+		}
+		if req.SSHPassword != "" {
+			host.SSHPassword = req.SSHPassword
+		} else {
+			host.SSHPassword = ""
 		}
 		if err := h.db.UpdateHost(host); err != nil {
 			http.Error(w, `{"error":"failed to update"}`, http.StatusInternalServerError)
