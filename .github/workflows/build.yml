@@ -121,7 +121,7 @@ jobs:
             ${{ env.GHCR }}/${{ github.repository_owner }}/anyclaw-server:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
 
   docker-api:
     name: Docker AnyClaw-API
@@ -154,4 +154,4 @@ jobs:
             ${{ env.GHCR }}/${{ github.repository_owner }}/anyclaw-web:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64

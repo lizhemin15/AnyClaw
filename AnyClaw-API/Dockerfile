@@ -12,7 +12,7 @@ COPY AnyClaw-API/go.mod AnyClaw-API/go.sum ./
 RUN go mod download
 COPY AnyClaw-API/ ./
 COPY --from=web /app/dist ./internal/web/dist
-RUN CGO_ENABLED=0 go build -o /anyclaw-api ./cmd/api
+RUN go mod tidy && CGO_ENABLED=0 go build -o /anyclaw-api ./cmd/api
 
 FROM alpine:3.19
 RUN apk add --no-cache ca-certificates
