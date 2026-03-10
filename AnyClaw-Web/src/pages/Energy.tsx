@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAdminUsers, adminRechargeUser, getMe, type UserWithInstances } from '../api'
+import { getAdminUsers, adminRechargeUser, getMe, type User, type UserWithInstances } from '../api'
 
 export default function Energy() {
   const [users, setUsers] = useState<UserWithInstances[]>([])
