@@ -191,16 +191,19 @@ export default function Chat() {
       requestAnimationFrame(() => list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' }))
     }
     const onFocus = () => scrollToBottom()
-    const vv = window.visualViewport
-    const onResize = () => {
-      if (document.activeElement === input) scrollToBottom()
-    }
     input.addEventListener('focus', onFocus)
-    vv.addEventListener('resize', onResize)
-    return () => {
-      input.removeEventListener('focus', onFocus)
-      vv.removeEventListener('resize', onResize)
+    const vv = window.visualViewport
+    if (vv) {
+      const onResize = () => {
+        if (document.activeElement === input) scrollToBottom()
+      }
+      vv.addEventListener('resize', onResize)
+      return () => {
+        input.removeEventListener('focus', onFocus)
+        vv.removeEventListener('resize', onResize)
+      }
     }
+    return () => input.removeEventListener('focus', onFocus)
   }, [])
 
   const handleScroll = () => {
