@@ -45,6 +45,9 @@ func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string) (co
 	}
 	log.Printf("[scheduler] instance %d: using host %q (%s:%d), image=%s, apiURL=%s",
 		instanceID, host.Name, host.Addr, host.SSHPort, image, s.apiURL)
+	if strings.Contains(s.apiURL, "localhost") && host.Addr != "127.0.0.1" && host.Addr != "localhost" {
+		log.Printf("[scheduler] 警告: apiURL 为 localhost，容器在远程 Host 上无法访问。请配置 ANYCLAW_API_URL 为公网地址")
+	}
 
 	// Ensure 1GB workspace volume exists (loop device) and is mounted
 	ensureWorkspace := fmt.Sprintf(`mkdir -p /var/lib/anyclaw && \
@@ -63,7 +66,7 @@ func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string) (co
 	}
 
 	mountPath := fmt.Sprintf("/var/lib/anyclaw/ws-%d", instanceID)
-	cmd := fmt.Sprintf("docker run -d --pull always -v %s:/workspace -e PICOCLAW_AGENTS_DEFAULTS_WORKSPACE=/workspace -e ANYCLAW_API_URL='%s' -e ANYCLAW_INSTANCE_ID=%d -e ANYCLAW_TOKEN='%s' %s",
+	cmd := fmt.Sprintf("docker run -d --pull always -v %s:/workspace -e PICOCLAW_AGENTS_DEFAULTS_WORKSPACE=/workspace -e ANYCLAW_API_URL='%s' -e ANYCLAW_INSTANCE_ID=%d -e ANYCLAW_TOKEN='%s' %s 2>&1",
 		mountPath, s.apiURL, instanceID, token, image)
 	out, err := runSSH(host, cmd)
 	if err != nil {

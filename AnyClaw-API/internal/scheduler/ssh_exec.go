@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 
 	"github.com/anyclaw/anyclaw-api/internal/db"
 	"golang.org/x/crypto/ssh"
@@ -44,8 +45,13 @@ func runSSH(host *db.Host, cmd string) (string, error) {
 	var out bytes.Buffer
 	session.Stdout = &out
 	session.Stderr = &out
-	if err := session.Run(cmd); err != nil {
-		return "", fmt.Errorf("run: %w: %s", err, out.String())
+	runErr := session.Run(cmd)
+	outStr := strings.TrimSpace(out.String())
+	if runErr != nil {
+		if outStr != "" {
+			return outStr, fmt.Errorf("%s: %s", runErr.Error(), outStr)
+		}
+		return "", runErr
 	}
-	return out.String(), nil
+	return outStr, nil
 }
