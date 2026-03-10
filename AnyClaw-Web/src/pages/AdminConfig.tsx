@@ -1,19 +1,11 @@
 import { useState, useEffect } from 'react'
-import { getAdminConfig, putAdminConfig, type AdminConfig, type ModelEntry } from '../api'
-
-const PROVIDER_LABELS: Record<string, string> = {
-  openai: 'OpenAI',
-  anthropic: 'Anthropic Claude',
-  openrouter: 'OpenRouter',
-}
-
-const PROVIDER_DEFAULTS: Record<string, string> = {
-  openai: 'https://api.openai.com/v1',
-  anthropic: 'https://api.anthropic.com/v1',
-  openrouter: 'https://openrouter.ai/api/v1',
-}
+import { getAdminConfig, putAdminConfig, type AdminConfig, type Channel, type ModelEntry } from '../api'
 
 function genId() {
+  return 'c-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
+}
+
+function genModelId() {
   return 'm-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
 }
 
@@ -24,15 +16,17 @@ export default function AdminConfig() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [editing, setEditing] = useState<string | null>(null)
-  const [newModelName, setNewModelName] = useState('')
+  const [addingChannel, setAddingChannel] = useState(false)
+  const [newChannel, setNewChannel] = useState({ name: '', api_key: '', api_base: '' })
+  const [editingChannel, setEditingChannel] = useState<string | null>(null)
+  const [newModelByChannel, setNewModelByChannel] = useState<Record<string, string>>({})
 
   useEffect(() => {
     getAdminConfig()
       .then((c) => {
-        const modelList = Array.isArray(c.model_list) ? c.model_list : []
-        setConfig({ ...c, model_list: modelList })
-        setForm({ ...c, model_list: JSON.parse(JSON.stringify(modelList)) })
+        const channels = Array.isArray(c.channels) ? c.channels : []
+        setConfig({ channels })
+        setForm({ channels: JSON.parse(JSON.stringify(channels)) })
       })
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
       .finally(() => setLoading(false))
@@ -48,7 +42,8 @@ export default function AdminConfig() {
       await putAdminConfig(form)
       setSuccess('保存成功，重启服务后生效')
       setConfig(form)
-      setEditing(null)
+      setAddingChannel(false)
+      setEditingChannel(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败')
     } finally {
@@ -56,63 +51,92 @@ export default function AdminConfig() {
     }
   }
 
-  const updatePool = (provider: keyof AdminConfig['key_pool'], field: 'api_key' | 'api_base', value: string) => {
+  const addChannel = () => {
+    if (!form || !newChannel.name.trim() || !newChannel.api_key.trim()) return
+    const ch: Channel = {
+      id: genId(),
+      name: newChannel.name.trim(),
+      api_key: newChannel.api_key.trim(),
+      api_base: newChannel.api_base.trim() || 'https://api.openai.com/v1',
+      enabled: true,
+      models: [],
+    }
+    setForm({ channels: [...(form.channels || []), ch] })
+    setNewChannel({ name: '', api_key: '', api_base: '' })
+    setAddingChannel(false)
+  }
+
+  const removeChannel = (id: string) => {
+    if (!form) return
+    setForm({ channels: (form.channels || []).filter((c) => c.id !== id) })
+    setEditingChannel(null)
+  }
+
+  const updateChannel = (id: string, upd: Partial<Channel>) => {
     if (!form) return
     setForm({
-      ...form,
-      key_pool: {
-        ...form.key_pool,
-        [provider]: { ...form.key_pool[provider], [field]: value },
-      },
+      channels: (form.channels || []).map((c) => (c.id === id ? { ...c, ...upd } : c)),
     })
   }
 
-  const addModel = () => {
-    if (!form || !newModelName.trim()) return
-    const name = newModelName.trim()
-    const list = form.model_list ?? []
-    if (list.some((m) => m.name === name)) return
-    const next: ModelEntry[] = list.map((m) => ({ ...m, enabled: false }))
-    next.push({ id: genId(), name, enabled: true })
-    setForm({ ...form, model_list: next })
-    setNewModelName('')
+  const setChannelEnabled = (id: string, enabled: boolean) => {
+    updateChannel(id, { enabled })
   }
 
-  const removeModel = (id: string) => {
+  const addModel = (channelId: string) => {
+    const name = (newModelByChannel[channelId] || '').trim()
+    if (!form || !name) return
+    const channels = form.channels || []
+    const ch = channels.find((c) => c.id === channelId)
+    if (!ch || (ch.models || []).some((m) => m.name === name)) return
+    const models = [...(ch.models || []), { id: genModelId(), name, enabled: false }]
+    setForm({
+      channels: channels.map((c) => (c.id === channelId ? { ...c, models } : c)),
+    })
+    setNewModelByChannel((prev) => ({ ...prev, [channelId]: '' }))
+  }
+
+  const removeModel = (channelId: string, modelId: string) => {
     if (!form) return
-    const list = (form.model_list ?? []).filter((m) => m.id !== id)
-    const hadEnabled = (form.model_list ?? []).find((m) => m.id === id)?.enabled
-    if (hadEnabled && list.length > 0 && !list.some((m) => m.enabled)) {
-      list[0].enabled = true
+    const channels = form.channels || []
+    const ch = channels.find((c) => c.id === channelId)
+    if (!ch) return
+    const hadEnabled = (ch.models || []).find((m) => m.id === modelId)?.enabled
+    let models = (ch.models || []).filter((m) => m.id !== modelId)
+    if (hadEnabled && models.length > 0 && !models.some((m) => m.enabled)) {
+      models = models.map((m, i) => ({ ...m, enabled: i === 0 }))
     }
-    setForm({ ...form, model_list: list })
+    setForm({
+      channels: channels.map((c) => (c.id === channelId ? { ...c, models } : c)),
+    })
   }
 
-  const setModelEnabled = (id: string) => {
+  const setModelEnabled = (channelId: string, modelId: string) => {
     if (!form) return
-    const list = (form.model_list ?? []).map((m) => ({
-      ...m,
-      enabled: m.id === id,
-    }))
-    setForm({ ...form, model_list: list })
+    setForm({
+      channels: (form.channels || []).map((c) => ({
+        ...c,
+        models: (c.models || []).map((m) => ({
+          ...m,
+          enabled: c.id === channelId && m.id === modelId,
+        })),
+      })),
+    })
   }
 
-  const updateModelName = (id: string, name: string) => {
+  const updateModelName = (channelId: string, modelId: string, name: string) => {
     if (!form) return
-    const list = (form.model_list ?? []).map((m) => (m.id === id ? { ...m, name } : m))
-    setForm({ ...form, model_list: list })
+    setForm({
+      channels: (form.channels || []).map((c) =>
+        c.id === channelId
+          ? { ...c, models: (c.models || []).map((m) => (m.id === modelId ? { ...m, name } : m)) }
+          : c
+      ),
+    })
   }
 
-  const statusBadge = (hasKey: boolean) =>
-    hasKey ? (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
-        已配置
-      </span>
-    ) : (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">
-        未配置
-      </span>
-    )
+  const channels = form?.channels ?? []
+  const enabledModel = channels.flatMap((c) => c.models || []).find((m) => m.enabled)
 
   if (loading) {
     return (
@@ -122,93 +146,19 @@ export default function AdminConfig() {
             <div className="h-6 bg-slate-200 rounded w-1/4" />
             <div className="h-12 bg-slate-100 rounded" />
             <div className="h-12 bg-slate-100 rounded" />
-            <div className="h-12 bg-slate-100 rounded" />
           </div>
         </div>
       </div>
     )
   }
 
-  const modelList = form?.model_list ?? []
-  const enabledModel = modelList.find((m) => m.enabled)
-
   return (
     <div className="max-w-5xl mx-auto">
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-slate-800">渠道管理</h1>
-        <p className="text-sm text-slate-500 mt-1">管理 LLM API 渠道，宠物实例将使用此处配置的密钥调用模型</p>
-      </div>
-
-      {/* 模型列表 - One API 风格 */}
-      <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-          <div>
-            <h2 className="font-semibold text-slate-800">模型管理</h2>
-            <p className="text-sm text-slate-500 mt-0.5">
-              添加模型后启用，一次只能启用一个。当前启用：{enabledModel ? enabledModel.name : '无（新宠物将用 gpt-4o）'}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newModelName}
-              onChange={(e) => setNewModelName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addModel())}
-              placeholder="gpt-4o、claude-3-5-sonnet 等"
-              className="px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono w-56 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-            <button
-              type="button"
-              onClick={addModel}
-              disabled={!newModelName.trim()}
-              className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              添加
-            </button>
-          </div>
-        </div>
-        <div className="divide-y divide-slate-100">
-          {modelList.length === 0 ? (
-            <div className="px-5 py-8 text-center text-slate-500 text-sm">暂无模型，点击上方添加</div>
-          ) : (
-            modelList.map((m) => (
-              <div
-                key={m.id}
-                className="px-5 py-3 flex items-center gap-4 hover:bg-slate-50/50"
-              >
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={m.enabled}
-                  onClick={() => setModelEnabled(m.id)}
-                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 ${
-                    m.enabled ? 'bg-indigo-600' : 'bg-slate-200'
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition ${
-                      m.enabled ? 'translate-x-4' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
-                <input
-                  type="text"
-                  value={m.name}
-                  onChange={(e) => updateModelName(m.id, e.target.value)}
-                  className="flex-1 min-w-0 px-3 py-1.5 border border-slate-300 rounded text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                />
-                <span className="text-xs text-slate-400 w-12">{m.enabled ? '已启用' : '未启用'}</span>
-                <button
-                  type="button"
-                  onClick={() => removeModel(m.id)}
-                  className="text-sm text-red-600 hover:text-red-700"
-                >
-                  删除
-                </button>
-              </div>
-            ))
-          )}
-        </div>
+        <p className="text-sm text-slate-500 mt-1">
+          添加渠道并配置 API，每个渠道可添加多个模型。一次只能启用一个模型作为新宠物默认。当前默认：{enabledModel ? enabledModel.name : '无（gpt-4o）'}
+        </p>
       </div>
 
       {error && (
@@ -220,105 +170,184 @@ export default function AdminConfig() {
         </div>
       )}
 
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-        {form && (
-          <form onSubmit={handleSave}>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">渠道</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">状态</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">API Key</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">API Base</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600 w-20">操作</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {(['openai', 'anthropic', 'openrouter'] as const).map((provider) => (
-                    <tr key={provider} className="hover:bg-slate-50/50">
-                      <td className="py-3 px-4">
-                        <span className="font-medium text-slate-800">{PROVIDER_LABELS[provider]}</span>
-                      </td>
-                      <td className="py-3 px-4">{statusBadge(!!config?.key_pool[provider].api_key)}</td>
-                      <td className="py-3 px-4">
-                        {editing === provider ? (
-                          <input
-                            type="password"
-                            value={form.key_pool[provider].api_key}
-                            onChange={(e) => updatePool(provider, 'api_key', e.target.value)}
-                            placeholder="sk-..."
-                            className="w-full max-w-xs px-3 py-2 border border-slate-300 rounded text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                          />
-                        ) : (
-                          <span className="text-sm font-mono text-slate-600">
-                            {config?.key_pool[provider].api_key || '—'}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        {editing === provider ? (
-                          <input
-                            type="url"
-                            value={form.key_pool[provider].api_base}
-                            onChange={(e) => updatePool(provider, 'api_base', e.target.value)}
-                            placeholder={PROVIDER_DEFAULTS[provider]}
-                            className="w-full max-w-xs px-3 py-2 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                          />
-                        ) : (
-                          <span className="text-sm text-slate-600 truncate max-w-[200px] block">
-                            {form.key_pool[provider].api_base || PROVIDER_DEFAULTS[provider]}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        {editing === provider ? (
-                          <button
-                            type="button"
-                            onClick={() => setEditing(null)}
-                            className="text-sm text-slate-600 hover:text-slate-800"
-                          >
-                            取消
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setEditing(provider)}
-                            className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
-                          >
-                            编辑
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="px-4 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
-              {(editing || JSON.stringify(form) !== JSON.stringify(config)) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForm(config ? JSON.parse(JSON.stringify(config)) : form)
-                    setEditing(null)
-                  }}
-                  className="px-4 py-2 text-sm border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100"
-                >
-                  重置
-                </button>
-              )}
+      <form onSubmit={handleSave}>
+        {/* 添加渠道 */}
+        <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+            <h2 className="font-semibold text-slate-800">渠道列表</h2>
+            {!addingChannel ? (
               <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                type="button"
+                onClick={() => setAddingChannel(true)}
+                className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
               >
-                {saving ? '保存中...' : '保存'}
+                + 添加渠道
               </button>
-            </div>
-          </form>
-        )}
-      </div>
+            ) : (
+              <div className="flex gap-2 items-center flex-wrap">
+                <input
+                  type="text"
+                  value={newChannel.name}
+                  onChange={(e) => setNewChannel((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="渠道名称，如 OpenAI"
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-32"
+                />
+                <input
+                  type="password"
+                  value={newChannel.api_key}
+                  onChange={(e) => setNewChannel((p) => ({ ...p, api_key: e.target.value }))}
+                  placeholder="API Key"
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-40 font-mono"
+                />
+                <input
+                  type="url"
+                  value={newChannel.api_base}
+                  onChange={(e) => setNewChannel((p) => ({ ...p, api_base: e.target.value }))}
+                  placeholder="API Base（可选）"
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-56"
+                />
+                <button type="button" onClick={addChannel} className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+                  添加
+                </button>
+                <button type="button" onClick={() => setAddingChannel(false)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
+                  取消
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 渠道列表 */}
+          <div className="divide-y divide-slate-100">
+            {channels.length === 0 ? (
+              <div className="px-5 py-8 text-center text-slate-500 text-sm">暂无渠道，点击上方添加</div>
+            ) : (
+              channels.map((ch) => (
+                <div key={ch.id} className="px-5 py-4">
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={ch.enabled}
+                      onClick={() => setChannelEnabled(ch.id, !ch.enabled)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${
+                        ch.enabled ? 'bg-indigo-600' : 'bg-slate-200'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
+                          ch.enabled ? 'translate-x-4' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                    <span className="font-medium text-slate-800 min-w-[100px]">{ch.name}</span>
+                    <span className="text-xs text-slate-400">{ch.enabled ? '已启用' : '未启用'}</span>
+                    {editingChannel === ch.id ? (
+                      <div className="flex gap-2 flex-1 flex-wrap">
+                        <input
+                          type="password"
+                          value={ch.api_key}
+                          onChange={(e) => updateChannel(ch.id, { api_key: e.target.value })}
+                          placeholder="API Key"
+                          className="px-3 py-1.5 border border-slate-300 rounded text-sm font-mono w-40"
+                        />
+                        <input
+                          type="url"
+                          value={ch.api_base}
+                          onChange={(e) => updateChannel(ch.id, { api_base: e.target.value })}
+                          placeholder="API Base"
+                          className="px-3 py-1.5 border border-slate-300 rounded text-sm w-48"
+                        />
+                        <button type="button" onClick={() => setEditingChannel(null)} className="text-sm text-slate-600">
+                          完成
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-slate-500 truncate max-w-[200px]">
+                        {ch.api_key ? '****' + ch.api_key.slice(-4) : '—'} · {ch.api_base || '—'}
+                      </span>
+                    )}
+                    {editingChannel !== ch.id && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingChannel(ch.id)}
+                        className="text-sm text-indigo-600 hover:text-indigo-700"
+                      >
+                        编辑
+                      </button>
+                    )}
+                    <button type="button" onClick={() => removeChannel(ch.id)} className="text-sm text-red-600 hover:text-red-700">
+                      删除
+                    </button>
+                  </div>
+
+                  {/* 模型列表 */}
+                  <div className="mt-3 ml-14 pl-4 border-l-2 border-slate-100">
+                    <div className="flex gap-2 items-center mb-2">
+                      <input
+                        type="text"
+                        value={newModelByChannel[ch.id] || ''}
+                        onChange={(e) => setNewModelByChannel((p) => ({ ...p, [ch.id]: e.target.value }))}
+                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addModel(ch.id))}
+                        placeholder="添加模型，如 gpt-4o"
+                        className="px-3 py-1.5 border border-slate-300 rounded text-sm font-mono w-40"
+                      />
+                      <button type="button" onClick={() => addModel(ch.id)} className="text-sm text-indigo-600 hover:text-indigo-700">
+                        添加
+                      </button>
+                    </div>
+                    <div className="space-y-1">
+                      {(ch.models || []).map((m) => (
+                        <div key={m.id} className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            role="radio"
+                            aria-checked={m.enabled}
+                            onClick={() => setModelEnabled(ch.id, m.id)}
+                            className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${
+                              m.enabled ? 'bg-indigo-600' : 'bg-slate-200'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition ${
+                                m.enabled ? 'translate-x-4' : 'translate-x-0.5'
+                              }`}
+                            />
+                          </button>
+                          <input
+                            type="text"
+                            value={m.name}
+                            onChange={(e) => updateModelName(ch.id, m.id, e.target.value)}
+                            className="px-2 py-1 border border-slate-200 rounded text-sm font-mono w-44"
+                          />
+                          <span className="text-xs text-slate-400">{m.enabled ? '默认' : ''}</span>
+                          <button type="button" onClick={() => removeModel(ch.id, m.id)} className="text-xs text-red-500 hover:text-red-600">
+                            删除
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          {JSON.stringify(form) !== JSON.stringify(config) && (
+            <button
+              type="button"
+              onClick={() => setForm(config ? JSON.parse(JSON.stringify(config)) : form)}
+              className="px-4 py-2 text-sm border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100"
+            >
+              重置
+            </button>
+          )}
+          <button type="submit" disabled={saving} className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+            {saving ? '保存中...' : '保存'}
+          </button>
+        </div>
+      </form>
     </div>
   )
 }

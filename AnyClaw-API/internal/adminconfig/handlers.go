@@ -28,29 +28,24 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to load config"}`, http.StatusInternalServerError)
 		return
 	}
-	modelList := cfg.ModelList
-	if modelList == nil {
-		modelList = []config.ModelEntry{}
+	channels := cfg.Channels
+	if channels == nil {
+		channels = []config.Channel{}
 	}
-	resp := map[string]any{
-		"model_list": modelList,
-		"key_pool": map[string]any{
-			"openai": map[string]any{
-				"api_key":  config.MaskAPIKey(cfg.KeyPool.OpenAI.APIKey),
-				"api_base": cfg.KeyPool.OpenAI.APIBase,
-			},
-			"anthropic": map[string]any{
-				"api_key":  config.MaskAPIKey(cfg.KeyPool.Anthropic.APIKey),
-				"api_base": cfg.KeyPool.Anthropic.APIBase,
-			},
-			"openrouter": map[string]any{
-				"api_key":  config.MaskAPIKey(cfg.KeyPool.OpenRouter.APIKey),
-				"api_base": cfg.KeyPool.OpenRouter.APIBase,
-			},
-		},
+	// Mask API keys for response
+	out := make([]map[string]any, len(channels))
+	for i, ch := range channels {
+		out[i] = map[string]any{
+			"id":      ch.ID,
+			"name":    ch.Name,
+			"api_key": config.MaskAPIKey(ch.APIKey),
+			"api_base": ch.APIBase,
+			"enabled": ch.Enabled,
+			"models":  ch.Models,
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	json.NewEncoder(w).Encode(map[string]any{"channels": out})
 }
 
 func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
@@ -60,8 +55,7 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		ModelList []config.ModelEntry `json:"model_list"`
-		KeyPool   config.KeyPool      `json:"key_pool"`
+		Channels []config.Channel `json:"channels"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
@@ -72,28 +66,24 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to load config"}`, http.StatusInternalServerError)
 		return
 	}
-	// Merge: only overwrite non-empty fields from request
-	mergeKeyEntry(&cfg.KeyPool.OpenAI, &req.KeyPool.OpenAI)
-	mergeKeyEntry(&cfg.KeyPool.Anthropic, &req.KeyPool.Anthropic)
-	mergeKeyEntry(&cfg.KeyPool.OpenRouter, &req.KeyPool.OpenRouter)
-	modelList := req.ModelList
-	if modelList == nil {
-		modelList = []config.ModelEntry{}
+	// Merge: preserve existing api_key if client sent masked value
+	channels := req.Channels
+	if channels == nil {
+		channels = []config.Channel{}
 	}
-	if err := config.SaveAdminConfig(h.configPath, cfg.KeyPool, modelList); err != nil {
+	existing := make(map[string]string)
+	for _, ch := range cfg.Channels {
+		existing[ch.ID] = ch.APIKey
+	}
+	for i := range channels {
+		if k, ok := existing[channels[i].ID]; ok && (channels[i].APIKey == "" || strings.HasPrefix(channels[i].APIKey, "****")) {
+			channels[i].APIKey = k
+		}
+	}
+	if err := config.SaveAdminConfig(h.configPath, channels); err != nil {
 		http.Error(w, `{"error":"failed to save config"}`, http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
-}
-
-func mergeKeyEntry(dst, src *config.KeyEntry) {
-	// Skip if api_key looks like masked value (user didn't change it)
-	if src.APIKey != "" && !strings.HasPrefix(src.APIKey, "****") {
-		dst.APIKey = src.APIKey
-	}
-	if src.APIBase != "" {
-		dst.APIBase = src.APIBase
-	}
 }

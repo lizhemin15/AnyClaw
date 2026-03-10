@@ -210,24 +210,23 @@ export async function getAdminUsers(): Promise<UserWithInstances[]> {
   return Array.isArray(data) ? data : [];
 }
 
-export interface KeyPoolEntry {
-  api_key: string;
-  api_base: string;
-}
-
 export interface ModelEntry {
   id: string;
   name: string;
   enabled: boolean;
 }
 
+export interface Channel {
+  id: string;
+  name: string;
+  api_key: string;
+  api_base: string;
+  enabled: boolean;
+  models: ModelEntry[];
+}
+
 export interface AdminConfig {
-  model_list: ModelEntry[];
-  key_pool: {
-    openai: KeyPoolEntry;
-    anthropic: KeyPoolEntry;
-    openrouter: KeyPoolEntry;
-  };
+  channels: Channel[];
 }
 
 export async function getAdminConfig(): Promise<AdminConfig> {

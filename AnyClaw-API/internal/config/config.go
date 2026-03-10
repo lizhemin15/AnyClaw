@@ -4,37 +4,70 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 )
 
 type Config struct {
-	Port        int         `json:"port" env:"ANYCLAW_API_PORT"`
-	DBDSN       string      `json:"db_dsn"`
-	JWTSecret   string      `json:"jwt_secret"`
-	APIURL      string      `json:"api_url"`       // e.g. http://localhost:8080 for Docker containers
-	DockerImage string      `json:"docker_image"` // openclaw/openclaw
-	DefaultModel string     `json:"default_model"` // deprecated, use model_list
-	ModelList   []ModelEntry `json:"model_list"`   // 可添加的模型列表，仅一个可启用
-	KeyPool     KeyPool     `json:"key_pool"`
-	InstanceMap InstanceMap `json:"instance_map"`  // legacy: tokens from config (merged with DB)
+	Port         int           `json:"port" env:"ANYCLAW_API_PORT"`
+	DBDSN        string        `json:"db_dsn"`
+	JWTSecret    string        `json:"jwt_secret"`
+	APIURL       string        `json:"api_url"`
+	DockerImage  string        `json:"docker_image"`
+	DefaultModel string        `json:"default_model"` // deprecated
+	Channels     []Channel     `json:"channels"`     // 用户添加的渠道，每个渠道可配置、启用、添加多个模型
+	KeyPool      KeyPool       `json:"key_pool"`     // deprecated, migrate to channels
+	InstanceMap  InstanceMap   `json:"instance_map"`
+}
+
+// Channel 渠道：用户添加，可配置、启用，每个渠道可添加多个模型
+type Channel struct {
+	ID      string        `json:"id"`
+	Name    string        `json:"name"`    // 如 "OpenAI 主账号"
+	APIKey  string        `json:"api_key"`
+	APIBase string        `json:"api_base"`
+	Enabled bool          `json:"enabled"`
+	Models  []ModelEntry  `json:"models"` // 该渠道下的模型列表
 }
 
 type ModelEntry struct {
 	ID      string `json:"id"`
-	Name    string `json:"name"`    // 如 gpt-4o, claude-3-5-sonnet
-	Enabled bool   `json:"enabled"` // 一次只能启用一个
+	Name    string `json:"name"`    // 如 gpt-4o
+	Enabled bool   `json:"enabled"` // 全局仅一个模型可启用（新宠物默认）
 }
 
-// GetEnabledModel 返回当前启用的模型名，若无则返回空（scheduler 会用 gpt-4o）
+// GetEnabledModel 返回当前启用的模型名
 func (c *Config) GetEnabledModel() string {
-	for _, m := range c.ModelList {
-		if m.Enabled && m.Name != "" {
-			return m.Name
+	for _, ch := range c.Channels {
+		for _, m := range ch.Models {
+			if m.Enabled && m.Name != "" {
+				return m.Name
+			}
 		}
 	}
 	if c.DefaultModel != "" {
 		return c.DefaultModel
 	}
 	return ""
+}
+
+// FindChannelForModel 返回能提供该模型的已启用渠道
+func (c *Config) FindChannelForModel(model string) (apiBase, apiKey string) {
+	model = strings.ToLower(strings.TrimSpace(model))
+	for _, ch := range c.Channels {
+		if !ch.Enabled || ch.APIKey == "" {
+			continue
+		}
+		for _, m := range ch.Models {
+			if strings.ToLower(strings.TrimSpace(m.Name)) == model {
+				base := ch.APIBase
+				if base == "" {
+					base = "https://api.openai.com/v1"
+				}
+				return strings.TrimSuffix(base, "/"), ch.APIKey
+			}
+		}
+	}
+	return "", ""
 }
 
 type KeyPool struct {
@@ -44,7 +77,7 @@ type KeyPool struct {
 }
 
 type KeyEntry struct {
-	APIKey  string `json:"api_key" env:"ANYCLAW_KEY_OPENAI_API_KEY"`
+	APIKey  string `json:"api_key"`
 	APIBase string `json:"api_base"`
 }
 
@@ -86,11 +119,12 @@ func Load(path string) (*Config, error) {
 	if cfg.InstanceMap.Tokens == nil {
 		cfg.InstanceMap.Tokens = make(map[string]InstanceInfo)
 	}
-	if cfg.ModelList == nil && cfg.DefaultModel != "" {
-		cfg.ModelList = []ModelEntry{{ID: "migrated", Name: cfg.DefaultModel, Enabled: true}}
+	if cfg.Channels == nil {
+		cfg.Channels = []Channel{}
 	}
-	if cfg.ModelList == nil {
-		cfg.ModelList = []ModelEntry{}
+	// 迁移：key_pool 或 model_list -> channels
+	if len(cfg.Channels) == 0 {
+		migrateToChannels(cfg)
 	}
 	// Env can override file
 	if s := os.Getenv("ANYCLAW_INSTANCE_TOKENS"); s != "" {
@@ -128,8 +162,8 @@ func Save(path string, c *SaveConfig) error {
 	return os.WriteFile(path, data, 0600)
 }
 
-// SaveAdminConfig saves key_pool and model_list to config file. Preserves other fields.
-func SaveAdminConfig(path string, pool KeyPool, modelList []ModelEntry) error {
+// SaveAdminConfig saves channels to config file. Preserves other fields.
+func SaveAdminConfig(path string, channels []Channel) error {
 	if path == "" {
 		path = ConfigPath()
 	}
@@ -150,13 +184,57 @@ func SaveAdminConfig(path string, pool KeyPool, modelList []ModelEntry) error {
 	if raw == nil {
 		raw = make(map[string]any)
 	}
-	raw["key_pool"] = pool
-	raw["model_list"] = modelList
+	raw["channels"] = channels
 	data, err := json.MarshalIndent(raw, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(path, data, 0600)
+}
+
+func migrateToChannels(cfg *Config) {
+	if cfg.KeyPool.OpenAI.APIKey != "" {
+		base := cfg.KeyPool.OpenAI.APIBase
+		if base == "" {
+			base = "https://api.openai.com/v1"
+		}
+		cfg.Channels = append(cfg.Channels, Channel{
+			ID:      "openai",
+			Name:    "OpenAI",
+			APIKey:  cfg.KeyPool.OpenAI.APIKey,
+			APIBase: base,
+			Enabled: true,
+			Models:  []ModelEntry{{ID: "gpt4o", Name: "gpt-4o", Enabled: true}},
+		})
+	}
+	if cfg.KeyPool.Anthropic.APIKey != "" {
+		base := cfg.KeyPool.Anthropic.APIBase
+		if base == "" {
+			base = "https://api.anthropic.com/v1"
+		}
+		cfg.Channels = append(cfg.Channels, Channel{
+			ID:      "anthropic",
+			Name:    "Anthropic Claude",
+			APIKey:  cfg.KeyPool.Anthropic.APIKey,
+			APIBase: base,
+			Enabled: true,
+			Models:  []ModelEntry{{ID: "claude", Name: "claude-3-5-sonnet", Enabled: false}},
+		})
+	}
+	if cfg.KeyPool.OpenRouter.APIKey != "" {
+		base := cfg.KeyPool.OpenRouter.APIBase
+		if base == "" {
+			base = "https://openrouter.ai/api/v1"
+		}
+		cfg.Channels = append(cfg.Channels, Channel{
+			ID:      "openrouter",
+			Name:    "OpenRouter",
+			APIKey:  cfg.KeyPool.OpenRouter.APIKey,
+			APIBase: base,
+			Enabled: true,
+			Models:  []ModelEntry{{ID: "auto", Name: "openrouter/auto", Enabled: false}},
+		})
+	}
 }
 
 // MaskAPIKey returns last 4 chars for display, empty if key empty.

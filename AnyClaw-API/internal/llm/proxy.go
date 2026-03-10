@@ -159,22 +159,9 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Proxy) selectProvider(model string) (apiBase, apiKey string) {
-	model = strings.ToLower(model)
-	if strings.Contains(model, "claude") || strings.HasPrefix(model, "anthropic/") {
-		if p.cfg.KeyPool.Anthropic.APIKey != "" {
-			return p.cfg.KeyPool.Anthropic.APIBase, p.cfg.KeyPool.Anthropic.APIKey
-		}
-	}
-	if strings.Contains(model, "gpt") || strings.HasPrefix(model, "openai/") || !strings.Contains(model, "/") {
-		if p.cfg.KeyPool.OpenAI.APIKey != "" {
-			return p.cfg.KeyPool.OpenAI.APIBase, p.cfg.KeyPool.OpenAI.APIKey
-		}
-	}
-	if p.cfg.KeyPool.OpenRouter.APIKey != "" {
-		return p.cfg.KeyPool.OpenRouter.APIBase, p.cfg.KeyPool.OpenRouter.APIKey
-	}
-	if p.cfg.KeyPool.OpenAI.APIKey != "" {
-		return p.cfg.KeyPool.OpenAI.APIBase, p.cfg.KeyPool.OpenAI.APIKey
+	apiBase, apiKey = p.cfg.FindChannelForModel(model)
+	if apiBase != "" && apiKey != "" {
+		return apiBase, apiKey
 	}
 	return "", ""
 }
