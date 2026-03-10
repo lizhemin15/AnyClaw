@@ -1,6 +1,7 @@
 package payment
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -32,7 +33,11 @@ func CreateAlipayPagePay(cfg *config.AlipayConfig, notifyURL, returnURL, outTrad
 		NotifyURL:   notifyURL,
 		ReturnURL:   returnURL,
 	}
-	return client.TradePagePay(pay)
+	u, err := client.TradePagePay(pay)
+	if err != nil {
+		return "", err
+	}
+	return u.String(), nil
 }
 
 // VerifyAlipayNotify 验证并解析支付宝异步通知
@@ -50,7 +55,7 @@ func VerifyAlipayNotify(cfg *config.AlipayConfig, r *http.Request) (outTradeNo, 
 			return
 		}
 	}
-	noti, err := client.DecodeNotification(r.Form)
+	noti, err := client.DecodeNotification(context.Background(), r.Form)
 	if err != nil {
 		return
 	}
