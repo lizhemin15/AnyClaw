@@ -30,6 +30,25 @@ type CreateRequest struct {
 	Name string `json:"name"`
 }
 
+// resolveAPIURL returns the API URL for containers. When config has localhost, use request Host for auto-detect.
+func (h *Handler) resolveAPIURL(r *http.Request) string {
+	if h.apiURL != "" && !strings.Contains(h.apiURL, "localhost") {
+		return ""
+	}
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+	if host == "" {
+		return ""
+	}
+	return scheme + "://" + host
+}
+
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	claims := request.FromContext(r.Context())
 	if claims == nil {
@@ -76,7 +95,8 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("[instances] creating instance id=%d name=%q, waiting for container", inst.ID, name)
-	containerID, hostID, err := h.scheduler.Run(context.Background(), inst.ID, token)
+	apiURL := h.resolveAPIURL(r)
+	containerID, hostID, err := h.scheduler.Run(context.Background(), inst.ID, token, apiURL)
 	if err != nil {
 		log.Printf("[instances] scheduler.Run failed for instance %d: %v", inst.ID, err)
 		_ = h.db.DeleteInstance(inst.ID)
