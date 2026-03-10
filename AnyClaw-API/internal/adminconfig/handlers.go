@@ -28,12 +28,8 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to load config"}`, http.StatusInternalServerError)
 		return
 	}
-	defaultModel := cfg.DefaultModel
-	if defaultModel == "" {
-		defaultModel = "gpt-4o"
-	}
 	resp := map[string]any{
-		"default_model": defaultModel,
+		"default_model": cfg.DefaultModel,
 		"key_pool": map[string]any{
 			"openai": map[string]any{
 				"api_key":  config.MaskAPIKey(cfg.KeyPool.OpenAI.APIKey),

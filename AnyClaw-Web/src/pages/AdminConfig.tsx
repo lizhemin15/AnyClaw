@@ -87,6 +87,15 @@ export default function AdminConfig() {
     )
   }
 
+  const [modelSwitchOn, setModelSwitchOn] = useState(false)
+  useEffect(() => {
+    if (form) setModelSwitchOn(!!(form.default_model ?? '').trim())
+  }, [form?.default_model])
+  const setModelEnabled = (on: boolean) => {
+    if (!form) return
+    setModelSwitchOn(on)
+    if (!on) setForm({ ...form, default_model: '' })
+  }
   const updateDefaultModel = (v: string) => {
     if (!form) return
     setForm({ ...form, default_model: v })
@@ -99,18 +108,42 @@ export default function AdminConfig() {
         <p className="text-sm text-slate-500 mt-1">管理 LLM API 渠道，宠物实例将使用此处配置的密钥调用模型</p>
       </div>
 
-      {/* 默认模型 */}
+      {/* 默认模型 - 滑纽启动 */}
       <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm p-5">
-        <h2 className="font-semibold text-slate-800 mb-2">默认模型</h2>
-        <p className="text-sm text-slate-500 mb-3">宠物实例对话时使用的模型，如 gpt-4o、claude-3-5-sonnet、openrouter/auto 等</p>
-        <input
-          type="text"
-          value={form?.default_model ?? ''}
-          onChange={(e) => updateDefaultModel(e.target.value)}
-          placeholder="gpt-4o"
-          className="w-full max-w-md px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-        />
-        <p className="text-xs text-slate-400 mt-1">当前使用：{form?.default_model || 'gpt-4o'}</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-slate-800">默认模型</h2>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {modelSwitchOn ? '已启用，添加模型后新领养宠物将使用' : '未启用，新领养宠物将使用 gpt-4o'}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={modelSwitchOn}
+            onClick={() => setModelEnabled(!modelSwitchOn)}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+              modelSwitchOn ? 'bg-indigo-600' : 'bg-slate-200'
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+                modelSwitchOn ? 'translate-x-5' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+        {modelSwitchOn && (
+          <div className="mt-4 pt-4 border-t border-slate-100">
+            <input
+              type="text"
+              value={form?.default_model ?? ''}
+              onChange={(e) => updateDefaultModel(e.target.value)}
+              placeholder="gpt-4o、claude-3-5-sonnet、openrouter/auto 等"
+              className="w-full max-w-md px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+          </div>
+        )}
       </div>
 
       {error && (
