@@ -50,7 +50,7 @@ func main() {
 	}
 	defer database.Close()
 
-	runApp(cfg, database)
+	runApp(configPath, cfg, database)
 }
 
 func runSetupMode(cfgPath string, cfg *config.Config) {
@@ -77,7 +77,7 @@ func runSetupMode(cfgPath string, cfg *config.Config) {
 	log.Fatal(http.ListenAndServe(addr, r))
 }
 
-func runApp(cfg *config.Config, database *db.DB) {
+func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	authSvc := auth.New(database, cfg.JWTSecret)
 	apiURL := cfg.APIURL
 	if apiURL == "" {
@@ -87,7 +87,6 @@ func runApp(cfg *config.Config, database *db.DB) {
 	instHandler := instances.New(database, sched, apiURL)
 	hostChecker := scheduler.HostChecker{}
 	hostHandler := hosts.New(database, hostChecker)
-	configPath := config.ConfigPath()
 	adminConfigHandler := adminconfig.New(configPath)
 	adminStatsHandler := adminstats.New(database)
 
