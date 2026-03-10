@@ -99,6 +99,10 @@ export async function createInstance(name: string): Promise<Instance> {
   });
 }
 
+export async function getInstance(id: number): Promise<Instance> {
+  return fetchApi<Instance>(`/instances/${id}`);
+}
+
 export async function deleteInstance(id: number): Promise<void> {
   await fetchApi(`/instances/${id}`, { method: 'DELETE' });
 }

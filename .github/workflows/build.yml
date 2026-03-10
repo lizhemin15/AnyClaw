@@ -117,7 +117,7 @@ jobs:
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/anyclaw-server:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
 
   docker-manager:
     name: Docker anyclaw-manager

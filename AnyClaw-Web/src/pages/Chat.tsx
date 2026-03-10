@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getToken, getWebSocketUrl, getMessages, type ChatMessage as ApiMessage } from '../api'
+import { getToken, getWebSocketUrl, getMessages, getInstance, type ChatMessage as ApiMessage } from '../api'
 
 interface PicoMessage {
   type: string
@@ -27,6 +27,7 @@ export default function Chat() {
   const [typing, setTyping] = useState(false)
   const [connected, setConnected] = useState(false)
   const [error, setError] = useState('')
+  const [instanceName, setInstanceName] = useState('')
   const wsRef = useRef<WebSocket | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const loadingMoreRef = useRef(false)
@@ -83,6 +84,9 @@ export default function Chat() {
       return
     }
     loadInitial()
+    getInstance(instanceId)
+      .then((inst) => setInstanceName(inst.name || '宠物'))
+      .catch(() => setInstanceName(''))
   }, [instanceId, navigate, loadInitial])
 
   // 页面重新可见时拉取最新消息（多标签/后台时可能漏收 WebSocket）
@@ -177,6 +181,28 @@ export default function Chat() {
     listRef.current?.scrollTo(0, listRef.current?.scrollHeight ?? 0)
   }, [messages, typing])
 
+  // 手机键盘弹出时滚动到底部，保持最新消息可见（类似微信）
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    const list = listRef.current
+    const input = inputRef.current
+    if (!list || !input) return
+    const scrollToBottom = () => {
+      requestAnimationFrame(() => list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' }))
+    }
+    const onFocus = () => scrollToBottom()
+    const vv = window.visualViewport
+    const onResize = () => {
+      if (document.activeElement === input) scrollToBottom()
+    }
+    input.addEventListener('focus', onFocus)
+    vv.addEventListener('resize', onResize)
+    return () => {
+      input.removeEventListener('focus', onFocus)
+      vv.removeEventListener('resize', onResize)
+    }
+  }, [])
+
   const handleScroll = () => {
     const el = listRef.current
     if (!el || loadingMoreRef.current || !hasMore) return
@@ -204,7 +230,7 @@ export default function Chat() {
 
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden bg-slate-50 sm:bg-white sm:max-w-2xl sm:mx-auto sm:my-4 sm:rounded-2xl sm:shadow-lg sm:border sm:border-slate-200 sm:min-h-[80vh] z-10 h-[100dvh] sm:h-auto">
-      {/* 顶部栏 - 移动端连接时极简，仅保留返回 */}
+      {/* 顶部栏 - 显示宠物名，移动端连接时隐藏状态 */}
       <div className="flex items-center gap-3 px-3 py-2.5 sm:py-3 sm:px-4 bg-white border-b border-slate-200 flex-shrink-0">
         <button
           onClick={() => navigate('/')}
@@ -213,9 +239,11 @@ export default function Chat() {
         >
           <span className="text-xl">←</span>
         </button>
-        {/* 移动端连接成功时隐藏，桌面端常显 */}
+        <span className="flex-1 font-medium text-slate-800 truncate">
+          {instanceName || '...'}
+        </span>
         <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${connected ? 'bg-green-500' : 'bg-red-500'} ${connected ? 'hidden sm:block' : ''}`} />
-        <span className={`text-sm text-slate-500 flex-1 ${connected ? 'hidden sm:block' : ''}`}>
+        <span className={`text-sm text-slate-500 ${connected ? 'hidden sm:block' : ''}`}>
           {connected ? '已连接' : '未连接'}
         </span>
       </div>
@@ -290,6 +318,7 @@ export default function Chat() {
         className="flex gap-2 p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white border-t border-slate-200 flex-shrink-0"
       >
         <input
+          ref={inputRef}
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
