@@ -21,8 +21,10 @@ export default function AdminStats() {
     load()
   }, [days])
 
+  const byModel = stats?.by_model ?? []
+  const byUser = stats?.by_user ?? []
   const maxModelTokens = Math.max(
-    ...(stats?.by_model?.map((m) => m.prompt_tokens + m.completion_tokens) ?? [1]),
+    ...(byModel.map((m) => m.prompt_tokens + m.completion_tokens)),
     1
   )
 
@@ -79,7 +81,7 @@ export default function AdminStats() {
           </div>
 
           {/* 按模型 - 带简易条形图 */}
-          {stats.by_model.length > 0 && (
+          {byModel.length > 0 && (
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-200">
                 <h2 className="font-semibold text-slate-800">模型使用分布</h2>
@@ -87,7 +89,7 @@ export default function AdminStats() {
               </div>
               <div className="p-5">
                 <div className="space-y-4">
-                  {stats.by_model.map((m, i) => {
+                  {byModel.map((m, i) => {
                     const tokens = m.prompt_tokens + m.completion_tokens
                     const pct = (tokens / maxModelTokens) * 100
                     return (
@@ -116,7 +118,7 @@ export default function AdminStats() {
           )}
 
           {/* 按模型 - 表格 */}
-          {stats.by_model.length > 0 && (
+          {byModel.length > 0 && (
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-200">
                 <h2 className="font-semibold text-slate-800">模型明细</h2>
@@ -132,7 +134,7 @@ export default function AdminStats() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {stats.by_model.map((m) => (
+                    {byModel.map((m) => (
                       <tr key={m.model} className="hover:bg-slate-50/50">
                         <td className="py-3 px-5 font-mono text-sm text-slate-800">{m.model}</td>
                         <td className="py-3 px-5 text-right text-sm text-slate-600">{m.calls.toLocaleString()}</td>
@@ -147,7 +149,7 @@ export default function AdminStats() {
           )}
 
           {/* 按用户 */}
-          {stats.by_user.length > 0 && (
+          {byUser.length > 0 && (
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-200">
                 <h2 className="font-semibold text-slate-800">用户使用明细</h2>
@@ -163,7 +165,7 @@ export default function AdminStats() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {stats.by_user.map((u) => (
+                    {byUser.map((u) => (
                       <tr key={u.user_id} className="hover:bg-slate-50/50">
                         <td className="py-3 px-5 text-sm text-slate-800">{u.email || u.user_id}</td>
                         <td className="py-3 px-5 text-right text-sm text-slate-600">{u.calls.toLocaleString()}</td>

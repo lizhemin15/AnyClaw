@@ -37,7 +37,10 @@ type UserUsage struct {
 }
 
 func (d *DB) GetUsageStats(since time.Time) (*UsageStats, error) {
-	s := &UsageStats{}
+	s := &UsageStats{
+		ByModel: []ModelUsage{},
+		ByUser:  []UserUsage{},
+	}
 	err := d.QueryRow(
 		"SELECT COUNT(*), COALESCE(SUM(prompt_tokens), 0), COALESCE(SUM(completion_tokens), 0) FROM usage_log WHERE created_at >= ?",
 		since,
