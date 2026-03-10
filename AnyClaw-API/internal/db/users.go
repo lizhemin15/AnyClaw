@@ -15,17 +15,20 @@ type User struct {
 	CreatedAt     string `json:"created_at"`
 }
 
-func (d *DB) CreateUser(email, passwordHash, role string, emailVerified bool) (*User, error) {
+func (d *DB) CreateUser(email, passwordHash, role string, emailVerified bool, initialEnergy int) (*User, error) {
 	if role == "" {
 		role = "user"
+	}
+	if initialEnergy <= 0 {
+		initialEnergy = 100
 	}
 	verified := 0
 	if emailVerified {
 		verified = 1
 	}
 	res, err := d.Exec(
-		"INSERT INTO users (email, password_hash, role, email_verified) VALUES (?, ?, ?, ?)",
-		email, passwordHash, role, verified,
+		"INSERT INTO users (email, password_hash, role, email_verified, energy) VALUES (?, ?, ?, ?, ?)",
+		email, passwordHash, role, verified, initialEnergy,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
@@ -101,4 +104,26 @@ func (d *DB) DeductUserEnergy(userID int64, amount int) (ok bool, err error) {
 	}
 	n, _ := res.RowsAffected()
 	return n > 0, nil
+}
+
+// GetUserInviterID 返回用户的邀请人 ID，无则返回 0, false
+func (d *DB) GetUserInviterID(userID int64) (int64, bool) {
+	var inviterID int64
+	err := d.QueryRow("SELECT inviter_id FROM users WHERE id = ? AND inviter_id IS NOT NULL", userID).Scan(&inviterID)
+	if err == sql.ErrNoRows || inviterID == 0 {
+		return 0, false
+	}
+	if err != nil {
+		return 0, false
+	}
+	return inviterID, true
+}
+
+// SetUserInviter 设置用户的邀请人（仅当尚未绑定且 inviterID != userID 时）
+func (d *DB) SetUserInviter(userID, inviterID int64) error {
+	if userID == inviterID {
+		return nil
+	}
+	_, err := d.Exec("UPDATE users SET inviter_id = ? WHERE id = ? AND inviter_id IS NULL", inviterID, userID)
+	return err
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { register, sendVerificationCode, getAuthConfig, setToken, type User } from '../api'
 
 interface RegisterProps {
@@ -17,6 +17,12 @@ export default function Register({ onRegister }: RegisterProps) {
   const [sendCodeCooldown, setSendCodeCooldown] = useState(0)
   const [verificationRequired, setVerificationRequired] = useState<boolean | null>(null)
   const [step, setStep] = useState(1)
+  const [searchParams] = useSearchParams()
+
+  useEffect(() => {
+    const invite = searchParams.get('invite') || searchParams.get('ref')
+    if (invite) setInviteCode(invite)
+  }, [searchParams])
 
   useEffect(() => {
     getAuthConfig()
@@ -148,7 +154,7 @@ export default function Register({ onRegister }: RegisterProps) {
             )}
             <div>
               <label htmlFor="invite" className="block text-sm font-medium text-slate-700 mb-2">
-                邀请码（可选，填写得 50 金币）
+                邀请码（可选，注册得奖励，受邀充值你可获返利）
               </label>
               <input
                 id="invite"

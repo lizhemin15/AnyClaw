@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/anyclaw/anyclaw-api/internal/config"
 	"github.com/anyclaw/anyclaw-api/internal/db"
 	"github.com/anyclaw/anyclaw-api/internal/request"
 	"github.com/go-chi/chi/v5"
@@ -15,11 +16,12 @@ import (
 const codeChars = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 type Handler struct {
-	db *db.DB
+	db         *db.DB
+	configPath string
 }
 
-func New(db *db.DB) *Handler {
-	return &Handler{db: db}
+func New(db *db.DB, configPath string) *Handler {
+	return &Handler{db: db, configPath: configPath}
 }
 
 func (h *Handler) Recharge(w http.ResponseWriter, r *http.Request) {
@@ -90,10 +92,12 @@ func (h *Handler) UseInviteCode(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
 		return
 	}
-	_ = h.db.AddUserEnergy(claims.UserID, InviteReward)
-	_ = h.db.AddUserEnergy(inviterID, InviteReward)
+	cfg, _ := config.Load(h.configPath)
+	reward := config.GetEnergyConfig(cfg).InviteReward
+	_ = h.db.AddUserEnergy(claims.UserID, reward)
+	_ = h.db.AddUserEnergy(inviterID, reward)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "reward": InviteReward})
+	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "reward": reward})
 }
 
 func (h *Handler) RunDaily(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +110,9 @@ func (h *Handler) RunDaily(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed"}`, http.StatusInternalServerError)
 		return
 	}
-	n, _ := h.db.DeleteInstancesZeroOverDays(ZeroDaysToDelete)
+	cfg, _ := config.Load(h.configPath)
+	days := config.GetEnergyConfig(cfg).ZeroDaysToDelete
+	n, _ := h.db.DeleteInstancesZeroOverDays(days)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "deleted": n})
 }

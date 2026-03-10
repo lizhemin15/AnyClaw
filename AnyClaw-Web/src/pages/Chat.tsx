@@ -20,7 +20,7 @@ interface ChatMessage {
 
 const PAGE_SIZE = 20
 
-const TYPING_PHRASES = ['嗯...', '想想...', '正在琢磨...', '快好了～', '有了！']
+const TYPING_PHRASES = ['嗯...', '想想看...', '稍等一下下～', '快好啦～', '马上就好～']
 
 function MessageContent({
   content,

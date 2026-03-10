@@ -60,6 +60,35 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		resp["smtp"] = smtp
 	}
+	if cfg.Payment != nil {
+		payment := map[string]any{"plans": cfg.Payment.Plans}
+		if cfg.Payment.Alipay != nil {
+			payment["alipay"] = map[string]any{
+				"enabled":            cfg.Payment.Alipay.Enabled,
+				"app_id":             cfg.Payment.Alipay.AppID,
+				"private_key":       config.MaskAPIKey(cfg.Payment.Alipay.PrivateKey),
+				"alipay_public_key": config.MaskAPIKey(cfg.Payment.Alipay.AlipayPubKey),
+				"is_sandbox":        cfg.Payment.Alipay.IsSandbox,
+			}
+		}
+		if cfg.Payment.Wechat != nil {
+			payment["wechat"] = map[string]any{
+				"enabled":     cfg.Payment.Wechat.Enabled,
+				"app_id":     cfg.Payment.Wechat.AppID,
+				"mch_id":     cfg.Payment.Wechat.MchID,
+				"api_v3_key": config.MaskAPIKey(cfg.Payment.Wechat.APIv3Key),
+				"serial_no":  cfg.Payment.Wechat.SerialNo,
+				"private_key": config.MaskAPIKey(cfg.Payment.Wechat.PrivateKey),
+			}
+		}
+		resp["payment"] = payment
+	}
+	if cfg.Energy != nil {
+		resp["energy"] = cfg.Energy
+	} else {
+		def := config.GetEnergyDefaults()
+		resp["energy"] = def
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -71,8 +100,10 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Channels []config.Channel  `json:"channels"`
-		SMTP     *config.SMTPConfig `json:"smtp"`
+		Channels []config.Channel      `json:"channels"`
+		SMTP     *config.SMTPConfig    `json:"smtp"`
+		Payment  *config.PaymentConfig `json:"payment"`
+		Energy   *config.EnergyConfig  `json:"energy"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
@@ -104,7 +135,33 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 	} else if smtp != nil && cfg.SMTP != nil && (smtp.Pass == "" || strings.HasPrefix(smtp.Pass, "****")) {
 		smtp.Pass = cfg.SMTP.Pass
 	}
-	if err := config.SaveAdminConfig(h.configPath, channels, smtp); err != nil {
+	// Merge Payment: preserve secrets if client sent masked value; keep existing if not sent
+	payment := req.Payment
+	if payment == nil {
+		payment = cfg.Payment
+	} else if cfg.Payment != nil {
+		if payment.Alipay != nil && cfg.Payment.Alipay != nil {
+			if payment.Alipay.PrivateKey == "" || strings.HasPrefix(payment.Alipay.PrivateKey, "****") {
+				payment.Alipay.PrivateKey = cfg.Payment.Alipay.PrivateKey
+			}
+			if payment.Alipay.AlipayPubKey == "" || strings.HasPrefix(payment.Alipay.AlipayPubKey, "****") {
+				payment.Alipay.AlipayPubKey = cfg.Payment.Alipay.AlipayPubKey
+			}
+		}
+		if payment.Wechat != nil && cfg.Payment.Wechat != nil {
+			if payment.Wechat.APIv3Key == "" || strings.HasPrefix(payment.Wechat.APIv3Key, "****") {
+				payment.Wechat.APIv3Key = cfg.Payment.Wechat.APIv3Key
+			}
+			if payment.Wechat.PrivateKey == "" || strings.HasPrefix(payment.Wechat.PrivateKey, "****") {
+				payment.Wechat.PrivateKey = cfg.Payment.Wechat.PrivateKey
+			}
+		}
+	}
+	energy := req.Energy
+	if energy == nil {
+		energy = cfg.Energy
+	}
+	if err := config.SaveAdminConfig(h.configPath, channels, smtp, payment, energy); err != nil {
 		http.Error(w, `{"error":"failed to save config"}`, http.StatusInternalServerError)
 		return
 	}
@@ -263,7 +320,11 @@ func (h *Handler) TestSMTP(w http.ResponseWriter, r *http.Request) {
 	err := mail.TestSMTP(req.Host, req.Port, req.User, req.Pass, req.From)
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
-		json.NewEncoder(w).Encode(map[string]any{"ok": false, "message": err.Error()})
+		msg := err.Error()
+		if strings.Contains(strings.ToLower(msg), "eof") {
+			msg += "（163/QQ 等邮箱须使用授权码而非登录密码；发件人建议填邮箱账号）"
+		}
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "message": msg})
 		return
 	}
 	json.NewEncoder(w).Encode(map[string]any{"ok": true, "message": "连接正常"})

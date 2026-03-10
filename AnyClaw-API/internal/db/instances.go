@@ -20,13 +20,16 @@ type Instance struct {
 	CreatedAt        string  `json:"created_at"`
 }
 
-func (d *DB) CreateInstance(userID int64, name, token string, initialEnergy int) (*Instance, error) {
+func (d *DB) CreateInstance(userID int64, name, token string, initialEnergy int, dailyConsume int) (*Instance, error) {
 	if initialEnergy < 0 {
 		initialEnergy = 100
 	}
+	if dailyConsume <= 0 {
+		dailyConsume = 10
+	}
 	res, err := d.Exec(
-		"INSERT INTO instances (user_id, name, status, token, energy, daily_consume) VALUES (?, ?, 'creating', ?, ?, 10)",
-		userID, name, token, initialEnergy,
+		"INSERT INTO instances (user_id, name, status, token, energy, daily_consume) VALUES (?, ?, 'creating', ?, ?, ?)",
+		userID, name, token, initialEnergy, dailyConsume,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create instance: %w", err)

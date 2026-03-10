@@ -11,7 +11,6 @@ import (
 
 	"github.com/anyclaw/anyclaw-api/internal/config"
 	"github.com/anyclaw/anyclaw-api/internal/db"
-	"github.com/anyclaw/anyclaw-api/internal/energy"
 	"github.com/anyclaw/anyclaw-api/internal/mail"
 	"github.com/anyclaw/anyclaw-api/internal/ratelimit"
 	"github.com/anyclaw/anyclaw-api/internal/request"
@@ -194,15 +193,18 @@ func (a *Auth) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
-	user, err := a.db.CreateUser(req.Email, hash, "user", smtpOk)
+	cfg, _ := config.Load(a.configPath)
+	initialEnergy := config.GetEnergyConfig(cfg).NewUserEnergy
+	user, err := a.db.CreateUser(req.Email, hash, "user", smtpOk, initialEnergy)
 	if err != nil {
 		http.Error(w, `{"error":"failed to create user"}`, http.StatusInternalServerError)
 		return
 	}
 	if req.InviteCode != "" {
 		if inviterID, err := a.db.UseInvitation(strings.TrimSpace(req.InviteCode), user.ID); err == nil {
-			_ = a.db.AddUserEnergy(user.ID, energy.InviteReward)
-			_ = a.db.AddUserEnergy(inviterID, energy.InviteReward)
+			reward := config.GetEnergyConfig(cfg).InviteReward
+			_ = a.db.AddUserEnergy(user.ID, reward)
+			_ = a.db.AddUserEnergy(inviterID, reward)
 		}
 	}
 	token, err := a.CreateToken(user)

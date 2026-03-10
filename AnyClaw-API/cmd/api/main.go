@@ -16,6 +16,7 @@ import (
 	"github.com/anyclaw/anyclaw-api/internal/instances"
 	"github.com/anyclaw/anyclaw-api/internal/llm"
 	"github.com/anyclaw/anyclaw-api/internal/messages"
+	"github.com/anyclaw/anyclaw-api/internal/payment"
 	"github.com/anyclaw/anyclaw-api/internal/scheduler"
 	"github.com/anyclaw/anyclaw-api/internal/setup"
 	"github.com/anyclaw/anyclaw-api/internal/web"
@@ -86,7 +87,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		apiURL = fmt.Sprintf("http://localhost:%d", cfg.Port)
 	}
 	sched := scheduler.New(apiURL, cfg.DockerImage, configPath, database)
-	instHandler := instances.New(database, sched, apiURL)
+	instHandler := instances.New(database, sched, apiURL, configPath)
 	hostChecker := scheduler.HostChecker{}
 	hostHandler := hosts.New(database, hostChecker)
 	adminConfigHandler := adminconfig.New(configPath)
@@ -95,7 +96,8 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	wsHub := ws.NewHub()
 	wsHandler := ws.NewHandler(database, wsHub)
 	msgHandler := messages.New(database)
-	energyHandler := energy.New(database)
+	energyHandler := energy.New(database, configPath)
+	paymentHandler := payment.New(configPath, database, apiURL)
 
 	proxy := llm.New(configPath, database, database)
 
@@ -141,6 +143,13 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Post("/invite", energyHandler.InviteCode)
 		r.Post("/invite/use", energyHandler.UseInviteCode)
 	})
+	r.Get("/api/payment/plans", paymentHandler.GetPlans)
+	r.Route("/api/payment", func(r chi.Router) {
+		r.Use(authSvc.Middleware)
+		r.Post("/order", paymentHandler.CreateOrder)
+	})
+	r.Post("/api/payment/notify/alipay", paymentHandler.NotifyAlipay)
+	r.Post("/api/payment/notify/wechat", paymentHandler.NotifyWechat)
 	r.Route("/admin", func(r chi.Router) {
 		r.Use(authSvc.AdminMiddleware)
 		r.Get("/config", adminConfigHandler.GetConfig)

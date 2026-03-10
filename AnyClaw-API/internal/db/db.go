@@ -99,6 +99,9 @@ func (d *DB) migrate() error {
 	if _, err := d.Exec("ALTER TABLE users ADD COLUMN energy INT NOT NULL DEFAULT 100"); err != nil && !isDuplicateColumn(err) {
 		log.Printf("[db] alter users: %v", err)
 	}
+	if _, err := d.Exec("ALTER TABLE users ADD COLUMN inviter_id BIGINT"); err != nil && !isDuplicateColumn(err) {
+		log.Printf("[db] alter users inviter_id: %v", err)
+	}
 	if _, err := d.Exec("ALTER TABLE instances ADD COLUMN energy INT NOT NULL DEFAULT 100"); err != nil && !isDuplicateColumn(err) {
 		log.Printf("[db] alter instances: %v", err)
 	}
@@ -141,6 +144,24 @@ func (d *DB) migrate() error {
 		INDEX idx_vc_expires (expires_at)
 	)`); err != nil {
 		log.Printf("[db] create verification_codes: %v", err)
+	}
+	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS orders (
+		id BIGINT AUTO_INCREMENT PRIMARY KEY,
+		user_id BIGINT NOT NULL,
+		plan_id VARCHAR(64) NOT NULL,
+		energy INT NOT NULL,
+		price_cny INT NOT NULL,
+		channel VARCHAR(32) NOT NULL,
+		status VARCHAR(32) NOT NULL DEFAULT 'pending',
+		out_trade_no VARCHAR(64) NOT NULL UNIQUE,
+		external_id VARCHAR(128),
+		paid_at DATETIME,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		INDEX idx_orders_user (user_id),
+		INDEX idx_orders_status (status),
+		INDEX idx_orders_out_trade_no (out_trade_no)
+	)`); err != nil {
+		log.Printf("[db] create orders: %v", err)
 	}
 	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS usage_log (
 		id BIGINT AUTO_INCREMENT PRIMARY KEY,

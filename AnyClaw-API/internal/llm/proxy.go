@@ -14,7 +14,6 @@ import (
 
 	"github.com/anyclaw/anyclaw-api/internal/config"
 	"github.com/anyclaw/anyclaw-api/internal/db"
-	"github.com/anyclaw/anyclaw-api/internal/energy"
 )
 
 // TokenResolver resolves a Bearer token to instance and user IDs.
@@ -88,11 +87,13 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	// Check and deduct energy for DB-backed instances
 	if p.db != nil {
+		cfg, _ := config.Load(p.configPath)
+		minEnergy := config.GetEnergyConfig(cfg).MinEnergyForTask
 		instID, _ := strconv.ParseInt(instanceID, 10, 64)
 		inst, err := p.db.GetInstanceByID(instID)
 		if err == nil && inst != nil {
-			if inst.Energy < energy.MinEnergyForTask {
-				http.Error(w, `{"error":{"message":"活力不足，无法完成对话（需至少 5 活力）"}}`, http.StatusPaymentRequired)
+			if inst.Energy < minEnergy {
+				http.Error(w, `{"error":{"message":"活力不足，无法完成对话（需至少 `+strconv.Itoa(minEnergy)+` 活力）"}}`, http.StatusPaymentRequired)
 				return
 			}
 		}
@@ -168,8 +169,10 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		p.logUsage(instanceID, userID, model, apiBase, promptTokens, completionTokens)
 		// Deduct energy based on actual token consumption
 		if p.db != nil {
+			cfg, _ := config.Load(p.configPath)
+			tokensPerEnergy := config.GetEnergyConfig(cfg).TokensPerEnergy
 			instID, _ := strconv.ParseInt(instanceID, 10, 64)
-			cost := energyFromTokens(promptTokens, completionTokens)
+			cost := energyFromTokens(promptTokens, completionTokens, tokensPerEnergy)
 			_, _ = p.db.DeductInstanceEnergy(instID, cost)
 		}
 	}
@@ -236,13 +239,16 @@ func parseUsageFromResponse(respBody []byte) (promptTokens, completionTokens int
 	return 0, 0
 }
 
-// energyFromTokens returns energy cost: ceil(total_tokens / TokensPerEnergy), minimum 1.
-func energyFromTokens(promptTokens, completionTokens int) int {
+// energyFromTokens returns energy cost: ceil(total_tokens / tokensPerEnergy), minimum 1.
+func energyFromTokens(promptTokens, completionTokens int, tokensPerEnergy int) int {
 	total := promptTokens + completionTokens
 	if total <= 0 {
-		return energy.TaskCost
+		return 1
 	}
-	cost := int(math.Ceil(float64(total) / float64(energy.TokensPerEnergy)))
+	if tokensPerEnergy <= 0 {
+		tokensPerEnergy = 1000
+	}
+	cost := int(math.Ceil(float64(total) / float64(tokensPerEnergy)))
 	if cost < 1 {
 		cost = 1
 	}

@@ -23,13 +23,15 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
           OpenClaw
         </Link>
         {user && (
-          <span className="text-sm text-amber-600 font-medium">🪙 {user.energy ?? 0}</span>
+          <Link to="/recharge" className="text-sm text-amber-600 font-medium hover:text-amber-700 active:opacity-70">
+            🪙 {user.energy ?? 0}
+          </Link>
         )}
         <nav className="flex items-center gap-2 sm:gap-4">
           {user?.role === 'admin' && (
             <>
               <Link to="/admin/config" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isConfig ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
-                AI配置
+                配置
               </Link>
               <Link to="/admin/stats" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isStats ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
                 监控

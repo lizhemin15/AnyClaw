@@ -45,13 +45,18 @@ func ConfigFromEnv() (host string, port int, user, pass, from string, ok bool) {
 	return host, port, user, pass, from, true
 }
 
+// tlsConfigForSMTP returns TLS config for SMTP (InsecureSkipVerify for compatibility with some providers)
+func tlsConfigForSMTP(host string) *tls.Config {
+	return &tls.Config{ServerName: host, InsecureSkipVerify: true}
+}
+
 // TestSMTP tests SMTP connectivity.
 func TestSMTP(host string, port int, user, pass, from string) error {
 	if port <= 0 {
 		port = 587
 	}
 	addr := fmt.Sprintf("%s:%d", host, port)
-	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
+	conn, err := net.DialTimeout("tcp", addr, 15*time.Second)
 	if err != nil {
 		return fmt.Errorf("连接失败: %w", err)
 	}
@@ -60,11 +65,11 @@ func TestSMTP(host string, port int, user, pass, from string) error {
 		return nil
 	}
 	auth := smtp.PlainAuth("", user, pass, host)
+	tlsCfg := tlsConfigForSMTP(host)
 	if port == 465 {
-		tlsConfig := &tls.Config{ServerName: host}
-		conn, err = tls.Dial("tcp", addr, tlsConfig)
+		conn, err = tls.Dial("tcp", addr, tlsCfg)
 	} else {
-		conn, err = net.DialTimeout("tcp", addr, 10*time.Second)
+		conn, err = net.DialTimeout("tcp", addr, 15*time.Second)
 	}
 	if err != nil {
 		return fmt.Errorf("连接失败: %w", err)
@@ -76,7 +81,7 @@ func TestSMTP(host string, port int, user, pass, from string) error {
 	}
 	defer client.Close()
 	if port != 465 {
-		if err = client.StartTLS(&tls.Config{ServerName: host}); err != nil {
+		if err = client.StartTLS(tlsCfg); err != nil {
 			return fmt.Errorf("STARTTLS 失败: %w", err)
 		}
 	}
@@ -136,8 +141,7 @@ func send(host string, port int, user, pass, from, to, subject, body string) err
 		auth = smtp.PlainAuth("", user, pass, host)
 	}
 	if port == 465 {
-		tlsConfig := &tls.Config{ServerName: host}
-		conn, err := tls.Dial("tcp", addr, tlsConfig)
+		conn, err := tls.Dial("tcp", addr, tlsConfigForSMTP(host))
 		if err != nil {
 			return err
 		}

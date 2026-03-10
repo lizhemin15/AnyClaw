@@ -8,16 +8,113 @@ import (
 )
 
 type Config struct {
-	Port         int           `json:"port" env:"ANYCLAW_API_PORT"`
-	DBDSN        string        `json:"db_dsn"`
-	JWTSecret    string        `json:"jwt_secret"`
-	APIURL       string        `json:"api_url"`
-	DockerImage  string        `json:"docker_image"`
-	DefaultModel string        `json:"default_model"` // deprecated
-	Channels     []Channel     `json:"channels"`     // 用户添加的渠道，每个渠道可配置、启用、添加多个模型
-	KeyPool      KeyPool       `json:"key_pool"`     // deprecated, migrate to channels
-	InstanceMap  InstanceMap   `json:"instance_map"`
-	SMTP         *SMTPConfig   `json:"smtp,omitempty"` // 注册验证码邮件
+	Port         int            `json:"port" env:"ANYCLAW_API_PORT"`
+	DBDSN        string         `json:"db_dsn"`
+	JWTSecret    string         `json:"jwt_secret"`
+	APIURL       string         `json:"api_url"`
+	DockerImage  string         `json:"docker_image"`
+	DefaultModel string         `json:"default_model"` // deprecated
+	Channels     []Channel      `json:"channels"`     // 用户添加的渠道，每个渠道可配置、启用、添加多个模型
+	KeyPool      KeyPool        `json:"key_pool"`     // deprecated, migrate to channels
+	InstanceMap  InstanceMap    `json:"instance_map"`
+	SMTP         *SMTPConfig    `json:"smtp,omitempty"` // 注册验证码邮件
+	Payment      *PaymentConfig `json:"payment,omitempty"`
+	Energy       *EnergyConfig  `json:"energy,omitempty"` // 金币/活力经济参数，即时生效
+}
+
+// EnergyConfig 金币经济配置，全部即时生效
+type EnergyConfig struct {
+	TokensPerEnergy      int `json:"tokens_per_energy"`      // 每 N token 消耗 1 活力，默认 1000
+	AdoptCost            int `json:"adopt_cost"`             // 领养宠物消耗金币，默认 100
+	DailyConsume         int `json:"daily_consume"`         // 每只宠物每日消耗活力，默认 10
+	MinEnergyForTask     int `json:"min_energy_for_task"`    // 低于此值无法对话，默认 5
+	ZeroDaysToDelete     int `json:"zero_days_to_delete"`    // 连续无活力天数后永久消失，默认 3
+	InviteReward         int `json:"invite_reward"`          // 邀请奖励（双方各得），默认 50
+	NewUserEnergy        int `json:"new_user_energy"`        // 新用户初始金币，默认 100
+	InviteCommissionRate int `json:"invite_commission_rate"` // 受邀用户充值时的邀请人返利比例(0-100)，默认 5
+}
+
+// GetEnergyDefaults 返回默认值
+func GetEnergyDefaults() EnergyConfig {
+	return EnergyConfig{
+		TokensPerEnergy:      1000,
+		AdoptCost:            100,
+		DailyConsume:         10,
+		MinEnergyForTask:     5,
+		ZeroDaysToDelete:     3,
+		InviteReward:         50,
+		NewUserEnergy:        100,
+		InviteCommissionRate: 5,
+	}
+}
+
+// GetEnergyConfig 从 cfg 获取能量配置，带默认值
+func GetEnergyConfig(cfg *Config) EnergyConfig {
+	def := GetEnergyDefaults()
+	if cfg == nil || cfg.Energy == nil {
+		return def
+	}
+	e := *cfg.Energy
+	if e.TokensPerEnergy <= 0 {
+		e.TokensPerEnergy = def.TokensPerEnergy
+	}
+	if e.AdoptCost <= 0 {
+		e.AdoptCost = def.AdoptCost
+	}
+	if e.DailyConsume < 0 {
+		e.DailyConsume = def.DailyConsume
+	}
+	if e.MinEnergyForTask < 0 {
+		e.MinEnergyForTask = def.MinEnergyForTask
+	}
+	if e.ZeroDaysToDelete <= 0 {
+		e.ZeroDaysToDelete = def.ZeroDaysToDelete
+	}
+	if e.InviteReward < 0 {
+		e.InviteReward = def.InviteReward
+	}
+	if e.NewUserEnergy < 0 {
+		e.NewUserEnergy = def.NewUserEnergy
+	}
+	if e.InviteCommissionRate < 0 || e.InviteCommissionRate > 100 {
+		e.InviteCommissionRate = def.InviteCommissionRate
+	}
+	return e
+}
+
+// PaymentConfig 支付配置：支付宝、微信、充值档位
+type PaymentConfig struct {
+	Alipay *AlipayConfig  `json:"alipay,omitempty"`
+	Wechat *WechatConfig  `json:"wechat,omitempty"`
+	Plans  []PaymentPlan  `json:"plans,omitempty"`
+}
+
+// AlipayConfig 支付宝配置
+type AlipayConfig struct {
+	Enabled     bool   `json:"enabled"`
+	AppID       string `json:"app_id"`
+	PrivateKey  string `json:"private_key"`
+	AlipayPubKey string `json:"alipay_public_key"` // 支付宝公钥
+	IsSandbox   bool   `json:"is_sandbox"`
+}
+
+// WechatConfig 微信支付配置
+type WechatConfig struct {
+	Enabled     bool   `json:"enabled"`
+	AppID       string `json:"app_id"`
+	MchID       string `json:"mch_id"`
+	APIv3Key    string `json:"api_v3_key"`
+	SerialNo    string `json:"serial_no"`   // 证书序列号
+	PrivateKey  string `json:"private_key"` // 商户私钥 PEM
+}
+
+// PaymentPlan 充值档位
+type PaymentPlan struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`    // 如 "100 金币"
+	Energy   int    `json:"energy"`   // 金币数量
+	PriceCny int    `json:"price_cny"` // 价格（分）
+	Sort     int    `json:"sort"`
 }
 
 // SMTPConfig 邮件服务配置
@@ -199,8 +296,8 @@ func Save(path string, c *SaveConfig) error {
 	return os.WriteFile(path, data, 0600)
 }
 
-// SaveAdminConfig saves channels and optionally smtp to config file. Preserves other fields.
-func SaveAdminConfig(path string, channels []Channel, smtp *SMTPConfig) error {
+// SaveAdminConfig saves channels, smtp, payment, energy to config file. Preserves other fields.
+func SaveAdminConfig(path string, channels []Channel, smtp *SMTPConfig, payment *PaymentConfig, energy *EnergyConfig) error {
 	if path == "" {
 		path = ConfigPath()
 	}
@@ -224,6 +321,12 @@ func SaveAdminConfig(path string, channels []Channel, smtp *SMTPConfig) error {
 	raw["channels"] = channels
 	if smtp != nil {
 		raw["smtp"] = smtp
+	}
+	if payment != nil {
+		raw["payment"] = payment
+	}
+	if energy != nil {
+		raw["energy"] = energy
 	}
 	data, err := json.MarshalIndent(raw, "", "  ")
 	if err != nil {

@@ -7,9 +7,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/anyclaw/anyclaw-api/internal/config"
 	"github.com/anyclaw/anyclaw-api/internal/db"
-	"github.com/anyclaw/anyclaw-api/internal/energy"
 	"github.com/anyclaw/anyclaw-api/internal/request"
 	"github.com/anyclaw/anyclaw-api/internal/scheduler"
 	"github.com/go-chi/chi/v5"
@@ -17,13 +18,14 @@ import (
 )
 
 type Handler struct {
-	db        *db.DB
-	scheduler *scheduler.Scheduler
-	apiURL    string
+	db          *db.DB
+	scheduler   *scheduler.Scheduler
+	apiURL      string
+	configPath  string
 }
 
-func New(db *db.DB, sched *scheduler.Scheduler, apiURL string) *Handler {
-	return &Handler{db: db, scheduler: sched, apiURL: apiURL}
+func New(db *db.DB, sched *scheduler.Scheduler, apiURL, configPath string) *Handler {
+	return &Handler{db: db, scheduler: sched, apiURL: apiURL, configPath: configPath}
 }
 
 type CreateRequest struct {
@@ -82,14 +84,15 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = "instance"
 	}
-	// 先检查金币，但不扣除；容器真正创建成功后才扣
+	cfg, _ := config.Load(h.configPath)
+	ec := config.GetEnergyConfig(cfg)
 	u, _ := h.db.GetUserByID(claims.UserID)
-	if u == nil || u.Energy < energy.AdoptCost {
-		http.Error(w, `{"error":"金币不足，领养需要 100 金币"}`, http.StatusBadRequest)
+	if u == nil || u.Energy < ec.AdoptCost {
+		http.Error(w, `{"error":"金币不足，领养需要 `+strconv.Itoa(ec.AdoptCost)+` 金币"}`, http.StatusBadRequest)
 		return
 	}
 	token := "inst-" + uuid.New().String()
-	inst, err := h.db.CreateInstance(claims.UserID, name, token, 0)
+	inst, err := h.db.CreateInstance(claims.UserID, name, token, 0, ec.DailyConsume)
 	if err != nil {
 		http.Error(w, `{"error":"failed to create instance"}`, http.StatusInternalServerError)
 		return
@@ -105,7 +108,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "创建宠物失败：" + err.Error()})
 		return
 	}
-	ok, err := h.db.DeductUserEnergy(claims.UserID, energy.AdoptCost)
+	ok, err := h.db.DeductUserEnergy(claims.UserID, ec.AdoptCost)
 	if err != nil || !ok {
 		log.Printf("[instances] deduct energy failed for user %d, container already running", claims.UserID)
 		_ = h.scheduler.Stop(context.Background(), hostID, containerID, inst.ID)
@@ -113,14 +116,26 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"金币不足或系统异常"}`, http.StatusInternalServerError)
 		return
 	}
-	if err := h.db.UpdateInstanceContainer(inst.ID, containerID, hostID); err != nil {
-		_ = h.db.AddUserEnergy(claims.UserID, energy.AdoptCost)
+	var updateErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt*100) * time.Millisecond)
+		}
+		updateErr = h.db.UpdateInstanceContainer(inst.ID, containerID, hostID)
+		if updateErr == nil {
+			break
+		}
+		log.Printf("[instances] UpdateInstanceContainer attempt %d failed for instance %d: %v", attempt+1, inst.ID, updateErr)
+	}
+	if updateErr != nil {
+		_ = h.db.AddUserEnergy(claims.UserID, ec.AdoptCost)
 		_ = h.scheduler.Stop(context.Background(), hostID, containerID, inst.ID)
 		_ = h.db.DeleteInstance(inst.ID)
+		log.Printf("[instances] failed to save instance %d after retries: %v", inst.ID, updateErr)
 		http.Error(w, `{"error":"failed to save instance"}`, http.StatusInternalServerError)
 		return
 	}
-	_ = h.db.AddInstanceEnergy(inst.ID, energy.AdoptCost)
+	_ = h.db.AddInstanceEnergy(inst.ID, ec.AdoptCost)
 	inst, _ = h.db.GetInstanceByID(inst.ID)
 	log.Printf("[instances] instance %d container started: %s on host %s", inst.ID, containerID, hostID)
 	w.Header().Set("Content-Type", "application/json")

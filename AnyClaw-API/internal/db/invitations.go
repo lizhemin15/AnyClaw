@@ -23,5 +23,6 @@ func (d *DB) UseInvitation(code string, inviteeID int64) (inviterID int64, err e
 	if err != nil {
 		return 0, err
 	}
+	_ = d.SetUserInviter(inviteeID, inviter)
 	return inviter, nil
 }

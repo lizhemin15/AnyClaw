@@ -302,9 +302,53 @@ export interface SMTPConfig {
   from: string;
 }
 
+export interface PaymentPlan {
+  id: string;
+  name: string;
+  energy: number;
+  price_cny: number;
+  sort: number;
+}
+
+export interface AlipayConfig {
+  enabled: boolean;
+  app_id: string;
+  private_key: string;
+  alipay_public_key: string;
+  is_sandbox: boolean;
+}
+
+export interface WechatConfig {
+  enabled: boolean;
+  app_id: string;
+  mch_id: string;
+  api_v3_key: string;
+  serial_no: string;
+  private_key: string;
+}
+
+export interface PaymentConfig {
+  alipay?: AlipayConfig;
+  wechat?: WechatConfig;
+  plans: PaymentPlan[];
+}
+
+export interface EnergyConfig {
+  tokens_per_energy: number;
+  adopt_cost: number;
+  daily_consume: number;
+  min_energy_for_task: number;
+  zero_days_to_delete: number;
+  invite_reward: number;
+  new_user_energy: number;
+  invite_commission_rate: number;
+}
+
 export interface AdminConfig {
   channels: Channel[];
   smtp?: SMTPConfig;
+  payment?: PaymentConfig;
+  energy?: EnergyConfig;
 }
 
 export async function getAdminConfig(): Promise<AdminConfig> {
@@ -380,6 +424,19 @@ export async function useInviteCode(code: string): Promise<{ status: string; rew
   return fetchApi<{ status: string; reward: number }>('/energy/invite/use', {
     method: 'POST',
     body: JSON.stringify({ code }),
+  });
+}
+
+export async function getPaymentPlans(): Promise<PaymentPlan[]> {
+  const res = await fetch(`${API_BASE}/api/payment/plans`);
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+export async function createPaymentOrder(planId: string, channel: 'alipay' | 'wechat'): Promise<{ out_trade_no: string; pay_url?: string; code_url?: string }> {
+  return fetchApi<{ out_trade_no: string; pay_url?: string; code_url?: string }>('/api/payment/order', {
+    method: 'POST',
+    body: JSON.stringify({ plan_id: planId, channel }),
   });
 }
 
