@@ -201,9 +201,65 @@ export async function checkHostStatus(id: string): Promise<{ status: string }> {
   return fetchApi<{ status: string }>(`/admin/hosts/${id}/check`, { method: 'POST' });
 }
 
-export async function getAdminUsers(): Promise<User[]> {
-  const data = await fetchApi<User[] | null>('/admin/energy/users');
+export interface UserWithInstances extends User {
+  instance_count: number;
+}
+
+export async function getAdminUsers(): Promise<UserWithInstances[]> {
+  const data = await fetchApi<UserWithInstances[] | null>('/admin/energy/users');
   return Array.isArray(data) ? data : [];
+}
+
+export interface KeyPoolEntry {
+  api_key: string;
+  api_base: string;
+}
+
+export interface AdminConfig {
+  key_pool: {
+    openai: KeyPoolEntry;
+    anthropic: KeyPoolEntry;
+    openrouter: KeyPoolEntry;
+  };
+}
+
+export async function getAdminConfig(): Promise<AdminConfig> {
+  return fetchApi<AdminConfig>('/admin/config');
+}
+
+export async function putAdminConfig(config: AdminConfig): Promise<void> {
+  await fetchApi('/admin/config', {
+    method: 'PUT',
+    body: JSON.stringify(config),
+  });
+}
+
+export interface ModelUsage {
+  model: string;
+  calls: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+}
+
+export interface UserUsage {
+  user_id: string;
+  email?: string;
+  calls: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+}
+
+export interface AdminStats {
+  total_calls: number;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  by_model: ModelUsage[];
+  by_user: UserUsage[];
+}
+
+export async function getAdminStats(days?: number): Promise<AdminStats> {
+  const url = days ? `/admin/stats?days=${days}` : '/admin/stats';
+  return fetchApi<AdminStats>(url);
 }
 
 export async function adminRechargeUser(userId: number, amount: number): Promise<void> {

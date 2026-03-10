@@ -101,6 +101,47 @@ func Save(path string, c *SaveConfig) error {
 	return os.WriteFile(path, data, 0600)
 }
 
+// SaveKeyPool merges KeyPool into config file and writes. Preserves other fields.
+func SaveKeyPool(path string, pool KeyPool) error {
+	if path == "" {
+		path = ConfigPath()
+	}
+	dir := path
+	for i := len(dir) - 1; i >= 0; i-- {
+		if dir[i] == '/' || dir[i] == '\\' {
+			dir = path[:i]
+			break
+		}
+	}
+	if dir != path {
+		os.MkdirAll(dir, 0755)
+	}
+	var raw map[string]any
+	if data, err := os.ReadFile(path); err == nil {
+		_ = json.Unmarshal(data, &raw)
+	}
+	if raw == nil {
+		raw = make(map[string]any)
+	}
+	raw["key_pool"] = pool
+	data, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0600)
+}
+
+// MaskAPIKey returns last 4 chars for display, empty if key empty.
+func MaskAPIKey(k string) string {
+	if k == "" {
+		return ""
+	}
+	if len(k) <= 4 {
+		return "****"
+	}
+	return "****" + k[len(k)-4:]
+}
+
 func loadFromEnv(c *Config) {
 	if v := os.Getenv("ANYCLAW_DB_DSN"); v != "" {
 		c.DBDSN = v

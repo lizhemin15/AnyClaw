@@ -75,6 +75,12 @@ func (d *DB) GetInstanceByToken(token string) (*Instance, error) {
 	return &i, nil
 }
 
+func (d *DB) CountInstancesByUserID(userID int64) (int, error) {
+	var n int
+	err := d.QueryRow("SELECT COUNT(*) FROM instances WHERE user_id = ?", userID).Scan(&n)
+	return n, err
+}
+
 func (d *DB) ListInstancesByUserID(userID int64) ([]*Instance, error) {
 	rows, err := d.Query(
 		`SELECT id, user_id, name, status, COALESCE(energy,100), COALESCE(daily_consume,10), zero_energy_since,

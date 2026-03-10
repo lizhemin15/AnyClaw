@@ -30,6 +30,10 @@ func CreateProvider(cfg *config.Config) (LLMProvider, string, error) {
 		if modelID == "" {
 			modelID = model
 		}
+		// Default model when none configured (e.g. fresh pet container)
+		if modelID == "" {
+			modelID = "gpt-4o"
+		}
 		return provider, modelID, nil
 	}
 

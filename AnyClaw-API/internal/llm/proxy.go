@@ -189,6 +189,9 @@ func (p *Proxy) logUsage(instanceID, userID, model, provider string, promptToken
 		CompletionTokens: completionTokens,
 	}
 	log.Printf("[usage] %+v", rec)
+	if p.db != nil {
+		_ = p.db.InsertUsage(instanceID, userID, model, provider, promptTokens, completionTokens)
+	}
 }
 
 // parseUsageFromResponse extracts prompt_tokens and completion_tokens from LLM response.

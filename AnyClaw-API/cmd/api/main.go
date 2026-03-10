@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/anyclaw/anyclaw-api/internal/adminconfig"
+	"github.com/anyclaw/anyclaw-api/internal/adminstats"
 	"github.com/anyclaw/anyclaw-api/internal/auth"
 	"github.com/anyclaw/anyclaw-api/internal/config"
 	"github.com/anyclaw/anyclaw-api/internal/db"
@@ -85,6 +87,9 @@ func runApp(cfg *config.Config, database *db.DB) {
 	instHandler := instances.New(database, sched, apiURL)
 	hostChecker := scheduler.HostChecker{}
 	hostHandler := hosts.New(database, hostChecker)
+	configPath := config.ConfigPath()
+	adminConfigHandler := adminconfig.New(configPath)
+	adminStatsHandler := adminstats.New(database)
 
 	wsHub := ws.NewHub()
 	wsHandler := ws.NewHandler(database, wsHub)
@@ -131,6 +136,9 @@ func runApp(cfg *config.Config, database *db.DB) {
 	})
 	r.Route("/admin", func(r chi.Router) {
 		r.Use(authSvc.AdminMiddleware)
+		r.Get("/config", adminConfigHandler.GetConfig)
+		r.Put("/config", adminConfigHandler.PutConfig)
+		r.Get("/stats", adminStatsHandler.GetStats)
 		r.Get("/energy/users", energyHandler.ListUsers)
 		r.Post("/energy/recharge", energyHandler.Recharge)
 		r.Post("/energy/daily", energyHandler.RunDaily)

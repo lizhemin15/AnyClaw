@@ -125,8 +125,17 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	if list == nil {
 		list = []*db.User{}
 	}
+	type userWithInstances struct {
+		*db.User
+		InstanceCount int `json:"instance_count"`
+	}
+	out := make([]userWithInstances, len(list))
+	for i, u := range list {
+		count, _ := h.db.CountInstancesByUserID(u.ID)
+		out[i] = userWithInstances{User: u, InstanceCount: count}
+	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(list)
+	json.NewEncoder(w).Encode(out)
 }
 
 func (h *Handler) AdminRechargeUser(w http.ResponseWriter, r *http.Request) {

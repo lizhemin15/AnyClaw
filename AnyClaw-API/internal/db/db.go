@@ -116,6 +116,21 @@ func (d *DB) migrate() error {
 	)`); err != nil {
 		log.Printf("[db] create invitations: %v", err)
 	}
+	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS usage_log (
+		id BIGINT AUTO_INCREMENT PRIMARY KEY,
+		instance_id VARCHAR(64) NOT NULL,
+		user_id VARCHAR(64),
+		model VARCHAR(128) NOT NULL,
+		provider VARCHAR(128),
+		prompt_tokens INT NOT NULL DEFAULT 0,
+		completion_tokens INT NOT NULL DEFAULT 0,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		INDEX idx_usage_instance (instance_id),
+		INDEX idx_usage_user (user_id),
+		INDEX idx_usage_created (created_at)
+	)`); err != nil {
+		log.Printf("[db] create usage_log: %v", err)
+	}
 	return nil
 }
 

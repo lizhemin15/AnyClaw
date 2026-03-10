@@ -8,6 +8,8 @@ import Home from './pages/Home'
 import Chat from './pages/Chat'
 import Hosts from './pages/Hosts'
 import Energy from './pages/Energy'
+import AdminConfig from './pages/AdminConfig'
+import AdminStats from './pages/AdminStats'
 import Setup from './pages/Setup'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -117,6 +119,20 @@ export default function App() {
               <Chat />
             </Layout>
           </ProtectedRoute>
+        } />
+        <Route path="/admin/config" element={
+          <AdminRoute user={user}>
+            <Layout user={user} onLogout={handleLogout}>
+              <AdminConfig />
+            </Layout>
+          </AdminRoute>
+        } />
+        <Route path="/admin/stats" element={
+          <AdminRoute user={user}>
+            <Layout user={user} onLogout={handleLogout}>
+              <AdminStats />
+            </Layout>
+          </AdminRoute>
         } />
         <Route path="/admin/hosts" element={
           <AdminRoute user={user}>

@@ -12,6 +12,8 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
   const isHome = loc.pathname === '/'
   const isHosts = loc.pathname.startsWith('/admin/hosts')
   const isEnergy = loc.pathname.startsWith('/admin/energy')
+  const isConfig = loc.pathname.startsWith('/admin/config')
+  const isStats = loc.pathname.startsWith('/admin/stats')
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col pb-16 sm:pb-0">
@@ -25,6 +27,12 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
         <nav className="flex items-center gap-2 sm:gap-4">
           {user?.role === 'admin' && (
             <>
+              <Link to="/admin/config" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isConfig ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
+                AI配置
+              </Link>
+              <Link to="/admin/stats" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isStats ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
+                监控
+              </Link>
               <Link to="/admin/energy" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isEnergy ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
                 电量
               </Link>
@@ -58,6 +66,20 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
         </Link>
         {user?.role === 'admin' && (
           <>
+            <Link
+              to="/admin/config"
+              className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isConfig ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
+            >
+              <span className="text-lg">🤖</span>
+              <span className="text-xs mt-0.5">AI</span>
+            </Link>
+            <Link
+              to="/admin/stats"
+              className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isStats ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
+            >
+              <span className="text-lg">📊</span>
+              <span className="text-xs mt-0.5">监控</span>
+            </Link>
             <Link
               to="/admin/energy"
               className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isEnergy ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
