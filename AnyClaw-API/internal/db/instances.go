@@ -21,7 +21,7 @@ type Instance struct {
 }
 
 func (d *DB) CreateInstance(userID int64, name, token string, initialEnergy int) (*Instance, error) {
-	if initialEnergy <= 0 {
+	if initialEnergy < 0 {
 		initialEnergy = 100
 	}
 	res, err := d.Exec(

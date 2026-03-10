@@ -63,36 +63,46 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = "instance"
 	}
-	ok, err := h.db.DeductUserEnergy(claims.UserID, energy.AdoptCost)
-	if err != nil {
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-		return
-	}
-	if !ok {
+	// 先检查电量，但不扣除；容器真正创建成功后才扣
+	u, _ := h.db.GetUserByID(claims.UserID)
+	if u == nil || u.Energy < energy.AdoptCost {
 		http.Error(w, `{"error":"电量不足，领养需要 100 电量"}`, http.StatusBadRequest)
 		return
 	}
 	token := "inst-" + uuid.New().String()
-	inst, err := h.db.CreateInstance(claims.UserID, name, token, energy.AdoptCost)
+	inst, err := h.db.CreateInstance(claims.UserID, name, token, 0)
 	if err != nil {
-		_ = h.db.AddUserEnergy(claims.UserID, energy.AdoptCost) // refund
 		http.Error(w, `{"error":"failed to create instance"}`, http.StatusInternalServerError)
 		return
 	}
-	log.Printf("[instances] created instance id=%d name=%q, starting container in background", inst.ID, name)
-	go func() {
-		containerID, hostID, err := h.scheduler.Run(context.Background(), inst.ID, token)
-		if err != nil {
-			log.Printf("[instances] scheduler.Run failed for instance %d: %v", inst.ID, err)
-			_ = h.db.UpdateInstanceStatus(inst.ID, "error")
-			return
-		}
-		if err := h.db.UpdateInstanceContainer(inst.ID, containerID, hostID); err != nil {
-			log.Printf("[instances] UpdateInstanceContainer failed for %d: %v", inst.ID, err)
-			return
-		}
-		log.Printf("[instances] instance %d container started: %s on host %s", inst.ID, containerID, hostID)
-	}()
+	log.Printf("[instances] creating instance id=%d name=%q, waiting for container", inst.ID, name)
+	containerID, hostID, err := h.scheduler.Run(context.Background(), inst.ID, token)
+	if err != nil {
+		log.Printf("[instances] scheduler.Run failed for instance %d: %v", inst.ID, err)
+		_ = h.db.DeleteInstance(inst.ID)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "创建宠物失败：" + err.Error()})
+		return
+	}
+	ok, err := h.db.DeductUserEnergy(claims.UserID, energy.AdoptCost)
+	if err != nil || !ok {
+		log.Printf("[instances] deduct energy failed for user %d, container already running", claims.UserID)
+		_ = h.scheduler.Stop(context.Background(), hostID, containerID, inst.ID)
+		_ = h.db.DeleteInstance(inst.ID)
+		http.Error(w, `{"error":"电量不足或系统异常"}`, http.StatusInternalServerError)
+		return
+	}
+	if err := h.db.UpdateInstanceContainer(inst.ID, containerID, hostID); err != nil {
+		_ = h.db.AddUserEnergy(claims.UserID, energy.AdoptCost)
+		_ = h.scheduler.Stop(context.Background(), hostID, containerID, inst.ID)
+		_ = h.db.DeleteInstance(inst.ID)
+		http.Error(w, `{"error":"failed to save instance"}`, http.StatusInternalServerError)
+		return
+	}
+	_ = h.db.AddInstanceEnergy(inst.ID, energy.AdoptCost)
+	inst, _ = h.db.GetInstanceByID(inst.ID)
+	log.Printf("[instances] instance %d container started: %s on host %s", inst.ID, containerID, hostID)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(inst)
@@ -143,7 +153,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if inst.ContainerID != "" {
-		_ = h.scheduler.Stop(r.Context(), inst.HostID, inst.ContainerID)
+		_ = h.scheduler.Stop(r.Context(), inst.HostID, inst.ContainerID, id)
 	}
 	if err := h.db.DeleteInstance(id); err != nil {
 		http.Error(w, `{"error":"failed to delete"}`, http.StatusInternalServerError)

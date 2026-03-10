@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getInstances, createInstance, getInviteCode, useInviteCode, type Instance, type User } from '../api'
+import { getInstances, createInstance, deleteInstance, getInviteCode, useInviteCode, type Instance, type User } from '../api'
 
 const ADOPT_COST = 100
 const MIN_ENERGY = 5
@@ -14,6 +14,7 @@ export default function Home({ user }: { user: User | null }) {
   const [inviteCode, setInviteCode] = useState('')
   const [myCode, setMyCode] = useState('')
   const [showInvite, setShowInvite] = useState(false)
+  const [deleting, setDeleting] = useState<number | null>(null)
 
   const navigate = useNavigate()
 
@@ -62,6 +63,21 @@ export default function Home({ user }: { user: User | null }) {
       window.location.reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : '邀请码无效或已使用')
+    }
+  }
+
+  const handleAbandon = async (e: React.MouseEvent, inst: Instance) => {
+    e.stopPropagation()
+    if (!confirm(`确定弃养「${inst.name}」？弃养后无法恢复。`)) return
+    setDeleting(inst.id)
+    setError('')
+    try {
+      await deleteInstance(inst.id)
+      setInstances((prev) => prev.filter((i) => i.id !== inst.id))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '弃养失败')
+    } finally {
+      setDeleting(null)
     }
   }
 
@@ -150,7 +166,7 @@ export default function Home({ user }: { user: User | null }) {
             disabled={creating || (user?.energy ?? 0) < ADOPT_COST}
             className="px-6 py-3 bg-slate-800 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {creating ? '领养中...' : `领养 (${ADOPT_COST} 电量)`}
+            {creating ? '领养中，请稍候（约 1–2 分钟）...' : `领养 (${ADOPT_COST} 电量)`}
           </button>
         </form>
         {(user?.energy ?? 0) < ADOPT_COST && (
@@ -177,7 +193,7 @@ export default function Home({ user }: { user: User | null }) {
             <div
               key={inst.id}
               onClick={() => navigate(`/instances/${inst.id}`)}
-              className="bg-white border border-slate-200 rounded-xl p-4 active:bg-slate-50 cursor-pointer transition-colors"
+              className="bg-white border border-slate-200 rounded-xl p-4 active:bg-slate-50 cursor-pointer transition-colors relative"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
@@ -192,19 +208,29 @@ export default function Home({ user }: { user: User | null }) {
                     {energyBar(inst.energy)}
                   </div>
                 </div>
-                <span
-                  className={`flex-shrink-0 px-2.5 py-1 text-xs rounded-full ${
-                    inst.status === 'running'
-                      ? 'bg-green-100 text-green-800'
-                      : inst.status === 'creating'
-                      ? 'bg-amber-100 text-amber-800'
-                      : inst.status === 'error'
-                      ? 'bg-red-100 text-red-800'
-                      : 'bg-slate-100 text-slate-700'
-                  }`}
-                >
-                  {inst.status === 'running' ? '在线' : inst.status === 'creating' ? '创建中' : inst.status === 'error' ? '异常' : inst.status}
-                </span>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span
+                    className={`px-2.5 py-1 text-xs rounded-full ${
+                      inst.status === 'running'
+                        ? 'bg-green-100 text-green-800'
+                        : inst.status === 'creating'
+                        ? 'bg-amber-100 text-amber-800'
+                        : inst.status === 'error'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {inst.status === 'running' ? '在线' : inst.status === 'creating' ? '创建中' : inst.status === 'error' ? '异常' : inst.status}
+                  </span>
+                  <button
+                    onClick={(e) => handleAbandon(e, inst)}
+                    disabled={!!deleting}
+                    className="px-2 py-1 text-xs text-red-600 border border-red-200 rounded-lg active:bg-red-50 disabled:opacity-50"
+                    title="弃养"
+                  >
+                    {deleting === inst.id ? '弃养中...' : '弃养'}
+                  </button>
+                </div>
               </div>
               {inst.energy < MIN_ENERGY && inst.status === 'running' && (
                 <p className="mt-2 text-xs text-amber-600">电量不足，无法对话</p>

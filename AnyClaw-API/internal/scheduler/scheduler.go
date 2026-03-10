@@ -28,6 +28,7 @@ func New(apiURL, defaultImage string, hosts HostStore) *Scheduler {
 }
 
 // Run creates a Docker container on a remote host via SSH and returns (containerID, hostID).
+// Workspace is persisted via a 1GB loop-mounted filesystem at /var/lib/anyclaw/ws-{instanceID}.
 func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string) (containerID, hostID string, err error) {
 	list, err := s.hosts.ListEnabledHosts()
 	if err != nil {
@@ -44,8 +45,26 @@ func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string) (co
 	}
 	log.Printf("[scheduler] instance %d: using host %q (%s:%d), image=%s, apiURL=%s",
 		instanceID, host.Name, host.Addr, host.SSHPort, image, s.apiURL)
-	cmd := fmt.Sprintf("docker run -d -e ANYCLAW_API_URL='%s' -e ANYCLAW_INSTANCE_ID=%d -e ANYCLAW_TOKEN='%s' %s",
-		s.apiURL, instanceID, token, image)
+
+	// Ensure 1GB workspace volume exists (loop device) and is mounted
+	ensureWorkspace := fmt.Sprintf(`mkdir -p /var/lib/anyclaw && \
+		FILE="/var/lib/anyclaw/ws-%d.img" && \
+		MOUNT="/var/lib/anyclaw/ws-%d" && \
+		if [ ! -f "$FILE" ]; then \
+			dd if=/dev/zero of="$FILE" bs=1M count=0 seek=1024 2>/dev/null && \
+			mkfs.ext4 -F "$FILE" >/dev/null 2>&1 && \
+			mkdir -p "$MOUNT" && mount -o loop "$FILE" "$MOUNT"; \
+		elif ! mountpoint -q "$MOUNT" 2>/dev/null; then \
+			mkdir -p "$MOUNT" && mount -o loop "$FILE" "$MOUNT"; \
+		fi`, instanceID, instanceID)
+	if _, err := runSSH(host, ensureWorkspace); err != nil {
+		log.Printf("[scheduler] ensure workspace on %s failed: %v", host.Addr, err)
+		return "", "", fmt.Errorf("ensure workspace: %w", err)
+	}
+
+	mountPath := fmt.Sprintf("/var/lib/anyclaw/ws-%d", instanceID)
+	cmd := fmt.Sprintf("docker run -d --pull always -v %s:/workspace -e PICOCLAW_AGENTS_DEFAULTS_WORKSPACE=/workspace -e ANYCLAW_API_URL='%s' -e ANYCLAW_INSTANCE_ID=%d -e ANYCLAW_TOKEN='%s' %s",
+		mountPath, s.apiURL, instanceID, token, image)
 	out, err := runSSH(host, cmd)
 	if err != nil {
 		log.Printf("[scheduler] ssh docker run on %s failed: %v", host.Addr, err)
@@ -56,7 +75,8 @@ func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string) (co
 }
 
 // Stop stops and removes a container on the given host.
-func (s *Scheduler) Stop(ctx context.Context, hostID, containerID string) error {
+// If instanceID > 0, also unmounts and removes the workspace volume.
+func (s *Scheduler) Stop(ctx context.Context, hostID, containerID string, instanceID int64) error {
 	if containerID == "" {
 		return nil
 	}
@@ -68,10 +88,19 @@ func (s *Scheduler) Stop(ctx context.Context, hostID, containerID string) error 
 	if err != nil || host == nil {
 		return fmt.Errorf("host not found: %s", hostID)
 	}
-	cmd := fmt.Sprintf("docker stop %s && docker rm %s", containerID, containerID)
+	cmd := fmt.Sprintf("docker rm -f %s", containerID)
 	if _, err := runSSH(host, cmd); err != nil {
-		log.Printf("[scheduler] ssh docker stop on %s failed: %v", host.Addr, err)
+		log.Printf("[scheduler] ssh docker rm on %s failed: %v", host.Addr, err)
 		return err
+	}
+	// Unmount and remove workspace volume when instance is deleted
+	if instanceID > 0 {
+		cleanup := fmt.Sprintf(`MOUNT="/var/lib/anyclaw/ws-%d" && FILE="/var/lib/anyclaw/ws-%d.img" && \
+			if mountpoint -q "$MOUNT" 2>/dev/null; then umount "$MOUNT"; fi && \
+			rm -f "$FILE"`, instanceID, instanceID)
+		if _, err := runSSH(host, cleanup); err != nil {
+			log.Printf("[scheduler] workspace cleanup on %s failed (non-fatal): %v", host.Addr, err)
+		}
 	}
 	return nil
 }
