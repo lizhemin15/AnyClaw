@@ -25,7 +25,7 @@ type Scheduler struct {
 
 func New(apiURL, defaultImage, configPath string, hosts HostStore) *Scheduler {
 	if defaultImage == "" {
-		defaultImage = "openclaw/openclaw"
+		defaultImage = "anyclaw/anyclaw"
 	}
 	return &Scheduler{apiURL: apiURL, defaultImg: defaultImage, configPath: configPath, hosts: hosts}
 }
@@ -70,7 +70,7 @@ func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string, api
 	}
 	wsPath := fmt.Sprintf("/var/lib/anyclaw/ws-%d", instanceID)
 	containerName := fmt.Sprintf("anyclaw-inst-%d", instanceID)
-	cmd := fmt.Sprintf("export PATH=/usr/local/bin:/usr/bin:$PATH; docker run -d --name %s --pull always -v %s:/workspace -e ANYCLAW_AGENTS_DEFAULTS_WORKSPACE=/workspace -e ANYCLAW_AGENTS_DEFAULTS_MODEL_NAME='%s' -e ANYCLAW_API_URL='%s' -e ANYCLAW_INSTANCE_ID=%d -e ANYCLAW_TOKEN='%s' %s 2>&1",
+	cmd := fmt.Sprintf("export PATH=/usr/local/bin:/usr/bin:$PATH; docker run -d --name %s --pull always -v %s:/workspace -e ANYCLAW_AGENTS_DEFAULTS_WORKSPACE=/workspace -e ANYCLAW_AGENTS_DEFAULTS_MODEL_NAME='%s' -e ANYCLAW_API_URL='%s' -e ANYCLAW_INSTANCE_ID=%d -e ANYCLAW_TOKEN='%s' %s gateway 2>&1",
 		containerName, wsPath, defaultModel, apiURL, instanceID, token, image)
 	out, err := runSSH(host, cmd)
 	if err != nil {
@@ -127,10 +127,9 @@ func (s *Scheduler) Stop(ctx context.Context, hostID, containerID string, instan
 				continue
 			}
 			expected := fmt.Sprintf("ANYCLAW_INSTANCE_ID=%d", instanceID)
-			got := strings.TrimSpace(out)
-			if got != expected {
-				if got != "" {
-					log.Printf("[scheduler] skip rm on %s: container %s env mismatch (got %q, expect %q)", host.Addr, rmTarget, got, expected)
+			if strings.TrimSpace(out) != expected {
+				if strings.TrimSpace(out) != "" {
+					log.Printf("[scheduler] skip rm on %s: container %s env mismatch (got %q, expect %q)", host.Addr, rmTarget, strings.TrimSpace(out), expected)
 					lastErr = fmt.Errorf("container %s does not belong to instance %d", rmTarget, instanceID)
 				}
 				continue

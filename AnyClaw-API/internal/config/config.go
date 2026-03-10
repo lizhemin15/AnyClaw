@@ -129,7 +129,7 @@ func Load(path string) (*Config, error) {
 	cfg := &Config{
 		Port:        8080,
 		DBDSN:       "",
-		DockerImage: "openclaw/openclaw",
+		DockerImage: "anyclaw/anyclaw",
 	}
 	if path == "" {
 		path = ConfigPath()
@@ -138,7 +138,7 @@ func Load(path string) (*Config, error) {
 		if json.Unmarshal(data, cfg) == nil {
 			// ensure required defaults
 			if cfg.DockerImage == "" {
-				cfg.DockerImage = "openclaw/openclaw"
+				cfg.DockerImage = "anyclaw/anyclaw"
 			}
 		}
 	}

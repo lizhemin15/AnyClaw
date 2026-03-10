@@ -1050,7 +1050,7 @@ Cette conception permet également le **support multi-agent** avec une sélectio
 
 #### Équilibrage de Charge
 
-Configurez plusieurs points de terminaison pour le même nom de modèle—PicoClaw utilisera automatiquement le round-robin entre eux :
+Configurez plusieurs points de terminaison pour le même nom de modèle—AnyClaw utilisera automatiquement le round-robin entre eux :
 
 ```json
 {

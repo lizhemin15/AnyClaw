@@ -3,7 +3,7 @@
   "db_path": "anyclaw.db",
   "jwt_secret": "change-me-in-production",
   "api_url": "http://localhost:8080",
-  "docker_image": "openclaw/openclaw",
+  "docker_image": "anyclaw/anyclaw",
   "key_pool": {
     "openai": {
       "api_key": "sk-xxx",

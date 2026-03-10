@@ -237,45 +237,45 @@ func TestConvertToAnyClaw(t *testing.T) {
 		t.Fatalf("failed to load config: %v", err)
 	}
 
-	picoCfg, warnings, err := cfg.ConvertToAnyClaw("")
+	anyCfg, warnings, err := cfg.ConvertToAnyClaw("")
 	if err != nil {
 		t.Fatalf("failed to convert config: %v", err)
 	}
 
-	if picoCfg.Agents.Defaults.ModelName != "claude-sonnet-4-20250514" {
-		t.Errorf("expected model 'claude-sonnet-4-20250514', got '%s'", picoCfg.Agents.Defaults.ModelName)
+	if anyCfg.Agents.Defaults.ModelName != "claude-sonnet-4-20250514" {
+		t.Errorf("expected model 'claude-sonnet-4-20250514', got '%s'", anyCfg.Agents.Defaults.ModelName)
 	}
-	if picoCfg.Agents.Defaults.Workspace != "~/.anyclaw/workspace" {
-		t.Errorf("expected workspace '~/.anyclaw/workspace', got '%s'", picoCfg.Agents.Defaults.Workspace)
+	if anyCfg.Agents.Defaults.Workspace != "~/.anyclaw/workspace" {
+		t.Errorf("expected workspace '~/.anyclaw/workspace', got '%s'", anyCfg.Agents.Defaults.Workspace)
 	}
 
-	if len(picoCfg.Agents.List) != 2 {
-		t.Errorf("expected 2 agents, got %d", len(picoCfg.Agents.List))
+	if len(anyCfg.Agents.List) != 2 {
+		t.Errorf("expected 2 agents, got %d", len(anyCfg.Agents.List))
 	}
-	if picoCfg.Agents.List[0].ID != "main" {
-		t.Errorf("expected first agent id 'main', got '%s'", picoCfg.Agents.List[0].ID)
+	if anyCfg.Agents.List[0].ID != "main" {
+		t.Errorf("expected first agent id 'main', got '%s'", anyCfg.Agents.List[0].ID)
 	}
-	if picoCfg.Agents.List[1].Skills == nil || len(picoCfg.Agents.List[1].Skills) != 2 {
+	if anyCfg.Agents.List[1].Skills == nil || len(anyCfg.Agents.List[1].Skills) != 2 {
 		t.Errorf("expected 2 skills for assistant agent")
 	}
 
-	if !picoCfg.Channels.Telegram.Enabled {
+	if !anyCfg.Channels.Telegram.Enabled {
 		t.Error("telegram should be enabled")
 	}
-	if picoCfg.Channels.Telegram.Token != "test-token" {
-		t.Errorf("expected telegram token 'test-token', got '%s'", picoCfg.Channels.Telegram.Token)
+	if anyCfg.Channels.Telegram.Token != "test-token" {
+		t.Errorf("expected telegram token 'test-token', got '%s'", anyCfg.Channels.Telegram.Token)
 	}
 
-	if picoCfg.Channels.WhatsApp.BridgeURL != "http://localhost:3000" {
-		t.Errorf("expected whatsapp bridge URL 'http://localhost:3000', got '%s'", picoCfg.Channels.WhatsApp.BridgeURL)
+	if anyCfg.Channels.WhatsApp.BridgeURL != "http://localhost:3000" {
+		t.Errorf("expected whatsapp bridge URL 'http://localhost:3000', got '%s'", anyCfg.Channels.WhatsApp.BridgeURL)
 	}
 
-	if picoCfg.Channels.Feishu.AppID != "app-id" {
-		t.Errorf("expected feishu app ID 'app-id', got '%s'", picoCfg.Channels.Feishu.AppID)
+	if anyCfg.Channels.Feishu.AppID != "app-id" {
+		t.Errorf("expected feishu app ID 'app-id', got '%s'", anyCfg.Channels.Feishu.AppID)
 	}
 
-	if len(picoCfg.ModelList) != 1 {
-		t.Errorf("expected 1 model config (no models.json provided), got %d", len(picoCfg.ModelList))
+	if len(anyCfg.ModelList) != 1 {
+		t.Errorf("expected 1 model config (no models.json provided), got %d", len(anyCfg.ModelList))
 	}
 
 	foundWarning := false
@@ -336,43 +336,43 @@ func TestConvertToAnyClawWithQQAndDingTalk(t *testing.T) {
 		t.Fatalf("failed to load config: %v", err)
 	}
 
-	picoCfg, _, err := cfg.ConvertToAnyClaw("")
+	anyCfg, _, err := cfg.ConvertToAnyClaw("")
 	if err != nil {
 		t.Fatalf("failed to convert config: %v", err)
 	}
 
-	if !picoCfg.Channels.QQ.Enabled {
+	if !anyCfg.Channels.QQ.Enabled {
 		t.Error("qq should be enabled")
 	}
-	if picoCfg.Channels.QQ.AppID != "qq-app-id" {
-		t.Errorf("expected qq app ID 'qq-app-id', got '%s'", picoCfg.Channels.QQ.AppID)
+	if anyCfg.Channels.QQ.AppID != "qq-app-id" {
+		t.Errorf("expected qq app ID 'qq-app-id', got '%s'", anyCfg.Channels.QQ.AppID)
 	}
 
-	if !picoCfg.Channels.DingTalk.Enabled {
+	if !anyCfg.Channels.DingTalk.Enabled {
 		t.Error("dingtalk should be enabled")
 	}
-	if picoCfg.Channels.DingTalk.ClientID != "ding-app-id" {
-		t.Errorf("expected dingtalk client ID 'ding-app-id', got '%s'", picoCfg.Channels.DingTalk.ClientID)
+	if anyCfg.Channels.DingTalk.ClientID != "ding-app-id" {
+		t.Errorf("expected dingtalk client ID 'ding-app-id', got '%s'", anyCfg.Channels.DingTalk.ClientID)
 	}
 
-	if !picoCfg.Channels.MaixCam.Enabled {
+	if !anyCfg.Channels.MaixCam.Enabled {
 		t.Error("maixcam should be enabled")
 	}
-	if picoCfg.Channels.MaixCam.Host != "192.168.1.100" {
-		t.Errorf("expected maixcam host '192.168.1.100', got '%s'", picoCfg.Channels.MaixCam.Host)
+	if anyCfg.Channels.MaixCam.Host != "192.168.1.100" {
+		t.Errorf("expected maixcam host '192.168.1.100', got '%s'", anyCfg.Channels.MaixCam.Host)
 	}
-	if picoCfg.Channels.MaixCam.Port != 9000 {
-		t.Errorf("expected maixcam port 9000, got %d", picoCfg.Channels.MaixCam.Port)
+	if anyCfg.Channels.MaixCam.Port != 9000 {
+		t.Errorf("expected maixcam port 9000, got %d", anyCfg.Channels.MaixCam.Port)
 	}
 
-	if !picoCfg.Channels.Slack.Enabled {
+	if !anyCfg.Channels.Slack.Enabled {
 		t.Error("slack should be enabled")
 	}
-	if picoCfg.Channels.Slack.BotToken != "xoxb-test" {
-		t.Errorf("expected slack bot token 'xoxb-test', got '%s'", picoCfg.Channels.Slack.BotToken)
+	if anyCfg.Channels.Slack.BotToken != "xoxb-test" {
+		t.Errorf("expected slack bot token 'xoxb-test', got '%s'", anyCfg.Channels.Slack.BotToken)
 	}
-	if picoCfg.Channels.Slack.AppToken != "xapp-test" {
-		t.Errorf("expected slack app token 'xapp-test', got '%s'", picoCfg.Channels.Slack.AppToken)
+	if anyCfg.Channels.Slack.AppToken != "xapp-test" {
+		t.Errorf("expected slack app token 'xapp-test', got '%s'", anyCfg.Channels.Slack.AppToken)
 	}
 }
 
@@ -402,26 +402,26 @@ func TestConvertToAnyClawWithMatrix(t *testing.T) {
 		t.Fatalf("failed to load config: %v", err)
 	}
 
-	picoCfg, warnings, err := cfg.ConvertToAnyClaw("")
+	anyCfg, warnings, err := cfg.ConvertToAnyClaw("")
 	if err != nil {
 		t.Fatalf("failed to convert config: %v", err)
 	}
 
-	if !picoCfg.Channels.Matrix.Enabled {
+	if !anyCfg.Channels.Matrix.Enabled {
 		t.Error("matrix should be enabled")
 	}
-	if picoCfg.Channels.Matrix.Homeserver != "https://matrix.example.com" {
-		t.Errorf("expected matrix homeserver, got %q", picoCfg.Channels.Matrix.Homeserver)
+	if anyCfg.Channels.Matrix.Homeserver != "https://matrix.example.com" {
+		t.Errorf("expected matrix homeserver, got %q", anyCfg.Channels.Matrix.Homeserver)
 	}
-	if picoCfg.Channels.Matrix.UserID != "@bot:matrix.example.com" {
-		t.Errorf("expected matrix user_id, got %q", picoCfg.Channels.Matrix.UserID)
+	if anyCfg.Channels.Matrix.UserID != "@bot:matrix.example.com" {
+		t.Errorf("expected matrix user_id, got %q", anyCfg.Channels.Matrix.UserID)
 	}
-	if picoCfg.Channels.Matrix.AccessToken != "syt_test_token" {
-		t.Errorf("expected matrix access_token, got %q", picoCfg.Channels.Matrix.AccessToken)
+	if anyCfg.Channels.Matrix.AccessToken != "syt_test_token" {
+		t.Errorf("expected matrix access_token, got %q", anyCfg.Channels.Matrix.AccessToken)
 	}
-	if len(picoCfg.Channels.Matrix.AllowFrom) != 1 ||
-		picoCfg.Channels.Matrix.AllowFrom[0] != "@alice:matrix.example.com" {
-		t.Errorf("unexpected matrix allow_from: %#v", picoCfg.Channels.Matrix.AllowFrom)
+	if len(anyCfg.Channels.Matrix.AllowFrom) != 1 ||
+		anyCfg.Channels.Matrix.AllowFrom[0] != "@alice:matrix.example.com" {
+		t.Errorf("unexpected matrix allow_from: %#v", anyCfg.Channels.Matrix.AllowFrom)
 	}
 
 	for _, w := range warnings {
@@ -456,12 +456,12 @@ func TestConvertToAnyClawWithMatrixDisabled(t *testing.T) {
 		t.Fatalf("failed to load config: %v", err)
 	}
 
-	picoCfg, _, err := cfg.ConvertToAnyClaw("")
+	anyCfg, _, err := cfg.ConvertToAnyClaw("")
 	if err != nil {
 		t.Fatalf("failed to convert config: %v", err)
 	}
 
-	if picoCfg.Channels.Matrix.Enabled {
+	if anyCfg.Channels.Matrix.Enabled {
 		t.Error("matrix should respect enabled=false from source config")
 	}
 }
@@ -620,7 +620,7 @@ func TestLoadOpenClawConfigFromDir(t *testing.T) {
 }
 
 func TestToStandardConfig(t *testing.T) {
-	picoCfg := &AnyClawConfig{
+	anyCfg := &AnyClawConfig{
 		Agents: AgentsConfig{
 			Defaults: AgentDefaults{
 				Provider:  "anthropic",
@@ -659,7 +659,7 @@ func TestToStandardConfig(t *testing.T) {
 		},
 	}
 
-	stdCfg := picoCfg.ToStandardConfig()
+	stdCfg := anyCfg.ToStandardConfig()
 
 	if stdCfg.Agents.Defaults.Provider != "anthropic" {
 		t.Errorf("expected provider 'anthropic', got '%s'", stdCfg.Agents.Defaults.Provider)

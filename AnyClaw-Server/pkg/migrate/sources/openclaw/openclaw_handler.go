@@ -91,7 +91,7 @@ func (o *OpenclawHandler) ExecuteConfigMigration(srcConfigPath, dstConfigPath st
 		return err
 	}
 
-	picoCfg, warnings, err := openclawCfg.ConvertToAnyClaw(o.opts.SourceHome)
+	anyCfg, warnings, err := openclawCfg.ConvertToAnyClaw(o.opts.SourceHome)
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func (o *OpenclawHandler) ExecuteConfigMigration(srcConfigPath, dstConfigPath st
 		fmt.Printf("  Warning: %s\n", w)
 	}
 
-	incoming := picoCfg.ToStandardConfig()
+	incoming := anyCfg.ToStandardConfig()
 	if err := os.MkdirAll(filepath.Dir(dstConfigPath), 0o755); err != nil {
 		return err
 	}

@@ -172,7 +172,9 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	_ = h.scheduler.Stop(r.Context(), inst.HostID, inst.ContainerID, id)
+	if err := h.scheduler.Stop(r.Context(), inst.HostID, inst.ContainerID, id); err != nil {
+		log.Printf("[instances] Stop failed for instance %d (container may still run): %v", id, err)
+	}
 	_ = h.db.DeleteMessagesByInstance(id)
 	if err := h.db.DeleteInstance(id); err != nil {
 		http.Error(w, `{"error":"failed to delete"}`, http.StatusInternalServerError)

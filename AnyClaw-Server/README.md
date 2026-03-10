@@ -1126,7 +1126,7 @@ AnyClaw strips only the outer `litellm/` prefix before sending the request, so p
 
 #### Load Balancing
 
-Configure multiple endpoints for the same model name—PicoClaw will automatically round-robin between them:
+Configure multiple endpoints for the same model name—AnyClaw will automatically round-robin between them:
 
 ```json
 {

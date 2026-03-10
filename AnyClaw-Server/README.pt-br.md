@@ -1046,7 +1046,7 @@ Este design também possibilita o **suporte multi-agent** com seleção flexíve
 
 #### Balanceamento de Carga
 
-Configure vários endpoints para o mesmo nome de modelo—PicoClaw fará round-robin automaticamente entre eles:
+Configure vários endpoints para o mesmo nome de modelo—AnyClaw fará round-robin automaticamente entre eles:
 
 ```json
 {
