@@ -21,6 +21,7 @@ export default function AdminConfig() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
+  const [modelSwitchOn, setModelSwitchOn] = useState(false)
 
   useEffect(() => {
     getAdminConfig()
@@ -31,6 +32,10 @@ export default function AdminConfig() {
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (form) setModelSwitchOn(!!(form.default_model ?? '').trim())
+  }, [form?.default_model])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -87,10 +92,6 @@ export default function AdminConfig() {
     )
   }
 
-  const [modelSwitchOn, setModelSwitchOn] = useState(false)
-  useEffect(() => {
-    if (form) setModelSwitchOn(!!(form.default_model ?? '').trim())
-  }, [form?.default_model])
   const setModelEnabled = (on: boolean) => {
     if (!form) return
     setModelSwitchOn(on)
