@@ -1,6 +1,18 @@
 import { useState, useEffect } from 'react'
 import { getAdminConfig, putAdminConfig, type AdminConfig } from '../api'
 
+const PROVIDER_LABELS: Record<string, string> = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic Claude',
+  openrouter: 'OpenRouter',
+}
+
+const PROVIDER_DEFAULTS: Record<string, string> = {
+  openai: 'https://api.openai.com/v1',
+  anthropic: 'https://api.anthropic.com/v1',
+  openrouter: 'https://openrouter.ai/api/v1',
+}
+
 export default function AdminConfig() {
   const [config, setConfig] = useState<AdminConfig | null>(null)
   const [form, setForm] = useState<AdminConfig | null>(null)
@@ -8,6 +20,7 @@ export default function AdminConfig() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [editing, setEditing] = useState<string | null>(null)
 
   useEffect(() => {
     getAdminConfig()
@@ -27,8 +40,9 @@ export default function AdminConfig() {
     setSuccess('')
     try {
       await putAdminConfig(form)
-      setSuccess('保存成功，重启后生效')
+      setSuccess('保存成功，重启服务后生效')
       setConfig(form)
+      setEditing(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败')
     } finally {
@@ -47,63 +61,147 @@ export default function AdminConfig() {
     })
   }
 
-  if (loading) return <p className="text-slate-500 py-8">加载中...</p>
+  const statusBadge = (hasKey: boolean) =>
+    hasKey ? (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
+        已配置
+      </span>
+    ) : (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">
+        未配置
+      </span>
+    )
+
+  if (loading) {
+    return (
+      <div className="max-w-5xl mx-auto">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-8">
+          <div className="animate-pulse space-y-4">
+            <div className="h-6 bg-slate-200 rounded w-1/4" />
+            <div className="h-12 bg-slate-100 rounded" />
+            <div className="h-12 bg-slate-100 rounded" />
+            <div className="h-12 bg-slate-100 rounded" />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-xl font-semibold text-slate-800 mb-2">AI 配置</h1>
-      <p className="text-sm text-slate-500 mb-6">管理 LLM API Key，宠物实例将使用此处配置的密钥调用模型</p>
+    <div className="max-w-5xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-xl font-semibold text-slate-800">渠道管理</h1>
+        <p className="text-sm text-slate-500 mt-1">管理 LLM API 渠道，宠物实例将使用此处配置的密钥调用模型</p>
+      </div>
 
-      {error && <p className="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded-xl">{error}</p>}
-      {success && <p className="mb-4 text-sm text-green-600 bg-green-50 p-3 rounded-xl">{success}</p>}
-
-      {form && (
-        <form onSubmit={handleSave} className="space-y-6">
-          {(['openai', 'anthropic', 'openrouter'] as const).map((provider) => (
-            <div key={provider} className="bg-white border border-slate-200 rounded-xl p-4">
-              <h2 className="font-medium text-slate-800 mb-3 capitalize">{provider}</h2>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm text-slate-600 mb-1">API Key</label>
-                  <input
-                    type="password"
-                    value={form.key_pool[provider].api_key}
-                    onChange={(e) => updatePool(provider, 'api_key', e.target.value)}
-                    placeholder={config?.key_pool[provider].api_key ? '已配置，输入新值可覆盖' : 'sk-...'}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg font-mono text-sm"
-                  />
-                  {config?.key_pool[provider].api_key && (
-                    <p className="text-xs text-slate-500 mt-1">当前: {config.key_pool[provider].api_key}</p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-600 mb-1">API Base（可选）</label>
-                  <input
-                    type="url"
-                    value={form.key_pool[provider].api_base}
-                    onChange={(e) => updatePool(provider, 'api_base', e.target.value)}
-                    placeholder={
-                      provider === 'openai'
-                        ? 'https://api.openai.com/v1'
-                        : provider === 'anthropic'
-                          ? 'https://api.anthropic.com/v1'
-                          : 'https://openrouter.ai/api/v1'
-                    }
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm"
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-          <button
-            type="submit"
-            disabled={saving}
-            className="w-full sm:w-auto px-6 py-3 bg-slate-800 text-white rounded-xl active:bg-slate-700 disabled:opacity-50 min-h-[48px]"
-          >
-            {saving ? '保存中...' : '保存'}
-          </button>
-        </form>
+      {error && (
+        <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-100 text-red-700 text-sm">{error}</div>
       )}
+      {success && (
+        <div className="mb-4 p-4 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm">
+          {success}
+        </div>
+      )}
+
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+        {form && (
+          <form onSubmit={handleSave}>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">渠道</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">状态</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">API Key</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">API Base</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600 w-20">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {(['openai', 'anthropic', 'openrouter'] as const).map((provider) => (
+                    <tr key={provider} className="hover:bg-slate-50/50">
+                      <td className="py-3 px-4">
+                        <span className="font-medium text-slate-800">{PROVIDER_LABELS[provider]}</span>
+                      </td>
+                      <td className="py-3 px-4">{statusBadge(!!config?.key_pool[provider].api_key)}</td>
+                      <td className="py-3 px-4">
+                        {editing === provider ? (
+                          <input
+                            type="password"
+                            value={form.key_pool[provider].api_key}
+                            onChange={(e) => updatePool(provider, 'api_key', e.target.value)}
+                            placeholder="sk-..."
+                            className="w-full max-w-xs px-3 py-2 border border-slate-300 rounded text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          />
+                        ) : (
+                          <span className="text-sm font-mono text-slate-600">
+                            {config?.key_pool[provider].api_key || '—'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        {editing === provider ? (
+                          <input
+                            type="url"
+                            value={form.key_pool[provider].api_base}
+                            onChange={(e) => updatePool(provider, 'api_base', e.target.value)}
+                            placeholder={PROVIDER_DEFAULTS[provider]}
+                            className="w-full max-w-xs px-3 py-2 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          />
+                        ) : (
+                          <span className="text-sm text-slate-600 truncate max-w-[200px] block">
+                            {form.key_pool[provider].api_base || PROVIDER_DEFAULTS[provider]}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        {editing === provider ? (
+                          <button
+                            type="button"
+                            onClick={() => setEditing(null)}
+                            className="text-sm text-slate-600 hover:text-slate-800"
+                          >
+                            取消
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setEditing(provider)}
+                            className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+                          >
+                            编辑
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-4 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+              {(editing || form !== config) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm(config ? JSON.parse(JSON.stringify(config)) : form)
+                    setEditing(null)
+                  }}
+                  className="px-4 py-2 text-sm border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100"
+                >
+                  重置
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {saving ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
     </div>
   )
 }

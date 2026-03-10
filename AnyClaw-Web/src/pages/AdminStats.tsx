@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { getAdminStats, type AdminStats } from '../api'
 
+const CHART_COLORS = ['#4318FF', '#00B5D8', '#6C63FF', '#05CD99', '#FFB547', '#FF5E7D', '#41B883', '#7983FF']
+
 export default function AdminStats() {
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -19,14 +21,22 @@ export default function AdminStats() {
     load()
   }, [days])
 
+  const maxModelTokens = Math.max(
+    ...(stats?.by_model?.map((m) => m.prompt_tokens + m.completion_tokens) ?? [1]),
+    1
+  )
+
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-5xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
-        <h1 className="text-xl font-semibold text-slate-800">使用监控</h1>
+        <div>
+          <h1 className="text-xl font-semibold text-slate-800">使用统计</h1>
+          <p className="text-sm text-slate-500 mt-1">查看 LLM 调用与 Token 消耗情况</p>
+        </div>
         <select
           value={days}
           onChange={(e) => setDays(parseInt(e.target.value, 10))}
-          className="px-4 py-2 border border-slate-300 rounded-lg text-sm"
+          className="px-4 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         >
           <option value={1}>最近 1 天</option>
           <option value={7}>最近 7 天</option>
@@ -35,47 +45,99 @@ export default function AdminStats() {
         </select>
       </div>
 
-      {error && <p className="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded-xl">{error}</p>}
+      {error && (
+        <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-100 text-red-700 text-sm">{error}</div>
+      )}
 
       {loading ? (
-        <p className="text-slate-500 py-8">加载中...</p>
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-8">
+          <div className="animate-pulse space-y-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="h-24 bg-slate-100 rounded-lg" />
+              <div className="h-24 bg-slate-100 rounded-lg" />
+              <div className="h-24 bg-slate-100 rounded-lg" />
+            </div>
+            <div className="h-48 bg-slate-100 rounded-lg" />
+          </div>
+        </div>
       ) : stats ? (
         <div className="space-y-6">
+          {/* 汇总卡片 - One API Dashboard 风格 */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-white border border-slate-200 rounded-xl p-4">
-              <p className="text-sm text-slate-500">调用次数</p>
-              <p className="text-2xl font-semibold text-slate-800 mt-1">{stats.total_calls.toLocaleString()}</p>
+            <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
+              <p className="text-sm font-medium text-slate-500">调用次数</p>
+              <p className="text-2xl font-bold text-indigo-600 mt-1">{stats.total_calls.toLocaleString()}</p>
             </div>
-            <div className="bg-white border border-slate-200 rounded-xl p-4">
-              <p className="text-sm text-slate-500">Prompt Tokens</p>
-              <p className="text-2xl font-semibold text-slate-800 mt-1">{stats.total_prompt_tokens.toLocaleString()}</p>
+            <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
+              <p className="text-sm font-medium text-slate-500">Prompt Tokens</p>
+              <p className="text-2xl font-bold text-cyan-600 mt-1">{stats.total_prompt_tokens.toLocaleString()}</p>
             </div>
-            <div className="bg-white border border-slate-200 rounded-xl p-4">
-              <p className="text-sm text-slate-500">Completion Tokens</p>
-              <p className="text-2xl font-semibold text-slate-800 mt-1">{stats.total_completion_tokens.toLocaleString()}</p>
+            <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5">
+              <p className="text-sm font-medium text-slate-500">Completion Tokens</p>
+              <p className="text-2xl font-bold text-violet-600 mt-1">{stats.total_completion_tokens.toLocaleString()}</p>
             </div>
           </div>
 
+          {/* 按模型 - 带简易条形图 */}
           {stats.by_model.length > 0 && (
-            <div className="bg-white border border-slate-200 rounded-xl p-4">
-              <h2 className="font-medium text-slate-800 mb-3">按模型</h2>
+            <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-200">
+                <h2 className="font-semibold text-slate-800">模型使用分布</h2>
+                <p className="text-sm text-slate-500 mt-0.5">各模型 Token 消耗对比</p>
+              </div>
+              <div className="p-5">
+                <div className="space-y-4">
+                  {stats.by_model.map((m, i) => {
+                    const tokens = m.prompt_tokens + m.completion_tokens
+                    const pct = (tokens / maxModelTokens) * 100
+                    return (
+                      <div key={m.model}>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="font-mono text-slate-700 truncate max-w-[200px]">{m.model}</span>
+                          <span className="text-slate-500">
+                            {tokens.toLocaleString()} tokens · {m.calls} 次
+                          </span>
+                        </div>
+                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${pct}%`,
+                              backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 按模型 - 表格 */}
+          {stats.by_model.length > 0 && (
+            <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-200">
+                <h2 className="font-semibold text-slate-800">模型明细</h2>
+              </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full">
                   <thead>
-                    <tr className="border-b border-slate-200">
-                      <th className="text-left py-2">模型</th>
-                      <th className="text-right py-2">调用</th>
-                      <th className="text-right py-2">Prompt</th>
-                      <th className="text-right py-2">Completion</th>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-left py-3 px-5 text-sm font-medium text-slate-600">模型</th>
+                      <th className="text-right py-3 px-5 text-sm font-medium text-slate-600">调用次数</th>
+                      <th className="text-right py-3 px-5 text-sm font-medium text-slate-600">Prompt</th>
+                      <th className="text-right py-3 px-5 text-sm font-medium text-slate-600">Completion</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-100">
                     {stats.by_model.map((m) => (
-                      <tr key={m.model} className="border-b border-slate-100">
-                        <td className="py-2 font-mono">{m.model}</td>
-                        <td className="text-right py-2">{m.calls.toLocaleString()}</td>
-                        <td className="text-right py-2">{m.prompt_tokens.toLocaleString()}</td>
-                        <td className="text-right py-2">{m.completion_tokens.toLocaleString()}</td>
+                      <tr key={m.model} className="hover:bg-slate-50/50">
+                        <td className="py-3 px-5 font-mono text-sm text-slate-800">{m.model}</td>
+                        <td className="py-3 px-5 text-right text-sm text-slate-600">{m.calls.toLocaleString()}</td>
+                        <td className="py-3 px-5 text-right text-sm text-slate-600">{m.prompt_tokens.toLocaleString()}</td>
+                        <td className="py-3 px-5 text-right text-sm text-slate-600">{m.completion_tokens.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -84,26 +146,29 @@ export default function AdminStats() {
             </div>
           )}
 
+          {/* 按用户 */}
           {stats.by_user.length > 0 && (
-            <div className="bg-white border border-slate-200 rounded-xl p-4">
-              <h2 className="font-medium text-slate-800 mb-3">按用户</h2>
+            <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-200">
+                <h2 className="font-semibold text-slate-800">用户使用明细</h2>
+              </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full">
                   <thead>
-                    <tr className="border-b border-slate-200">
-                      <th className="text-left py-2">用户</th>
-                      <th className="text-right py-2">调用</th>
-                      <th className="text-right py-2">Prompt</th>
-                      <th className="text-right py-2">Completion</th>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-left py-3 px-5 text-sm font-medium text-slate-600">用户</th>
+                      <th className="text-right py-3 px-5 text-sm font-medium text-slate-600">调用次数</th>
+                      <th className="text-right py-3 px-5 text-sm font-medium text-slate-600">Prompt</th>
+                      <th className="text-right py-3 px-5 text-sm font-medium text-slate-600">Completion</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-100">
                     {stats.by_user.map((u) => (
-                      <tr key={u.user_id} className="border-b border-slate-100">
-                        <td className="py-2">{u.email || u.user_id}</td>
-                        <td className="text-right py-2">{u.calls.toLocaleString()}</td>
-                        <td className="text-right py-2">{u.prompt_tokens.toLocaleString()}</td>
-                        <td className="text-right py-2">{u.completion_tokens.toLocaleString()}</td>
+                      <tr key={u.user_id} className="hover:bg-slate-50/50">
+                        <td className="py-3 px-5 text-sm text-slate-800">{u.email || u.user_id}</td>
+                        <td className="py-3 px-5 text-right text-sm text-slate-600">{u.calls.toLocaleString()}</td>
+                        <td className="py-3 px-5 text-right text-sm text-slate-600">{u.prompt_tokens.toLocaleString()}</td>
+                        <td className="py-3 px-5 text-right text-sm text-slate-600">{u.completion_tokens.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -113,7 +178,10 @@ export default function AdminStats() {
           )}
 
           {stats.total_calls === 0 && (
-            <p className="text-slate-500 py-8 text-center">暂无使用数据</p>
+            <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-12 text-center">
+              <p className="text-slate-500">暂无使用数据</p>
+              <p className="text-sm text-slate-400 mt-1">宠物实例产生对话后将在此展示</p>
+            </div>
           )}
         </div>
       ) : null}
