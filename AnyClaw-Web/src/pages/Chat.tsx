@@ -85,6 +85,19 @@ export default function Chat() {
     loadInitial()
   }, [instanceId, navigate, loadInitial])
 
+  // 页面重新可见时拉取最新消息（多标签/后台时可能漏收 WebSocket）
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !isNaN(instanceId)) {
+        loadMessages().then((list) => {
+          if (list.length > 0) setMessages(list.reverse())
+        })
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [instanceId, loadMessages])
+
   useEffect(() => {
     if (isNaN(instanceId)) return
     const token = getToken()
@@ -118,15 +131,16 @@ export default function Chat() {
             if (msg.payload?.content != null) {
               const targetId = msg.payload.message_id ?? msg.id
               const content = String(msg.payload.content)
-              if (targetId) {
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === targetId ? { ...m, content } : m
-                  )
-                )
-              } else {
-                setMessages((prev) => [...prev, { id: 'u-' + Date.now(), content, role: 'assistant' }])
-              }
+              if (content.startsWith('Thinking')) return
+              setMessages((prev) => {
+                if (targetId) {
+                  const idx = prev.findIndex((m) => m.id === targetId)
+                  if (idx >= 0) {
+                    return prev.map((m) => (m.id === targetId ? { ...m, content } : m))
+                  }
+                }
+                return [...prev, { id: targetId || 'u-' + Date.now(), content, role: 'assistant' }]
+              })
             }
             break
           case 'typing.start':
