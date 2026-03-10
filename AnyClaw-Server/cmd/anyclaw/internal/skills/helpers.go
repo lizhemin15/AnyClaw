@@ -28,7 +28,7 @@ func skillsListCmd(loader *skills.SkillsLoader) {
 	fmt.Println("\nInstalled Skills:")
 	fmt.Println("------------------")
 	for _, skill := range allSkills {
-		fmt.Printf("  ?%s (%s)\n", skill.Name, skill.Source)
+		fmt.Printf("  ? %s (%s)\n", skill.Name, skill.Source)
 		if skill.Description != "" {
 			fmt.Printf("    %s\n", skill.Description)
 		}
@@ -94,7 +94,7 @@ func skillsInstallFromRegistry(cfg *config.Config, registryName, slug string) er
 		if rmErr != nil {
 			fmt.Printf("\u2717 Failed to remove partial install: %v\n", rmErr)
 		}
-		return fmt.Errorf("?failed to install skill: %w", err)
+		return fmt.Errorf("? failed to install skill: %w", err)
 	}
 
 	if result.IsMalwareBlocked {
@@ -122,11 +122,11 @@ func skillsRemoveCmd(installer *skills.SkillInstaller, skillName string) {
 	fmt.Printf("Removing skill '%s'...\n", skillName)
 
 	if err := installer.Uninstall(skillName); err != nil {
-		fmt.Printf("?Failed to remove skill: %v\n", err)
+		fmt.Printf("? Failed to remove skill: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("?Skill '%s' removed successfully!\n", skillName)
+	fmt.Printf("? Skill '%s' removed successfully!\n", skillName)
 }
 
 func skillsInstallBuiltinCmd(workspace string) {
@@ -147,21 +147,21 @@ func skillsInstallBuiltinCmd(workspace string) {
 		workspacePath := filepath.Join(workspaceSkillsDir, skillName)
 
 		if _, err := os.Stat(builtinPath); err != nil {
-			fmt.Printf("??Builtin skill '%s' not found: %v\n", skillName, err)
+			fmt.Printf("? Builtin skill '%s' not found: %v\n", skillName, err)
 			continue
 		}
 
 		if err := os.MkdirAll(workspacePath, 0o755); err != nil {
-			fmt.Printf("?Failed to create directory for %s: %v\n", skillName, err)
+			fmt.Printf("? Failed to create directory for %s: %v\n", skillName, err)
 			continue
 		}
 
 		if err := copyDirectory(builtinPath, workspacePath); err != nil {
-			fmt.Printf("?Failed to copy %s: %v\n", skillName, err)
+			fmt.Printf("? Failed to copy %s: %v\n", skillName, err)
 		}
 	}
 
-	fmt.Println("\n?All builtin skills installed!")
+	fmt.Println("\n? All builtin skills installed!")
 	fmt.Println("Now you can use them in your workspace.")
 }
 
@@ -208,7 +208,7 @@ func skillsListBuiltinCmd() {
 					}
 				}
 			}
-			status := "?
+			status := "?"
 			fmt.Printf("  %s  %s\n", status, entry.Name())
 			if description != "" {
 				fmt.Printf("     %s\n", description)
@@ -222,7 +222,7 @@ func skillsSearchCmd(query string) {
 
 	cfg, err := internal.LoadConfig()
 	if err != nil {
-		fmt.Printf("?Failed to load config: %v\n", err)
+		fmt.Printf("? Failed to load config: %v\n", err)
 		return
 	}
 
@@ -236,7 +236,7 @@ func skillsSearchCmd(query string) {
 
 	results, err := registryMgr.SearchAll(ctx, query, skillsSearchMaxResults)
 	if err != nil {
-		fmt.Printf("?Failed to fetch skills list: %v\n", err)
+		fmt.Printf("? Failed to fetch skills list: %v\n", err)
 		return
 	}
 
@@ -248,7 +248,7 @@ func skillsSearchCmd(query string) {
 	fmt.Printf("\nAvailable Skills (%d):\n", len(results))
 	fmt.Println("--------------------")
 	for _, result := range results {
-		fmt.Printf("  ?? %s\n", result.DisplayName)
+		fmt.Printf("  ? %s\n", result.DisplayName)
 		fmt.Printf("     %s\n", result.Summary)
 		fmt.Printf("     Slug: %s\n", result.Slug)
 		fmt.Printf("     Registry: %s\n", result.RegistryName)
@@ -262,11 +262,11 @@ func skillsSearchCmd(query string) {
 func skillsShowCmd(loader *skills.SkillsLoader, skillName string) {
 	content, ok := loader.LoadSkill(skillName)
 	if !ok {
-		fmt.Printf("?Skill '%s' not found\n", skillName)
+		fmt.Printf("? Skill '%s' not found\n", skillName)
 		return
 	}
 
-	fmt.Printf("\n?? Skill: %s\n", skillName)
+	fmt.Printf("\n? Skill: %s\n", skillName)
 	fmt.Println("----------------------")
 	fmt.Println(content)
 }

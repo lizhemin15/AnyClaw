@@ -493,9 +493,9 @@ func authModelsCmd() error {
 	fmt.Println("Available Antigravity Models:")
 	fmt.Println("-----------------------------")
 	for _, m := range models {
-		status := "?
+		status := "?"
 		if m.IsExhausted {
-			status = "?(quota exhausted)"
+			status = "? (quota exhausted)"
 		}
 		name := m.ID
 		if m.DisplayName != "" {
