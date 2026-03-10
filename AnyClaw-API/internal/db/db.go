@@ -127,6 +127,21 @@ func (d *DB) migrate() error {
 	)`); err != nil {
 		log.Printf("[db] create messages: %v", err)
 	}
+	// Email verification
+	if _, err := d.Exec("ALTER TABLE users ADD COLUMN email_verified TINYINT NOT NULL DEFAULT 1"); err != nil && !isDuplicateColumn(err) {
+		log.Printf("[db] alter users email_verified: %v", err)
+	}
+	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS verification_codes (
+		id BIGINT AUTO_INCREMENT PRIMARY KEY,
+		email VARCHAR(255) NOT NULL,
+		code VARCHAR(16) NOT NULL,
+		expires_at DATETIME NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		INDEX idx_vc_email (email),
+		INDEX idx_vc_expires (expires_at)
+	)`); err != nil {
+		log.Printf("[db] create verification_codes: %v", err)
+	}
 	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS usage_log (
 		id BIGINT AUTO_INCREMENT PRIMARY KEY,
 		instance_id VARCHAR(64) NOT NULL,

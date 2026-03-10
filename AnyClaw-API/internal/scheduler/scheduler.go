@@ -70,7 +70,7 @@ func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string, api
 	}
 	wsPath := fmt.Sprintf("/var/lib/anyclaw/ws-%d", instanceID)
 	containerName := fmt.Sprintf("anyclaw-inst-%d", instanceID)
-	cmd := fmt.Sprintf("export PATH=/usr/local/bin:/usr/bin:$PATH; docker run -d --name %s --pull always -v %s:/workspace -e ANYCLAW_AGENTS_DEFAULTS_WORKSPACE=/workspace -e ANYCLAW_AGENTS_DEFAULTS_MODEL_NAME='%s' -e ANYCLAW_API_URL='%s' -e ANYCLAW_INSTANCE_ID=%d -e ANYCLAW_TOKEN='%s' %s gateway 2>&1",
+	cmd := fmt.Sprintf("export PATH=/usr/local/bin:/usr/bin:$PATH; docker run -d --name %s --pull always -v %s:/workspace -e TZ=Asia/Shanghai -e ANYCLAW_AGENTS_DEFAULTS_WORKSPACE=/workspace -e ANYCLAW_AGENTS_DEFAULTS_MODEL_NAME='%s' -e ANYCLAW_API_URL='%s' -e ANYCLAW_INSTANCE_ID=%d -e ANYCLAW_TOKEN='%s' %s gateway 2>&1",
 		containerName, wsPath, defaultModel, apiURL, instanceID, token, image)
 	out, err := runSSH(host, cmd)
 	if err != nil {

@@ -80,7 +80,7 @@ func runSetupMode(cfgPath string, cfg *config.Config) {
 }
 
 func runApp(configPath string, cfg *config.Config, database *db.DB) {
-	authSvc := auth.New(database, cfg.JWTSecret)
+	authSvc := auth.New(database, cfg.JWTSecret, configPath)
 	apiURL := cfg.APIURL
 	if apiURL == "" {
 		apiURL = fmt.Sprintf("http://localhost:%d", cfg.Port)
@@ -114,6 +114,8 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	})
 
 	r.Route("/auth", func(r chi.Router) {
+		r.Get("/config", authSvc.HandleAuthConfig)
+		r.Post("/send-code", authSvc.HandleSendCode)
 		r.Post("/register", authSvc.HandleRegister)
 		r.Post("/login", authSvc.HandleLogin)
 	})
@@ -144,6 +146,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Get("/config", adminConfigHandler.GetConfig)
 		r.Put("/config", adminConfigHandler.PutConfig)
 		r.Post("/config/test", adminConfigHandler.TestChannel)
+		r.Post("/config/test-smtp", adminConfigHandler.TestSMTP)
 		r.Get("/stats", adminStatsHandler.GetStats)
 		r.Get("/energy/users", energyHandler.ListUsers)
 		r.Post("/energy/recharge", energyHandler.Recharge)

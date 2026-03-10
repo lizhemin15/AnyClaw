@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAdminConfig, putAdminConfig, testChannelConfig, type AdminConfig, type Channel } from '../api'
+import { getAdminConfig, putAdminConfig, testChannelConfig, testSMTPConfig, type AdminConfig, type Channel, type SMTPConfig } from '../api'
 
 function genId() {
   return 'c-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
@@ -23,6 +23,8 @@ export default function AdminConfig() {
   const [testResult, setTestResult] = useState<{ id: string; ok: boolean; message: string } | null>(null)
   const [testingNew, setTestingNew] = useState(false)
   const [newTestResult, setNewTestResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [testingSMTP, setTestingSMTP] = useState(false)
+  const [smtpTestResult, setSmtpTestResult] = useState<{ ok: boolean; message: string } | null>(null)
 
   useEffect(() => {
     getAdminConfig()
@@ -31,8 +33,9 @@ export default function AdminConfig() {
           const models = ch.models && ch.models.length > 0 ? ch.models : [{ id: genModelId(), name: 'gpt-4o', enabled: ch.enabled }]
           return { ...ch, models }
         })
-        setConfig({ channels })
-        setForm({ channels: JSON.parse(JSON.stringify(channels)) })
+        const smtp = c.smtp ? { ...c.smtp } : undefined
+        setConfig({ channels, smtp })
+        setForm({ channels: JSON.parse(JSON.stringify(channels)), smtp })
       })
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
       .finally(() => setLoading(false))
@@ -162,6 +165,38 @@ export default function AdminConfig() {
       setTestResult({ id: ch.id, ok: false, message: err instanceof Error ? err.message : '测试失败' })
     } finally {
       setTestingChannel(null)
+    }
+  }
+
+  const updateSmtp = (upd: Partial<SMTPConfig>) => {
+    if (!form) return
+    setForm({
+      ...form,
+      smtp: { host: '', port: 587, user: '', pass: '', from: '', ...form.smtp, ...upd },
+    })
+  }
+
+  const handleTestSMTP = async () => {
+    const s = form?.smtp
+    if (!s?.host?.trim()) {
+      setSmtpTestResult({ ok: false, message: '请先填写 SMTP 地址' })
+      return
+    }
+    setTestingSMTP(true)
+    setSmtpTestResult(null)
+    try {
+      const res = await testSMTPConfig({
+        host: s.host.trim(),
+        port: s.port || 587,
+        user: s.user?.trim(),
+        pass: s.pass?.trim(),
+        from: s.from?.trim(),
+      })
+      setSmtpTestResult(res)
+    } catch (err) {
+      setSmtpTestResult({ ok: false, message: err instanceof Error ? err.message : '测试失败' })
+    } finally {
+      setTestingSMTP(false)
     }
   }
 
@@ -371,6 +406,88 @@ export default function AdminConfig() {
                   )}
                 </div>
               ))
+            )}
+          </div>
+        </div>
+
+        {/* SMTP 配置 */}
+        <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200">
+            <h2 className="font-semibold text-slate-800">邮件服务（注册验证码）</h2>
+            <p className="text-sm text-slate-500 mt-1">配置后用户注册需邮箱验证码，留空则无需验证</p>
+          </div>
+          <div className="px-5 py-4 space-y-4">
+            <div className="flex gap-4 flex-wrap">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">SMTP 地址</label>
+                <input
+                  type="text"
+                  value={form?.smtp?.host ?? ''}
+                  onChange={(e) => updateSmtp({ host: e.target.value })}
+                  placeholder="smtp.example.com"
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-48"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">端口</label>
+                <input
+                  type="number"
+                  value={form?.smtp?.port ?? 587}
+                  onChange={(e) => updateSmtp({ port: parseInt(e.target.value, 10) || 587 })}
+                  placeholder="587"
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-20"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">用户名</label>
+                <input
+                  type="text"
+                  value={form?.smtp?.user ?? ''}
+                  onChange={(e) => updateSmtp({ user: e.target.value })}
+                  placeholder="user@example.com"
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-48"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">密码</label>
+                <input
+                  type="password"
+                  value={form?.smtp?.pass ?? ''}
+                  onChange={(e) => updateSmtp({ pass: e.target.value })}
+                  placeholder="密码"
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-40 font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">发件人</label>
+                <input
+                  type="text"
+                  value={form?.smtp?.from ?? ''}
+                  onChange={(e) => updateSmtp({ from: e.target.value })}
+                  placeholder="noreply@example.com（可选）"
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-48"
+                />
+              </div>
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={handleTestSMTP}
+                  disabled={testingSMTP || !form?.smtp?.host?.trim()}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50"
+                >
+                  {testingSMTP ? '测试中...' : '测试连通性'}
+                </button>
+              </div>
+            </div>
+            {smtpTestResult && (
+              <div
+                className={`text-xs px-3 py-1.5 rounded ${
+                  smtpTestResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+                }`}
+              >
+                {smtpTestResult.ok ? '✓ ' : '✗ '}
+                {smtpTestResult.message}
+              </div>
             )}
           </div>
         </div>

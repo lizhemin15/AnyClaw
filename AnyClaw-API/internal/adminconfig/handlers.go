@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/anyclaw/anyclaw-api/internal/config"
+	"github.com/anyclaw/anyclaw-api/internal/mail"
 	"github.com/anyclaw/anyclaw-api/internal/request"
 )
 
@@ -48,8 +49,19 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 			"models":  ch.Models,
 		}
 	}
+	resp := map[string]any{"channels": out}
+	if cfg.SMTP != nil {
+		smtp := map[string]any{
+			"host": cfg.SMTP.Host,
+			"port": cfg.SMTP.Port,
+			"user": cfg.SMTP.User,
+			"pass": config.MaskAPIKey(cfg.SMTP.Pass),
+			"from": cfg.SMTP.From,
+		}
+		resp["smtp"] = smtp
+	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"channels": out})
+	json.NewEncoder(w).Encode(resp)
 }
 
 func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +71,8 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Channels []config.Channel `json:"channels"`
+		Channels []config.Channel  `json:"channels"`
+		SMTP     *config.SMTPConfig `json:"smtp"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
@@ -84,7 +97,14 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 			channels[i].APIKey = k
 		}
 	}
-	if err := config.SaveAdminConfig(h.configPath, channels); err != nil {
+	// Merge SMTP: preserve pass if client sent masked value; clear if host empty
+	smtp := req.SMTP
+	if smtp != nil && strings.TrimSpace(smtp.Host) == "" {
+		smtp = nil
+	} else if smtp != nil && cfg.SMTP != nil && (smtp.Pass == "" || strings.HasPrefix(smtp.Pass, "****")) {
+		smtp.Pass = cfg.SMTP.Pass
+	}
+	if err := config.SaveAdminConfig(h.configPath, channels, smtp); err != nil {
 		http.Error(w, `{"error":"failed to save config"}`, http.StatusInternalServerError)
 		return
 	}
@@ -200,4 +220,51 @@ func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
 		"ok":      true,
 		"message": "连接正常",
 	})
+}
+
+// TestSMTPRequest 测试 SMTP 连通性
+type TestSMTPRequest struct {
+	Host string `json:"host"`
+	Port int    `json:"port"`
+	User string `json:"user"`
+	Pass string `json:"pass"`
+	From string `json:"from"`
+}
+
+func (h *Handler) TestSMTP(w http.ResponseWriter, r *http.Request) {
+	claims := request.FromContext(r.Context())
+	if claims == nil || claims.Role != "admin" {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	var req TestSMTPRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Host == "" {
+		cfg, err := config.Load(h.configPath)
+		if err != nil || cfg.SMTP == nil || cfg.SMTP.Host == "" {
+			http.Error(w, `{"error":"SMTP not configured"}`, http.StatusBadRequest)
+			return
+		}
+		req.Host = cfg.SMTP.Host
+		req.Port = cfg.SMTP.Port
+		req.User = cfg.SMTP.User
+		req.Pass = cfg.SMTP.Pass
+		req.From = cfg.SMTP.From
+	}
+	if req.Port <= 0 {
+		req.Port = 587
+	}
+	if req.From == "" {
+		req.From = req.User
+	}
+	err := mail.TestSMTP(req.Host, req.Port, req.User, req.Pass, req.From)
+	w.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "message": err.Error()})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "message": "连接正常"})
 }

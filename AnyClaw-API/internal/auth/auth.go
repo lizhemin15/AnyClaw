@@ -22,17 +22,18 @@ type Claims struct {
 }
 
 type Auth struct {
-	db     *db.DB
-	secret []byte
+	db         *db.DB
+	secret     []byte
+	configPath string
 }
 
-func New(database *db.DB, secret string) *Auth {
+func New(database *db.DB, secret, configPath string) *Auth {
 	if secret == "" {
 		b := make([]byte, 32)
 		rand.Read(b)
 		secret = base64.URLEncoding.EncodeToString(b)
 	}
-	return &Auth{db: database, secret: []byte(secret)}
+	return &Auth{db: database, secret: []byte(secret), configPath: configPath}
 }
 
 func (a *Auth) HashPassword(password string) (string, error) {

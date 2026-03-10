@@ -69,6 +69,17 @@ async function fetchApi<T>(
   return data as T;
 }
 
+export async function getAuthConfig(): Promise<{ email_verification_required: boolean }> {
+  return fetchApi<{ email_verification_required: boolean }>('/auth/config');
+}
+
+export async function sendVerificationCode(email: string): Promise<void> {
+  await fetchApi('/auth/send-code', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
 export async function login(email: string, password: string): Promise<LoginResponse> {
   return fetchApi<LoginResponse>('/auth/login', {
     method: 'POST',
@@ -76,10 +87,16 @@ export async function login(email: string, password: string): Promise<LoginRespo
   });
 }
 
-export async function register(email: string, password: string, inviteCode?: string): Promise<LoginResponse> {
+export async function register(
+  email: string,
+  password: string,
+  options?: { code?: string; inviteCode?: string }
+): Promise<LoginResponse> {
+  const body: Record<string, string> = { email, password, invite_code: options?.inviteCode || '' };
+  if (options?.code) body.code = options.code;
   return fetchApi<LoginResponse>('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ email, password, invite_code: inviteCode || '' }),
+    body: JSON.stringify(body),
   });
 }
 
@@ -277,8 +294,17 @@ export interface Channel {
   models: ModelEntry[];
 }
 
+export interface SMTPConfig {
+  host: string;
+  port: number;
+  user: string;
+  pass: string;
+  from: string;
+}
+
 export interface AdminConfig {
   channels: Channel[];
+  smtp?: SMTPConfig;
 }
 
 export async function getAdminConfig(): Promise<AdminConfig> {
@@ -289,6 +315,13 @@ export async function putAdminConfig(config: AdminConfig): Promise<void> {
   await fetchApi('/admin/config', {
     method: 'PUT',
     body: JSON.stringify(config),
+  });
+}
+
+export async function testSMTPConfig(params?: Partial<SMTPConfig>): Promise<{ ok: boolean; message: string }> {
+  return fetchApi<{ ok: boolean; message: string }>('/admin/config/test-smtp', {
+    method: 'POST',
+    body: JSON.stringify(params || {}),
   });
 }
 

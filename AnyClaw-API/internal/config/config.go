@@ -17,6 +17,16 @@ type Config struct {
 	Channels     []Channel     `json:"channels"`     // 用户添加的渠道，每个渠道可配置、启用、添加多个模型
 	KeyPool      KeyPool       `json:"key_pool"`     // deprecated, migrate to channels
 	InstanceMap  InstanceMap   `json:"instance_map"`
+	SMTP         *SMTPConfig   `json:"smtp,omitempty"` // 注册验证码邮件
+}
+
+// SMTPConfig 邮件服务配置
+type SMTPConfig struct {
+	Host string `json:"host"`
+	Port int    `json:"port"` // 587 or 465
+	User string `json:"user"`
+	Pass string `json:"pass"`
+	From string `json:"from"` // 发件人，空则用 User
 }
 
 // Channel 渠道：用户添加，可配置、启用，每个渠道可添加多个模型
@@ -189,8 +199,8 @@ func Save(path string, c *SaveConfig) error {
 	return os.WriteFile(path, data, 0600)
 }
 
-// SaveAdminConfig saves channels to config file. Preserves other fields.
-func SaveAdminConfig(path string, channels []Channel) error {
+// SaveAdminConfig saves channels and optionally smtp to config file. Preserves other fields.
+func SaveAdminConfig(path string, channels []Channel, smtp *SMTPConfig) error {
 	if path == "" {
 		path = ConfigPath()
 	}
@@ -212,6 +222,9 @@ func SaveAdminConfig(path string, channels []Channel) error {
 		raw = make(map[string]any)
 	}
 	raw["channels"] = channels
+	if smtp != nil {
+		raw["smtp"] = smtp
+	}
 	data, err := json.MarshalIndent(raw, "", "  ")
 	if err != nil {
 		return err

@@ -114,7 +114,7 @@ func (h *Handler) CreateAdmin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
-	_, err = database.Exec("INSERT INTO users (email, password_hash, role) VALUES (?, ?, 'admin')", req.Email, hash)
+	_, err = database.Exec("INSERT INTO users (email, password_hash, role, email_verified) VALUES (?, ?, 'admin', 1)", req.Email, hash)
 	if err != nil {
 		if strings.Contains(err.Error(), "Duplicate") {
 			http.Error(w, `{"error":"email already exists"}`, http.StatusConflict)
