@@ -40,7 +40,7 @@ export default function AdminConfig() {
     setSuccess('')
     try {
       await putAdminConfig(form)
-      setSuccess('保存成功，重启服务后生效')
+      setSuccess('保存成功，配置已立即生效')
       setConfig(form)
       setAddingChannel(false)
       setEditingChannel(null)

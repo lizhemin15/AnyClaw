@@ -83,7 +83,7 @@ func runApp(cfg *config.Config, database *db.DB) {
 	if apiURL == "" {
 		apiURL = fmt.Sprintf("http://localhost:%d", cfg.Port)
 	}
-	sched := scheduler.New(apiURL, cfg.DockerImage, cfg.GetEnabledModel(), database)
+	sched := scheduler.New(apiURL, cfg.DockerImage, configPath, database)
 	instHandler := instances.New(database, sched, apiURL)
 	hostChecker := scheduler.HostChecker{}
 	hostHandler := hosts.New(database, hostChecker)
@@ -95,7 +95,7 @@ func runApp(cfg *config.Config, database *db.DB) {
 	wsHandler := ws.NewHandler(database, wsHub)
 	energyHandler := energy.New(database)
 
-	proxy := llm.New(cfg, database, database)
+	proxy := llm.New(configPath, database, database)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)

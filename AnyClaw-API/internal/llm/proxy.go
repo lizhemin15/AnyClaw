@@ -32,20 +32,24 @@ type UsageRecord struct {
 }
 
 type Proxy struct {
-	cfg     *config.Config
-	resolver TokenResolver
-	db      *db.DB
-	client  *http.Client
-	mu      sync.RWMutex
+	configPath string
+	resolver   TokenResolver
+	db         *db.DB
+	client     *http.Client
+	mu         sync.RWMutex
 }
 
-func New(cfg *config.Config, resolver TokenResolver, database *db.DB) *Proxy {
+func New(configPath string, resolver TokenResolver, database *db.DB) *Proxy {
 	return &Proxy{
-		cfg:     cfg,
-		resolver: resolver,
-		db:      database,
-		client:  &http.Client{},
+		configPath: configPath,
+		resolver:   resolver,
+		db:         database,
+		client:     &http.Client{},
 	}
+}
+
+func (p *Proxy) loadConfig() (*config.Config, error) {
+	return config.Load(p.configPath)
 }
 
 // HandleChatCompletions proxies the request to the appropriate provider.
@@ -67,12 +71,11 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if instanceID == "" {
-		p.mu.RLock()
-		info, ok := p.cfg.InstanceMap.Tokens[token]
-		p.mu.RUnlock()
-		if ok {
-			instanceID = info.InstanceID
-			userID = info.UserID
+		if cfg, err := p.loadConfig(); err == nil {
+			if info, ok := cfg.InstanceMap.Tokens[token]; ok {
+				instanceID = info.InstanceID
+				userID = info.UserID
+			}
 		}
 	}
 	if instanceID == "" {
@@ -110,7 +113,12 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiBase, apiKey := p.selectProvider(model)
+	cfg, cfgErr := p.loadConfig()
+	if cfgErr != nil {
+		http.Error(w, `{"error":{"message":"config error"}}`, http.StatusInternalServerError)
+		return
+	}
+	apiBase, apiKey := cfg.FindChannelForModel(model)
 	if apiBase == "" || apiKey == "" {
 		log.Printf("[llm] no key for model %q", model)
 		http.Error(w, `{"error":{"message":"no provider configured for model"}}`, http.StatusServiceUnavailable)
@@ -158,13 +166,6 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *Proxy) selectProvider(model string) (apiBase, apiKey string) {
-	apiBase, apiKey = p.cfg.FindChannelForModel(model)
-	if apiBase != "" && apiKey != "" {
-		return apiBase, apiKey
-	}
-	return "", ""
-}
 
 func (p *Proxy) logUsage(instanceID, userID, model, provider string, promptTokens, completionTokens int) {
 	rec := UsageRecord{

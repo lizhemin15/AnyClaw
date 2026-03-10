@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/anyclaw/anyclaw-api/internal/config"
 	"github.com/anyclaw/anyclaw-api/internal/db"
 )
 
@@ -15,20 +16,17 @@ type HostStore interface {
 }
 
 type Scheduler struct {
-	apiURL       string
-	defaultImg   string
-	defaultModel string
-	hosts        HostStore
+	apiURL     string
+	defaultImg string
+	configPath string
+	hosts      HostStore
 }
 
-func New(apiURL, defaultImage, defaultModel string, hosts HostStore) *Scheduler {
+func New(apiURL, defaultImage, configPath string, hosts HostStore) *Scheduler {
 	if defaultImage == "" {
 		defaultImage = "openclaw/openclaw"
 	}
-	if defaultModel == "" {
-		defaultModel = "gpt-4o"
-	}
-	return &Scheduler{apiURL: apiURL, defaultImg: defaultImage, defaultModel: defaultModel, hosts: hosts}
+	return &Scheduler{apiURL: apiURL, defaultImg: defaultImage, configPath: configPath, hosts: hosts}
 }
 
 // Run creates a Docker container on a remote host via SSH and returns (containerID, hostID).
@@ -73,9 +71,15 @@ func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string, api
 		return "", "", fmt.Errorf("ensure workspace: %w", err)
 	}
 
+	defaultModel := "gpt-4o"
+	if cfg, err := config.Load(s.configPath); err == nil {
+		if m := cfg.GetEnabledModel(); m != "" {
+			defaultModel = m
+		}
+	}
 	mountPath := fmt.Sprintf("/var/lib/anyclaw/ws-%d", instanceID)
 	cmd := fmt.Sprintf("export PATH=/usr/local/bin:/usr/bin:$PATH; docker run -d --pull always -v %s:/workspace -e PICOCLAW_AGENTS_DEFAULTS_WORKSPACE=/workspace -e ANYCLAW_AGENTS_DEFAULTS_MODEL_NAME='%s' -e ANYCLAW_API_URL='%s' -e ANYCLAW_INSTANCE_ID=%d -e ANYCLAW_TOKEN='%s' %s 2>&1",
-		mountPath, s.defaultModel, apiURL, instanceID, token, image)
+		mountPath, defaultModel, apiURL, instanceID, token, image)
 	out, err := runSSH(host, cmd)
 	if err != nil {
 		log.Printf("[scheduler] ssh docker run on %s failed: %v", host.Addr, err)
