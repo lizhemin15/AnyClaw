@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/anyclaw/anyclaw-server/pkg/logger"
+	"github.com/anyclaw/anyclaw-server/pkg/providers"
 )
 
 type ToolRegistry struct {
@@ -46,7 +46,7 @@ func (r *ToolRegistry) Execute(ctx context.Context, name string, args map[string
 
 // ExecuteWithContext executes a tool with channel/chatID context and optional async callback.
 // If the tool implements AsyncExecutor and a non-nil callback is provided,
-// ExecuteAsync is called instead of Execute â€” the callback is a parameter,
+// ExecuteAsync is called instead of Execute â€?the callback is a parameter,
 // never stored as mutable state on the tool.
 func (r *ToolRegistry) ExecuteWithContext(
 	ctx context.Context,
@@ -71,7 +71,7 @@ func (r *ToolRegistry) ExecuteWithContext(
 	}
 
 	// Inject channel/chatID into ctx so tools read them via ToolChannel(ctx)/ToolChatID(ctx).
-	// Always inject â€” tools validate what they require.
+	// Always inject â€?tools validate what they require.
 	ctx = WithToolContext(ctx, channel, chatID)
 
 	// If tool implements AsyncExecutor and callback is provided, use ExecuteAsync.

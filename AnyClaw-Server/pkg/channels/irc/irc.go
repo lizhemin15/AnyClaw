@@ -9,10 +9,10 @@ import (
 	"github.com/ergochat/irc-go/ircevent"
 	"github.com/ergochat/irc-go/ircmsg"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/channels"
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/anyclaw/anyclaw-server/pkg/bus"
+	"github.com/anyclaw/anyclaw-server/pkg/channels"
+	"github.com/anyclaw/anyclaw-server/pkg/config"
+	"github.com/anyclaw/anyclaw-server/pkg/logger"
 )
 
 // IRCChannel implements the Channel interface for IRC servers.

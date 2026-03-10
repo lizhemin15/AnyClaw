@@ -1,8 +1,8 @@
-// PicoClaw - Ultra-lightweight personal AI agent
+// AnyClaw - Ultra-lightweight personal AI agent
 // Inspired by and based on nanobot: https://github.com/HKUDS/nanobot
 // License: MIT
 //
-// Copyright (c) 2026 PicoClaw contributors
+// Copyright (c) 2026 AnyClaw contributors
 
 package agent
 
@@ -15,13 +15,13 @@ import (
 
 	"github.com/h2non/filetype"
 
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/media"
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/anyclaw/anyclaw-server/pkg/logger"
+	"github.com/anyclaw/anyclaw-server/pkg/media"
+	"github.com/anyclaw/anyclaw-server/pkg/providers"
 )
 
 // resolveMediaRefs replaces media:// refs in message Media fields with base64 data URLs.
-// Uses streaming base64 encoding (file handle â†’ encoder â†’ buffer) to avoid holding
+// Uses streaming base64 encoding (file handle â†?encoder â†?buffer) to avoid holding
 // both raw bytes and encoded string in memory simultaneously.
 // Returns a new slice; original messages are not mutated.
 func resolveMediaRefs(messages []providers.Message, store media.MediaStore, maxSize int) []providers.Message {
@@ -83,7 +83,7 @@ func resolveMediaRefs(messages []providers.Message, store media.MediaStore, maxS
 				mime = kind.MIME.Value
 			}
 
-			// Streaming base64: open file â†’ base64 encoder â†’ buffer
+			// Streaming base64: open file â†?base64 encoder â†?buffer
 			// Peak memory: ~1.33x file size (buffer only, no raw bytes copy)
 			f, err := os.Open(localPath)
 			if err != nil {

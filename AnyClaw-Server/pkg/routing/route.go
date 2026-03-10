@@ -3,7 +3,7 @@ package routing
 import (
 	"strings"
 
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/anyclaw/anyclaw-server/pkg/config"
 )
 
 // RouteInput contains the routing context from an inbound message.

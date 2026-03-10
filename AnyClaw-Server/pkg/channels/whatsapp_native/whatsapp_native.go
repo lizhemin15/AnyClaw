@@ -1,9 +1,9 @@
 //go:build whatsapp_native
 
-// PicoClaw - Ultra-lightweight personal AI agent
+// AnyClaw - Ultra-lightweight personal AI agent
 // License: MIT
 //
-// Copyright (c) 2026 PicoClaw contributors
+// Copyright (c) 2026 AnyClaw contributors
 
 package whatsapp
 
@@ -28,12 +28,12 @@ import (
 	"google.golang.org/protobuf/proto"
 	_ "modernc.org/sqlite"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/channels"
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/identity"
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/anyclaw/anyclaw-server/pkg/bus"
+	"github.com/anyclaw/anyclaw-server/pkg/channels"
+	"github.com/anyclaw/anyclaw-server/pkg/config"
+	"github.com/anyclaw/anyclaw-server/pkg/identity"
+	"github.com/anyclaw/anyclaw-server/pkg/logger"
+	"github.com/anyclaw/anyclaw-server/pkg/utils"
 )
 
 const (
@@ -217,7 +217,7 @@ func (c *WhatsAppNativeChannel) Stop(ctx context.Context) error {
 	// eventHandler atomically with respect to its wg.Add(1) call.
 	// This closes the TOCTOU window where eventHandler could check
 	// stopping (false), then Stop sets it true + enters wg.Wait,
-	// then eventHandler calls wg.Add(1) â€” causing a panic.
+	// then eventHandler calls wg.Add(1) â€?causing a panic.
 	c.reconnectMu.Lock()
 	c.stopping.Store(true)
 	c.reconnectMu.Unlock()

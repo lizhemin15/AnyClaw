@@ -1,15 +1,15 @@
-// PicoClaw - Ultra-lightweight personal AI agent
+// AnyClaw - Ultra-lightweight personal AI agent
 // License: MIT
 //
-// Copyright (c) 2026 PicoClaw contributors
+// Copyright (c) 2026 AnyClaw contributors
 
 package providers
 
 import (
 	"fmt"
 
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/providers/api_proxy"
+	"github.com/anyclaw/anyclaw-server/pkg/config"
+	"github.com/anyclaw/anyclaw-server/pkg/providers/api_proxy"
 )
 
 // CreateProvider creates a provider based on the configuration.

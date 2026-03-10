@@ -1,8 +1,8 @@
-// PicoClaw - Ultra-lightweight personal AI agent
+// AnyClaw - Ultra-lightweight personal AI agent
 // Inspired by and based on nanobot: https://github.com/HKUDS/nanobot
 // License: MIT
 //
-// Copyright (c) 2026 PicoClaw contributors
+// Copyright (c) 2026 AnyClaw contributors
 
 package channels
 
@@ -17,12 +17,12 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/constants"
-	"github.com/sipeed/picoclaw/pkg/health"
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/media"
+	"github.com/anyclaw/anyclaw-server/pkg/bus"
+	"github.com/anyclaw/anyclaw-server/pkg/config"
+	"github.com/anyclaw/anyclaw-server/pkg/constants"
+	"github.com/anyclaw/anyclaw-server/pkg/health"
+	"github.com/anyclaw/anyclaw-server/pkg/logger"
+	"github.com/anyclaw/anyclaw-server/pkg/media"
 )
 
 const (
@@ -85,9 +85,9 @@ type Manager struct {
 	mux           *http.ServeMux
 	httpServer    *http.Server
 	mu            sync.RWMutex
-	placeholders  sync.Map // "channel:chatID" â†’ placeholderID (string)
-	typingStops   sync.Map // "channel:chatID" â†’ func()
-	reactionUndos sync.Map // "channel:chatID" â†’ reactionEntry
+	placeholders  sync.Map // "channel:chatID" â†?placeholderID (string)
+	typingStops   sync.Map // "channel:chatID" â†?func()
+	reactionUndos sync.Map // "channel:chatID" â†?reactionEntry
 }
 
 type asyncTask struct {
@@ -141,7 +141,7 @@ func (m *Manager) preSend(ctx context.Context, name string, msg bus.OutboundMess
 				if err := editor.EditMessage(ctx, msg.ChatID, entry.id, msg.Content); err == nil {
 					return true // edited successfully, skip Send
 				}
-				// edit failed â†’ fall through to normal Send
+				// edit failed â†?fall through to normal Send
 			}
 		}
 	}
@@ -521,17 +521,17 @@ func (m *Manager) sendWithRetry(ctx context.Context, name string, w *channelWork
 			return
 		}
 
-		// Permanent failures â€” don't retry
+		// Permanent failures â€?don't retry
 		if errors.Is(lastErr, ErrNotRunning) || errors.Is(lastErr, ErrSendFailed) {
 			break
 		}
 
-		// Last attempt exhausted â€” don't sleep
+		// Last attempt exhausted â€?don't sleep
 		if attempt == maxRetries {
 			break
 		}
 
-		// Rate limit error â€” fixed delay
+		// Rate limit error â€?fixed delay
 		if errors.Is(lastErr, ErrRateLimit) {
 			select {
 			case <-time.After(rateLimitDelay):
@@ -541,7 +541,7 @@ func (m *Manager) sendWithRetry(ctx context.Context, name string, w *channelWork
 			}
 		}
 
-		// ErrTemporary or unknown error â€” exponential backoff
+		// ErrTemporary or unknown error â€?exponential backoff
 		backoff := min(time.Duration(float64(baseBackoff)*math.Pow(2, float64(attempt))), maxBackoff)
 		select {
 		case <-time.After(backoff):
@@ -682,17 +682,17 @@ func (m *Manager) sendMediaWithRetry(ctx context.Context, name string, w *channe
 			return
 		}
 
-		// Permanent failures â€” don't retry
+		// Permanent failures â€?don't retry
 		if errors.Is(lastErr, ErrNotRunning) || errors.Is(lastErr, ErrSendFailed) {
 			break
 		}
 
-		// Last attempt exhausted â€” don't sleep
+		// Last attempt exhausted â€?don't sleep
 		if attempt == maxRetries {
 			break
 		}
 
-		// Rate limit error â€” fixed delay
+		// Rate limit error â€?fixed delay
 		if errors.Is(lastErr, ErrRateLimit) {
 			select {
 			case <-time.After(rateLimitDelay):
@@ -702,7 +702,7 @@ func (m *Manager) sendMediaWithRetry(ctx context.Context, name string, w *channe
 			}
 		}
 
-		// ErrTemporary or unknown error â€” exponential backoff
+		// ErrTemporary or unknown error â€?exponential backoff
 		backoff := min(time.Duration(float64(baseBackoff)*math.Pow(2, float64(attempt))), maxBackoff)
 		select {
 		case <-time.After(backoff):

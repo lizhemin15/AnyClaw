@@ -13,11 +13,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/channels"
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/identity"
-	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/anyclaw/anyclaw-server/pkg/bus"
+	"github.com/anyclaw/anyclaw-server/pkg/channels"
+	"github.com/anyclaw/anyclaw-server/pkg/config"
+	"github.com/anyclaw/anyclaw-server/pkg/identity"
+	"github.com/anyclaw/anyclaw-server/pkg/logger"
 )
 
 // picoConn represents a single WebSocket connection.
@@ -52,7 +52,7 @@ type PicoChannel struct {
 	*channels.BaseChannel
 	config      config.PicoConfig
 	upgrader    websocket.Upgrader
-	connections sync.Map // connID â†’ *picoConn
+	connections sync.Map // connID â†?*picoConn
 	connCount   atomic.Int32
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -137,7 +137,7 @@ func (c *PicoChannel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Send implements Channel â€” sends a message to the appropriate WebSocket connection.
+// Send implements Channel â€?sends a message to the appropriate WebSocket connection.
 func (c *PicoChannel) Send(ctx context.Context, msg bus.OutboundMessage) error {
 	if !c.IsRunning() {
 		return channels.ErrNotRunning

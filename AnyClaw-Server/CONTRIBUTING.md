@@ -1,8 +1,8 @@
-# Contributing to PicoClaw
+# Contributing to AnyClaw
 
-Thank you for your interest in contributing to PicoClaw! This project is a community-driven effort to build the lightweight and versatile personal AI assistant. We welcome contributions of all kinds: bug fixes, features, documentation, translations, and testing.
+Thank you for your interest in contributing to AnyClaw! This project is a community-driven effort to build the lightweight and versatile personal AI assistant. We welcome contributions of all kinds: bug fixes, features, documentation, translations, and testing.
 
-PicoClaw itself was substantially developed with AI assistance ‚Äî we embrace this approach and have built our contribution process around it.
+AnyClaw itself was substantially developed with AI assistance ‚Ä?we embrace this approach and have built our contribution process around it.
 
 ## Table of Contents
 
@@ -27,11 +27,11 @@ We are committed to maintaining a welcoming and respectful community. Be kind, c
 
 ## Ways to Contribute
 
-- **Bug reports** ‚Äî Open an issue using the bug report template.
-- **Feature requests** ‚Äî Open an issue using the feature request template; discuss before implementing.
-- **Code** ‚Äî Fix bugs or implement features. See the workflow below.
-- **Documentation** ‚Äî Improve READMEs, docs, inline comments, or translations.
-- **Testing** ‚Äî Run PicoClaw on new hardware, channels, or LLM providers and report your results.
+- **Bug reports** ‚Ä?Open an issue using the bug report template.
+- **Feature requests** ‚Ä?Open an issue using the feature request template; discuss before implementing.
+- **Code** ‚Ä?Fix bugs or implement features. See the workflow below.
+- **Documentation** ‚Ä?Improve READMEs, docs, inline comments, or translations.
+- **Testing** ‚Ä?Run AnyClaw on new hardware, channels, or LLM providers and report your results.
 
 For substantial new features, please open an issue first to discuss the design before writing code. This prevents wasted effort and ensures alignment with the project's direction.
 
@@ -42,12 +42,12 @@ For substantial new features, please open an issue first to discuss the design b
 1. **Fork** the repository on GitHub.
 2. **Clone** your fork locally:
    ```bash
-   git clone https://github.com/<your-username>/picoclaw.git
-   cd picoclaw
+   git clone https://github.com/<your-username>/AnyClaw.git
+   cd AnyClaw
    ```
 3. Add the upstream remote:
    ```bash
-   git remote add upstream https://github.com/sipeed/picoclaw.git
+   git remote add upstream https://github.com/anyclaw/anyclaw-server.git
    ```
 
 ---
@@ -123,7 +123,7 @@ git rebase upstream/main
 
 ## AI-Assisted Contributions
 
-PicoClaw was built with substantial AI assistance, and we fully embrace AI-assisted development. However, contributors must understand their responsibilities when using AI tools.
+AnyClaw was built with substantial AI assistance, and we fully embrace AI-assisted development. However, contributors must understand their responsibilities when using AI tools.
 
 ### Disclosure Is Required
 
@@ -132,10 +132,10 @@ Every PR must disclose AI involvement using the PR template's **ü§ñ AI Code Gen
 | Level | Description |
 |---|---|
 | ü§ñ Fully AI-generated | AI wrote the code; contributor reviewed and validated it |
-| üõ†Ô∏è Mostly AI-generated | AI produced the draft; contributor made significant modifications |
-| üë®‚Äçüíª Mostly Human-written | Contributor led; AI provided suggestions or none at all |
+| üõ†Ô∏?Mostly AI-generated | AI produced the draft; contributor made significant modifications |
+| üë®‚Äçüí?Mostly Human-written | Contributor led; AI provided suggestions or none at all |
 
-Honest disclosure is expected. There is no stigma attached to any level ‚Äî what matters is the quality of the contribution.
+Honest disclosure is expected. There is no stigma attached to any level ‚Ä?what matters is the quality of the contribution.
 
 ### You Are Responsible for What You Submit
 
@@ -143,8 +143,8 @@ Using AI to generate code does not reduce your responsibility as the contributor
 
 - **Read and understand** every line of the generated code.
 - **Test it** in a real environment (see the Test Environment section of the PR template).
-- **Check for security issues** ‚Äî AI models can generate subtly insecure code (e.g., path traversal, injection, credential exposure). Review carefully.
-- **Verify correctness** ‚Äî AI-generated logic can be plausible-sounding but wrong. Validate the behavior, not just the syntax.
+- **Check for security issues** ‚Ä?AI models can generate subtly insecure code (e.g., path traversal, injection, credential exposure). Review carefully.
+- **Verify correctness** ‚Ä?AI-generated logic can be plausible-sounding but wrong. Validate the behavior, not just the syntax.
 
 PRs where it is clear the contributor has not read or tested the AI-generated code will be closed without review.
 
@@ -166,7 +166,7 @@ AI-generated code requires extra security scrutiny. Pay special attention to:
 - Credential or secret handling
 - Command execution (`exec.Command`, shell invocations)
 
-If you are unsure whether a piece of AI-generated code is safe, say so in the PR ‚Äî reviewers will help.
+If you are unsure whether a piece of AI-generated code is safe, say so in the PR ‚Ä?reviewers will help.
 
 ---
 
@@ -183,14 +183,14 @@ If you are unsure whether a piece of AI-generated code is safe, say so in the PR
 
 The PR template asks for:
 
-- **Description** ‚Äî What does this change do and why?
-- **Type of Change** ‚Äî Bug fix, feature, docs, or refactor.
-- **AI Code Generation** ‚Äî Disclosure of AI involvement (required).
-- **Related Issue** ‚Äî Link to the issue this addresses.
-- **Technical Context** ‚Äî Reference URLs and reasoning (skip for pure docs PRs).
-- **Test Environment** ‚Äî Hardware, OS, model/provider, and channels used for testing.
-- **Evidence** ‚Äî Optional logs or screenshots demonstrating the change works.
-- **Checklist** ‚Äî Self-review confirmation.
+- **Description** ‚Ä?What does this change do and why?
+- **Type of Change** ‚Ä?Bug fix, feature, docs, or refactor.
+- **AI Code Generation** ‚Ä?Disclosure of AI involvement (required).
+- **Related Issue** ‚Ä?Link to the issue this addresses.
+- **Technical Context** ‚Ä?Reference URLs and reasoning (skip for pure docs PRs).
+- **Test Environment** ‚Ä?Hardware, OS, model/provider, and channels used for testing.
+- **Evidence** ‚Ä?Optional logs or screenshots demonstrating the change works.
+- **Checklist** ‚Ä?Self-review confirmation.
 
 ### PR Size
 
@@ -202,17 +202,17 @@ Prefer small, reviewable PRs. A PR that changes 200 lines across 5 files is much
 
 ### Long-Lived Branches
 
-- **`main`** ‚Äî the active development branch. All feature PRs target `main`. The branch is protected: direct pushes are not permitted, and at least one maintainer approval is required before merging.
-- **`release/x.y`** ‚Äî stable release branches, cut from `main` when a version is ready to ship. These branches are more strictly protected than `main`.
+- **`main`** ‚Ä?the active development branch. All feature PRs target `main`. The branch is protected: direct pushes are not permitted, and at least one maintainer approval is required before merging.
+- **`release/x.y`** ‚Ä?stable release branches, cut from `main` when a version is ready to ship. These branches are more strictly protected than `main`.
 
 ### Requirements to Merge into `main`
 
 A PR can only be merged when all of the following are satisfied:
 
-1. **CI passes** ‚Äî All GitHub Actions workflows (lint, test, build) must be green.
-2. **Reviewer approval** ‚Äî At least one maintainer has approved the PR.
-3. **No unresolved review comments** ‚Äî All review threads must be resolved.
-4. **PR template is complete** ‚Äî Including AI disclosure and test environment.
+1. **CI passes** ‚Ä?All GitHub Actions workflows (lint, test, build) must be green.
+2. **Reviewer approval** ‚Ä?At least one maintainer has approved the PR.
+3. **No unresolved review comments** ‚Ä?All review threads must be resolved.
+4. **PR template is complete** ‚Ä?Including AI disclosure and test environment.
 
 ### Who Can Merge
 
@@ -248,19 +248,19 @@ Release branches have stricter protections than `main` and are never directly pu
 - Respond to review comments within a reasonable time. If you need more time, say so.
 - When you update a PR in response to feedback, briefly note what changed (e.g., "Updated to use `sync.RWMutex` as suggested").
 - If you disagree with feedback, engage respectfully. Explain your reasoning; reviewers can be wrong too.
-- Do not force-push after a review has started ‚Äî it makes it harder for reviewers to see what changed. Use additional commits instead; the maintainer will squash on merge.
+- Do not force-push after a review has started ‚Ä?it makes it harder for reviewers to see what changed. Use additional commits instead; the maintainer will squash on merge.
 
 ### For Reviewers
 
 Review for:
 
-1. **Correctness** ‚Äî Does the code do what it claims? Are there edge cases?
-2. **Security** ‚Äî Especially for AI-generated code, tool implementations, and channel handlers.
-3. **Architecture** ‚Äî Is the approach consistent with the existing design?
-4. **Simplicity** ‚Äî Is there a simpler solution? Does this add unnecessary complexity?
-5. **Tests** ‚Äî Are the changes covered by tests? Are existing tests still meaningful?
+1. **Correctness** ‚Ä?Does the code do what it claims? Are there edge cases?
+2. **Security** ‚Ä?Especially for AI-generated code, tool implementations, and channel handlers.
+3. **Architecture** ‚Ä?Is the approach consistent with the existing design?
+4. **Simplicity** ‚Ä?Is there a simpler solution? Does this add unnecessary complexity?
+5. **Tests** ‚Ä?Are the changes covered by tests? Are existing tests still meaningful?
 
-Be constructive and specific. "This could have a race condition if two goroutines call this concurrently ‚Äî consider using a mutex here" is better than "this looks wrong".
+Be constructive and specific. "This could have a race condition if two goroutines call this concurrently ‚Ä?consider using a mutex here" is better than "this looks wrong".
 
 
 ### Reviewer List
@@ -284,10 +284,10 @@ Once your PR is submitted, you can reach out to the assigned reviewers listed in
 
 ## Communication
 
-- **GitHub Issues** ‚Äî Bug reports, feature requests, design discussions.
-- **GitHub Discussions** ‚Äî General questions, ideas, community conversation.
-- **Pull Request comments** ‚Äî Code-specific feedback.
-- **Wechat&Discord** ‚Äî We will invite you when you have at least one merged PR
+- **GitHub Issues** ‚Ä?Bug reports, feature requests, design discussions.
+- **GitHub Discussions** ‚Ä?General questions, ideas, community conversation.
+- **Pull Request comments** ‚Ä?Code-specific feedback.
+- **Wechat&Discord** ‚Ä?We will invite you when you have at least one merged PR
 
 When in doubt, open an issue before writing code. It costs little and prevents wasted effort.
 
@@ -295,7 +295,7 @@ When in doubt, open an issue before writing code. It costs little and prevents w
 
 ## A Note on the Project's AI-Driven Origin
 
-PicoClaw's architecture was substantially designed and implemented with AI assistance, guided by human oversight. If you find something that looks odd or over-engineered, it may be an artifact of that process ‚Äî opening an issue to discuss it is always welcome.
+AnyClaw's architecture was substantially designed and implemented with AI assistance, guided by human oversight. If you find something that looks odd or over-engineered, it may be an artifact of that process ‚Ä?opening an issue to discuss it is always welcome.
 
 We believe AI-assisted development done responsibly produces great results. We also believe humans must remain accountable for what they ship. These two beliefs are not in conflict.
 

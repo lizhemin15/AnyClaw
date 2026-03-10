@@ -7,20 +7,20 @@ before:
     - go mod tidy
     - go generate ./...
     - go install github.com/tc-hib/go-winres@latest
-    - go-winres make --in cmd/picoclaw-launcher/winres/winres.json --out cmd/picoclaw-launcher/rsrc --product-version={{ .Version }} --file-version={{ .Version }}
+    - go-winres make --in cmd/anyclaw-launcher/winres/winres.json --out cmd/anyclaw-launcher/rsrc --product-version={{ .Version }} --file-version={{ .Version }}
 
 builds:
-  - id: picoclaw
+  - id: anyclaw
     env:
       - CGO_ENABLED=0
     tags:
       - stdjson
     ldflags:
       - -s -w
-      - -X github.com/sipeed/picoclaw/cmd/picoclaw/internal.version={{ .Version }}
-      - -X github.com/sipeed/picoclaw/cmd/picoclaw/internal.gitCommit={{ .ShortCommit }}
-      - -X github.com/sipeed/picoclaw/cmd/picoclaw/internal.buildTime={{ .Date }}
-      - -X github.com/sipeed/picoclaw/cmd/picoclaw/internal.goVersion={{ .Env.GOVERSION }}
+      - -X github.com/anyclaw/anyclaw-server/cmd/anyclaw/internal.version={{ .Version }}
+      - -X github.com/anyclaw/anyclaw-server/cmd/anyclaw/internal.gitCommit={{ .ShortCommit }}
+      - -X github.com/anyclaw/anyclaw-server/cmd/anyclaw/internal.buildTime={{ .Date }}
+      - -X github.com/anyclaw/anyclaw-server/cmd/anyclaw/internal.goVersion={{ .Env.GOVERSION }}
     goos:
       - linux
       - windows
@@ -35,13 +35,13 @@ builds:
     goarm:
       - "6"
       - "7"
-    main: ./cmd/picoclaw
+    main: ./cmd/anyclaw
     ignore:
       - goos: windows
         goarch: arm
 
-  - id: picoclaw-launcher
-    binary: picoclaw-launcher
+  - id: anyclaw-launcher
+    binary: anyclaw-launcher
     env:
       - CGO_ENABLED=0
     tags:
@@ -62,13 +62,13 @@ builds:
     goarm:
       - "6"
       - "7"
-    main: ./cmd/picoclaw-launcher
+    main: ./cmd/anyclaw-launcher
     ignore:
       - goos: windows
         goarch: arm
 
-  - id: picoclaw-launcher-tui
-    binary: picoclaw-launcher-tui
+  - id: anyclaw-launcher-tui
+    binary: anyclaw-launcher-tui
     env:
       - CGO_ENABLED=0
     tags:
@@ -89,20 +89,20 @@ builds:
     goarm:
       - "6"
       - "7"
-    main: ./cmd/picoclaw-launcher-tui
+    main: ./cmd/anyclaw-launcher-tui
     ignore:
       - goos: windows
         goarch: arm
 
 dockers_v2:
-  - id: picoclaw
+  - id: anyclaw
     dockerfile: docker/Dockerfile.goreleaser
     extra_files:
       - docker/entrypoint.sh
     ids:
-      - picoclaw
+      - anyclaw
     images:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/picoclaw"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/anyclaw-server"
       - "docker.io/{{ .Env.DOCKERHUB_IMAGE_NAME }}"
     tags:
       - "{{ .Tag }}"
@@ -128,22 +128,22 @@ archives:
         formats: [zip]
 
 nfpms:
-  - id: picoclaw
+  - id: anyclaw
     builds:
-      - picoclaw
-      - picoclaw-launcher
-      - picoclaw-launcher-tui
-    package_name: picoclaw
+      - anyclaw
+      - anyclaw-launcher
+      - anyclaw-launcher-tui
+    package_name: anyclaw
     file_name_template: >-
       {{ .PackageName }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "arm64" }}aarch64
       {{- else if eq .Arch "arm" }}armv{{ .Arm }}
       {{- else }}{{ .Arch }}{{ end }}
-    vendor: picoclaw
-    homepage: https://github.com/{{ .Env.GITHUB_REPOSITORY_OWNER }}/picoclaw
-    maintainer: picoclaw contributors
-    description: picoclaw - a tool for managing and running tasks
+    vendor: anyclaw
+    homepage: https://github.com/{{ .Env.GITHUB_REPOSITORY_OWNER }}/anyclaw-server
+    maintainer: anyclaw contributors
+    description: anyclaw - a tool for managing and running tasks
     license: MIT
     formats:
       - rpm

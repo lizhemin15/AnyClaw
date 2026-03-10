@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/providers/protocoltypes"
+	"github.com/anyclaw/anyclaw-server/pkg/providers/protocoltypes"
 )
 
 type (
@@ -153,7 +153,7 @@ func (p *Provider) Chat(
 
 	// Prompt caching: pass a stable cache key so OpenAI can bucket requests
 	// with the same key and reuse prefix KV cache across calls.
-	// The key is typically the agent ID â€” stable per agent, shared across requests.
+	// The key is typically the agent ID â€?stable per agent, shared across requests.
 	// See: https://platform.openai.com/docs/guides/prompt-caching
 	// Prompt caching is only supported by OpenAI-native endpoints.
 	// Gemini and other providers reject unknown fields, so skip for non-OpenAI APIs.

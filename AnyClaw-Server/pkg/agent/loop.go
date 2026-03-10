@@ -1,8 +1,8 @@
-// PicoClaw - Ultra-lightweight personal AI agent
+// AnyClaw - Ultra-lightweight personal AI agent
 // Inspired by and based on nanobot: https://github.com/HKUDS/nanobot
 // License: MIT
 //
-// Copyright (c) 2026 PicoClaw contributors
+// Copyright (c) 2026 AnyClaw contributors
 
 package agent
 
@@ -19,21 +19,21 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/channels"
-	"github.com/sipeed/picoclaw/pkg/commands"
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/constants"
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/mcp"
-	"github.com/sipeed/picoclaw/pkg/media"
-	"github.com/sipeed/picoclaw/pkg/providers"
-	"github.com/sipeed/picoclaw/pkg/routing"
-	"github.com/sipeed/picoclaw/pkg/skills"
-	"github.com/sipeed/picoclaw/pkg/state"
-	"github.com/sipeed/picoclaw/pkg/tools"
-	"github.com/sipeed/picoclaw/pkg/utils"
-	"github.com/sipeed/picoclaw/pkg/voice"
+	"github.com/anyclaw/anyclaw-server/pkg/bus"
+	"github.com/anyclaw/anyclaw-server/pkg/channels"
+	"github.com/anyclaw/anyclaw-server/pkg/commands"
+	"github.com/anyclaw/anyclaw-server/pkg/config"
+	"github.com/anyclaw/anyclaw-server/pkg/constants"
+	"github.com/anyclaw/anyclaw-server/pkg/logger"
+	"github.com/anyclaw/anyclaw-server/pkg/mcp"
+	"github.com/anyclaw/anyclaw-server/pkg/media"
+	"github.com/anyclaw/anyclaw-server/pkg/providers"
+	"github.com/anyclaw/anyclaw-server/pkg/routing"
+	"github.com/anyclaw/anyclaw-server/pkg/skills"
+	"github.com/anyclaw/anyclaw-server/pkg/state"
+	"github.com/anyclaw/anyclaw-server/pkg/tools"
+	"github.com/anyclaw/anyclaw-server/pkg/utils"
+	"github.com/anyclaw/anyclaw-server/pkg/voice"
 )
 
 type AgentLoop struct {
@@ -183,7 +183,7 @@ func registerSharedTools(
 			agent.Tools.Register(messageTool)
 		}
 
-		// Send file tool (outbound media via MediaStore â€” store injected later by SetMediaStore)
+		// Send file tool (outbound media via MediaStore â€?store injected later by SetMediaStore)
 		if cfg.Tools.IsToolEnabled("send_file") {
 			sendFileTool := tools.NewSendFileTool(
 				agent.Workspace,
@@ -847,7 +847,7 @@ func (al *AgentLoop) handleReasoning(
 		// (bus full under load, or parent canceled).  Check the error
 		// itself rather than ctx.Err(), because pubCtx may time out
 		// (5 s) while the parent ctx is still active.
-		// Also treat ErrBusClosed as expected â€” it occurs during normal
+		// Also treat ErrBusClosed as expected â€?it occurs during normal
 		// shutdown when the bus is closed before all goroutines finish.
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) ||
 			errors.Is(err, bus.ErrBusClosed) {
@@ -969,7 +969,7 @@ func (al *AgentLoop) runLLMIteration(
 
 			errMsg := strings.ToLower(err.Error())
 
-			// Check if this is a network/HTTP timeout â€” not a context window error.
+			// Check if this is a network/HTTP timeout â€?not a context window error.
 			isTimeoutError := errors.Is(err, context.DeadlineExceeded) ||
 				strings.Contains(errMsg, "deadline exceeded") ||
 				strings.Contains(errMsg, "client.timeout") ||
@@ -1266,7 +1266,7 @@ func (al *AgentLoop) runLLMIteration(
 // candidates instead of the primary ones.
 //
 // The returned (candidates, model) pair is used for all LLM calls within one
-// turn â€” tool follow-up iterations use the same tier as the initial call so
+// turn â€?tool follow-up iterations use the same tier as the initial call so
 // that a multi-step tool chain doesn't switch models mid-way.
 func (al *AgentLoop) selectCandidates(
 	agent *AgentInstance,
@@ -1718,7 +1718,7 @@ func (al *AgentLoop) handleCommand(
 			return commandReply, true
 		}
 		return "", true
-	default: // OutcomePassthrough â€” let the message fall through to LLM
+	default: // OutcomePassthrough â€?let the message fall through to LLM
 		return "", false
 	}
 }

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/anyclaw/anyclaw-server/pkg/providers"
 )
 
 func writeJSONSession(
@@ -304,7 +304,7 @@ func TestMigrateFromJSON_ColonInKey(t *testing.T) {
 
 	// In the file-based store, "telegram:123" and "telegram_123" both
 	// sanitize to the same filename, so they share storage. This is
-	// expected â€” the colon-to-underscore mapping is a one-way function.
+	// expected â€?the colon-to-underscore mapping is a one-way function.
 	history2, err := store.GetHistory(ctx, "telegram_123")
 	if err != nil {
 		t.Fatalf("GetHistory: %v", err)
@@ -332,7 +332,7 @@ func TestMigrateFromJSON_RetryAfterCrash(t *testing.T) {
 		Updated: time.Now(),
 	})
 
-	// First migration succeeds â€” writes messages and renames file.
+	// First migration succeeds â€?writes messages and renames file.
 	count, err := MigrateFromJSON(ctx, sessionsDir, store)
 	if err != nil {
 		t.Fatalf("first migration: %v", err)

@@ -2,7 +2,7 @@
 
 ## Overview
 
-**Antigravity** (Google Cloud Code Assist) is a Google-backed AI model provider that offers access to models like Claude Opus 4.6 and Gemini through Google's Cloud infrastructure. This document provides a complete guide on how authentication works, how to fetch models, and how to implement a new provider in PicoClaw.
+**Antigravity** (Google Cloud Code Assist) is a Google-backed AI model provider that offers access to models like Claude Opus 4.6 and Gemini through Google's Cloud infrastructure. This document provides a complete guide on how authentication works, how to fetch models, and how to implement a new provider in AnyClaw.
 
 ---
 
@@ -17,7 +17,7 @@
 7. [Integration Requirements](#integration-requirements)
 8. [API Endpoints](#api-endpoints)
 9. [Configuration](#configuration)
-10. [Creating a New Provider in PicoClaw](#creating-a-new-provider-in-picoclaw)
+10. [Creating a New Provider in AnyClaw](#creating-a-new-provider-in-AnyClaw)
 
 ---
 
@@ -28,17 +28,7 @@
 Antigravity uses **OAuth 2.0 with PKCE (Proof Key for Code Exchange)** for secure authentication:
 
 ```
-┌─────────────┐                                    ┌─────────────────┐
-│   Client    │ ───(1) Generate PKCE Pair────────> │                 │
-│             │ ───(2) Open Auth URL─────────────> │  Google OAuth   │
-│             │                                    │    Server       │
-│             │ <──(3) Redirect with Code───────── │                 │
-│             │                                    └─────────────────┘
-│             │ ───(4) Exchange Code for Tokens──> │   Token URL     │
-│             │                                    │                 │
-│             │ <──(5) Access + Refresh Tokens──── │                 │
-└─────────────┘                                    └─────────────────┘
-```
+┌─────────────�?                                   ┌─────────────────�?�?  Client    �?───(1) Generate PKCE Pair────────> �?                �?�?            �?───(2) Open Auth URL─────────────> �? Google OAuth   �?�?            �?                                   �?   Server       �?�?            �?<──(3) Redirect with Code───────── �?                �?�?            �?                                   └─────────────────�?�?            �?───(4) Exchange Code for Tokens──> �?  Token URL     �?�?            �?                                   �?                �?�?            �?<──(5) Access + Refresh Tokens──── �?                �?└─────────────�?                                   └─────────────────�?```
 
 ### 2. Detailed Steps
 
@@ -378,7 +368,7 @@ const antigravityPlugin = {
   description: "OAuth flow for Google Antigravity (Cloud Code Assist)",
   configSchema: emptyPluginConfigSchema(),
   
-  register(api: PicoClawPluginApi) {
+  register(api: AnyClawPluginApi) {
     api.registerProvider({
       id: "google-antigravity",
       label: "Google Antigravity",
@@ -405,7 +395,7 @@ const antigravityPlugin = {
 
 ```typescript
 type ProviderAuthContext = {
-  config: PicoClawConfig;
+  config: AnyClawConfig;
   agentDir?: string;
   workspaceDir?: string;
   prompter: WizardPrompter;      // UI prompts/notifications
@@ -426,7 +416,7 @@ type ProviderAuthResult = {
     profileId: string;
     credential: AuthProfileCredential;
   }>;
-  configPatch?: Partial<PicoClawConfig>;
+  configPatch?: Partial<AnyClawConfig>;
   defaultModel?: string;
   notes?: string[];
 };
@@ -438,8 +428,8 @@ type ProviderAuthResult = {
 
 ### 1. Required Environment/Dependencies
 
-- Go ≥ 1.21
-- PicoClaw codebase (`pkg/providers/` and `pkg/auth/`)
+- Go �?1.21
+- AnyClaw codebase (`pkg/providers/` and `pkg/auth/`)
 - `crypto` and `net/http` standard library packages
 
 ### 2. Required Headers for API Calls
@@ -592,7 +582,7 @@ Each SSE message (`data: {...}`) is wrapped in a `response` field:
 
 ### Auth Profile Storage
 
-Auth profiles are stored in `~/.picoclaw/auth.json`:
+Auth profiles are stored in `~/.AnyClaw/auth.json`:
 
 ```json
 {
@@ -612,9 +602,9 @@ Auth profiles are stored in `~/.picoclaw/auth.json`:
 
 ---
 
-## Creating a New Provider in PicoClaw
+## Creating a New Provider in AnyClaw
 
-PicoClaw providers are implemented as Go packages under `pkg/providers/`. To add a new provider:
+AnyClaw providers are implemented as Go packages under `pkg/providers/`. To add a new provider:
 
 ### Step-by-Step Implementation
 
@@ -674,7 +664,7 @@ Add a default entry in `pkg/config/defaults.go`:
 
 #### 5. Add Auth Support (Optional)
 
-If your provider requires OAuth or special authentication, add a case to `cmd/picoclaw/cmd_auth.go`:
+If your provider requires OAuth or special authentication, add a case to `cmd/AnyClaw/cmd_auth.go`:
 
 ```go
 case "your-provider":
@@ -704,26 +694,26 @@ case "your-provider":
 
 ```bash
 # Authenticate with a provider
-picoclaw auth login --provider your-provider
+AnyClaw auth login --provider your-provider
 
 # List models (for Antigravity)
-picoclaw auth models
+AnyClaw auth models
 
 # Start the gateway
-picoclaw gateway
+AnyClaw gateway
 
 # Run an agent with a specific model
-picoclaw agent -m "Hello" --model your-model
+AnyClaw agent -m "Hello" --model your-model
 ```
 
 ### Environment Variables for Testing
 
 ```bash
 # Override default model
-export PICOCLAW_AGENTS_DEFAULTS_MODEL=your-model
+export AnyClaw_AGENTS_DEFAULTS_MODEL=your-model
 
 # Override provider settings
-export PICOCLAW_MODEL_LIST='[{"model_name":"your-model","model":"your-provider/model-name","api_key":"..."}]'
+export AnyClaw_MODEL_LIST='[{"model_name":"your-model","model":"your-provider/model-name","api_key":"..."}]'
 ```
 
 ---
@@ -733,10 +723,10 @@ export PICOCLAW_MODEL_LIST='[{"model_name":"your-model","model":"your-provider/m
 - **Source Files:**
   - `pkg/providers/antigravity_provider.go` - Antigravity provider implementation
   - `pkg/auth/oauth.go` - OAuth flow implementation
-  - `pkg/auth/store.go` - Auth credential storage (`~/.picoclaw/auth.json`)
+  - `pkg/auth/store.go` - Auth credential storage (`~/.AnyClaw/auth.json`)
   - `pkg/providers/factory.go` - Provider factory and protocol routing
   - `pkg/providers/types.go` - Provider interface definitions
-  - `cmd/picoclaw/cmd_auth.go` - Auth CLI commands
+  - `cmd/AnyClaw/cmd_auth.go` - Auth CLI commands
 
 - **Documentation:**
   - `docs/ANTIGRAVITY_USAGE.md` - Antigravity usage guide
@@ -792,7 +782,7 @@ Some models might show up in the available models list but return an empty respo
 ## Troubleshooting
 
 ### "Token expired"
-- Refresh OAuth tokens: `picoclaw auth login --provider antigravity`
+- Refresh OAuth tokens: `AnyClaw auth login --provider antigravity`
 
 ### "Gemini for Google Cloud is not enabled"
 - Enable the API in your Google Cloud Console
@@ -803,5 +793,5 @@ Some models might show up in the available models list but return an empty respo
 
 ### Models not appearing in list
 - Verify OAuth authentication completed successfully
-- Check auth profile storage: `~/.picoclaw/auth.json`
-- Re-run `picoclaw auth login --provider antigravity`
+- Check auth profile storage: `~/.AnyClaw/auth.json`
+- Re-run `AnyClaw auth login --provider antigravity`

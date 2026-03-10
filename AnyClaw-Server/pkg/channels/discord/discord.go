@@ -14,13 +14,13 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/gorilla/websocket"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/channels"
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/identity"
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/media"
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/anyclaw/anyclaw-server/pkg/bus"
+	"github.com/anyclaw/anyclaw-server/pkg/channels"
+	"github.com/anyclaw/anyclaw-server/pkg/config"
+	"github.com/anyclaw/anyclaw-server/pkg/identity"
+	"github.com/anyclaw/anyclaw-server/pkg/logger"
+	"github.com/anyclaw/anyclaw-server/pkg/media"
+	"github.com/anyclaw/anyclaw-server/pkg/utils"
 )
 
 const (
@@ -40,7 +40,7 @@ type DiscordChannel struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
 	typingMu   sync.Mutex
-	typingStop map[string]chan struct{} // chatID â†’ stop signal
+	typingStop map[string]chan struct{} // chatID â†?stop signal
 	botUserID  string                   // stored for mention checking
 }
 
@@ -533,11 +533,11 @@ func applyDiscordProxy(session *discordgo.Session, proxyAddr string) error {
 	return nil
 }
 
-// resolveDiscordRefs resolves channel references (<#id> â†’ #channel-name) and
+// resolveDiscordRefs resolves channel references (<#id> â†?#channel-name) and
 // expands Discord message links to show the linked message content.
 // Only links pointing to the same guild are expanded to prevent cross-guild leakage.
 func (c *DiscordChannel) resolveDiscordRefs(s *discordgo.Session, text string, guildID string) string {
-	// 1. Resolve channel references: <#id> â†’ #channel-name
+	// 1. Resolve channel references: <#id> â†?#channel-name
 	text = channelRefRe.ReplaceAllStringFunc(text, func(match string) string {
 		parts := channelRefRe.FindStringSubmatch(match)
 		if len(parts) < 2 {

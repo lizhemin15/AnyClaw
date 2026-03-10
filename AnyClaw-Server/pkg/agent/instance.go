@@ -8,11 +8,11 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/providers"
-	"github.com/sipeed/picoclaw/pkg/routing"
-	"github.com/sipeed/picoclaw/pkg/session"
-	"github.com/sipeed/picoclaw/pkg/tools"
+	"github.com/anyclaw/anyclaw-server/pkg/config"
+	"github.com/anyclaw/anyclaw-server/pkg/providers"
+	"github.com/anyclaw/anyclaw-server/pkg/routing"
+	"github.com/anyclaw/anyclaw-server/pkg/session"
+	"github.com/anyclaw/anyclaw-server/pkg/tools"
 )
 
 // AgentInstance represents a fully configured agent with its own workspace,
@@ -202,7 +202,7 @@ func NewAgentInstance(
 			})
 			lightCandidates = resolved
 		} else {
-			log.Printf("routing: light_model %q not found in model_list â€” routing disabled for agent %q",
+			log.Printf("routing: light_model %q not found in model_list â€?routing disabled for agent %q",
 				rc.LightModel, agentID)
 		}
 	}
@@ -237,7 +237,7 @@ func resolveAgentWorkspace(agentCfg *config.AgentConfig, defaults *config.AgentD
 	if agentCfg != nil && strings.TrimSpace(agentCfg.Workspace) != "" {
 		return expandHome(strings.TrimSpace(agentCfg.Workspace))
 	}
-	// Use the configured default workspace (respects PICOCLAW_HOME)
+	// Use the configured default workspace (respects ANYCLAW_HOME)
 	if agentCfg == nil || agentCfg.Default || agentCfg.ID == "" || routing.NormalizeAgentID(agentCfg.ID) == "main" {
 		return expandHome(defaults.Workspace)
 	}

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/anyclaw/anyclaw-server/pkg/config"
 )
 
 type OpenClawConfig struct {
@@ -475,8 +475,8 @@ func (c *OpenClawConfig) HasAuthProfiles() bool {
 	return c.Auth != nil && c.Auth.Profiles != nil && len(c.Auth.Profiles) > 0
 }
 
-func (c *OpenClawConfig) ConvertToPicoClaw(sourceHome string) (*PicoClawConfig, []string, error) {
-	cfg := &PicoClawConfig{}
+func (c *OpenClawConfig) ConvertToAnyClaw(sourceHome string) (*AnyClawConfig, []string, error) {
+	cfg := &AnyClawConfig{}
 	var warnings []string
 
 	provider, modelName := c.GetDefaultModel()
@@ -527,25 +527,25 @@ func (c *OpenClawConfig) ConvertToPicoClaw(sourceHome string) (*PicoClawConfig, 
 		warnings = append(
 			warnings,
 			fmt.Sprintf(
-				"Skills (%d entries) not automatically migrated - reinstall via picoclaw CLI",
+				"Skills (%d entries) not automatically migrated - reinstall via AnyClaw CLI",
 				len(c.Skills.Entries),
 			),
 		)
 	}
 	if c.HasMemory() {
-		warnings = append(warnings, "Memory backend config not migrated - PicoClaw uses SQLite with vector embeddings")
+		warnings = append(warnings, "Memory backend config not migrated - AnyClaw uses SQLite with vector embeddings")
 	}
 	if c.HasCron() {
 		warnings = append(
 			warnings,
-			"Cron job scheduling not supported in PicoClaw - consider using external schedulers",
+			"Cron job scheduling not supported in AnyClaw - consider using external schedulers",
 		)
 	}
 	if c.HasHooks() {
-		warnings = append(warnings, "Webhook hooks not supported in PicoClaw - use event system instead")
+		warnings = append(warnings, "Webhook hooks not supported in AnyClaw - use event system instead")
 	}
 	if c.HasSession() {
-		warnings = append(warnings, "Session scope config differs - PicoClaw uses per-agent sessions by default")
+		warnings = append(warnings, "Session scope config differs - AnyClaw uses per-agent sessions by default")
 	}
 	if c.HasAuthProfiles() {
 		warnings = append(
@@ -565,7 +565,7 @@ type ModelConfig struct {
 	Proxy     string `json:"proxy,omitempty"`
 }
 
-type PicoClawConfig struct {
+type AnyClawConfig struct {
 	Agents    AgentsConfig   `json:"agents"`
 	Bindings  []AgentBinding `json:"bindings,omitempty"`
 	Channels  ChannelsConfig `json:"channels"`
@@ -896,13 +896,13 @@ func (c *OpenClawConfig) convertChannels(warnings *[]string) ChannelsConfig {
 	}
 
 	if c.Channels.Signal != nil {
-		*warnings = append(*warnings, "Channel 'signal': No PicoClaw adapter available")
+		*warnings = append(*warnings, "Channel 'signal': No AnyClaw adapter available")
 	}
 	if c.Channels.IRC != nil {
-		*warnings = append(*warnings, "Channel 'irc': No PicoClaw adapter available")
+		*warnings = append(*warnings, "Channel 'irc': No AnyClaw adapter available")
 	}
 	if c.Channels.Mattermost != nil {
-		*warnings = append(*warnings, "Channel 'mattermost': No PicoClaw adapter available")
+		*warnings = append(*warnings, "Channel 'mattermost': No AnyClaw adapter available")
 	}
 	if c.Channels.IMessage != nil {
 		*warnings = append(*warnings, "Channel 'imessage': macOS-only channel - requires manual setup")
@@ -910,7 +910,7 @@ func (c *OpenClawConfig) convertChannels(warnings *[]string) ChannelsConfig {
 	if c.Channels.BlueBubbles != nil {
 		*warnings = append(
 			*warnings,
-			"Channel 'bluebubbles': No PicoClaw adapter available - consider iMessage instead",
+			"Channel 'bluebubbles': No AnyClaw adapter available - consider iMessage instead",
 		)
 	}
 
@@ -965,7 +965,7 @@ func (c *OpenClawConfig) convertAgents(warnings *[]string) []AgentConfig {
 	return agents
 }
 
-func (c *PicoClawConfig) ToStandardConfig() *config.Config {
+func (c *AnyClawConfig) ToStandardConfig() *config.Config {
 	cfg := config.DefaultConfig()
 
 	cfg.Agents.Defaults.Workspace = c.Agents.Defaults.Workspace

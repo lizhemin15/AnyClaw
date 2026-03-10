@@ -1,4 +1,4 @@
-// Package identity provides unified user identity utilities for PicoClaw.
+// Package identity provides unified user identity utilities for AnyClaw.
 // It introduces a canonical "platform:id" format and matching logic
 // that is backward-compatible with all legacy allow-list formats.
 package identity
@@ -6,7 +6,7 @@ package identity
 import (
 	"strings"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
+	"github.com/anyclaw/anyclaw-server/pkg/bus"
 )
 
 // BuildCanonicalID constructs a canonical "platform:id" identifier.
@@ -34,10 +34,10 @@ func ParseCanonicalID(canonical string) (platform, id string, ok bool) {
 // MatchAllowed checks whether the given sender matches a single allow-list entry.
 // It is backward-compatible with all legacy formats:
 //
-//   - "123456"              â†’ matches sender.PlatformID
-//   - "@alice"              â†’ matches sender.Username
-//   - "123456|alice"        â†’ matches PlatformID or Username
-//   - "telegram:123456"     â†’ exact match on sender.CanonicalID
+//   - "123456"              â†?matches sender.PlatformID
+//   - "@alice"              â†?matches sender.Username
+//   - "123456|alice"        â†?matches PlatformID or Username
+//   - "telegram:123456"     â†?exact match on sender.CanonicalID
 func MatchAllowed(sender bus.SenderInfo, allowed string) bool {
 	allowed = strings.TrimSpace(allowed)
 	if allowed == "" {

@@ -1,7 +1,7 @@
-// PicoClaw - Ultra-lightweight personal AI agent
+// AnyClaw - Ultra-lightweight personal AI agent
 // License: MIT
 //
-// Copyright (c) 2026 PicoClaw contributors
+// Copyright (c) 2026 AnyClaw contributors
 
 package config
 
@@ -10,16 +10,16 @@ import (
 	"path/filepath"
 )
 
-// DefaultConfig returns the default configuration for PicoClaw.
+// DefaultConfig returns the default configuration for AnyClaw.
 func DefaultConfig() *Config {
 	// Determine the base path for the workspace.
-	// Priority: $PICOCLAW_HOME > ~/.picoclaw
+	// Priority: $ANYCLAW_HOME > ~/.anyclaw
 	var homePath string
-	if picoclawHome := os.Getenv("PICOCLAW_HOME"); picoclawHome != "" {
-		homePath = picoclawHome
+	if anyclawHome := os.Getenv("ANYCLAW_HOME"); anyclawHome != "" {
+		homePath = anyclawHome
 	} else {
 		userHome, _ := os.UserHomeDir()
-		homePath = filepath.Join(userHome, ".picoclaw")
+		homePath = filepath.Join(userHome, ".anyclaw")
 	}
 	workspacePath := filepath.Join(homePath, "workspace")
 
@@ -294,7 +294,7 @@ func DefaultConfig() *Config {
 				APIKey:    "",
 			},
 
-			// ShengsuanYun (神算云)
+			// ShengsuanYun (神算�?
 			{
 				ModelName: "deepseek-v3",
 				Model:     "shengsuanyun/deepseek-v3",

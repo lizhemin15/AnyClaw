@@ -9,14 +9,14 @@
 
 **Cause:** The `model` field in your `model_list` entry is what gets sent to the API. For OpenRouter you must use the **full** model ID, not a shorthand.
 
-- **Wrong:** `"model": "free"` â†’ OpenRouter receives `free` and rejects it.
-- **Right:** `"model": "openrouter/free"` â†’ OpenRouter receives `openrouter/free` (auto free-tier routing).
+- **Wrong:** `"model": "free"` â†?OpenRouter receives `free` and rejects it.
+- **Right:** `"model": "openrouter/free"` â†?OpenRouter receives `openrouter/free` (auto free-tier routing).
 
-**Fix:** In `~/.picoclaw/config.json` (or your config path):
+**Fix:** In `~/.AnyClaw/config.json` (or your config path):
 
 1. **agents.defaults.model** must match a `model_name` in `model_list` (e.g. `"openrouter-free"`).
 2. That entryâ€™s **model** must be a valid OpenRouter model ID, for example:
-   - `"openrouter/free"` â€“ auto free-tier
+   - `"openrouter/free"` â€?auto free-tier
    - `"google/gemini-2.0-flash-exp:free"`
    - `"meta-llama/llama-3.1-8b-instruct:free"`
 

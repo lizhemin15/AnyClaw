@@ -1,7 +1,7 @@
 {
   "agents": {
     "defaults": {
-      "workspace": "~/.picoclaw/workspace",
+      "workspace": "~/.anyclaw/workspace",
       "restrict_to_workspace": true,
       "model_name": "gpt4",
       "max_tokens": 8192,
@@ -174,7 +174,7 @@
       "reasoning_channel_id": ""
     },
     "wecom_aibot": {
-      "_comment": "WeCom AI Bot (智能机器人) - Official WeCom AI Bot integration, supports proactive messaging and private chats.",
+      "_comment": "WeCom AI Bot (智能机器�? - Official WeCom AI Bot integration, supports proactive messaging and private chats.",
       "enabled": false,
       "token": "YOUR_TOKEN",
       "encoding_aes_key": "YOUR_43_CHAR_ENCODING_AES_KEY",

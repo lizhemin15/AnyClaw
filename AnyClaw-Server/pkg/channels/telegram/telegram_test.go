@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/channels"
+	"github.com/anyclaw/anyclaw-server/pkg/bus"
+	"github.com/anyclaw/anyclaw-server/pkg/channels"
 )
 
 const testToken = "1234567890:aaaabbbbaaaabbbbaaaabbbbaaaabbbbccc"
@@ -158,7 +158,7 @@ func TestSend_HTMLFallback_PerChunk(t *testing.T) {
 	})
 
 	assert.NoError(t, err)
-	// One short message â†’ 1 HTML attempt (fail) + 1 plain text fallback (success) = 2 calls
+	// One short message â†?1 HTML attempt (fail) + 1 plain text fallback (success) = 2 calls
 	assert.Equal(t, 2, len(caller.calls), "should have HTML attempt + plain text fallback")
 }
 

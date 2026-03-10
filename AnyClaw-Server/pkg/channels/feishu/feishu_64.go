@@ -21,13 +21,13 @@ import (
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/channels"
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/identity"
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/media"
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/anyclaw/anyclaw-server/pkg/bus"
+	"github.com/anyclaw/anyclaw-server/pkg/channels"
+	"github.com/anyclaw/anyclaw-server/pkg/config"
+	"github.com/anyclaw/anyclaw-server/pkg/identity"
+	"github.com/anyclaw/anyclaw-server/pkg/logger"
+	"github.com/anyclaw/anyclaw-server/pkg/media"
+	"github.com/anyclaw/anyclaw-server/pkg/utils"
 )
 
 type FeishuChannel struct {
@@ -510,7 +510,7 @@ func extractContent(messageType, rawContent string) string {
 		return rawContent
 
 	case larkim.MsgTypePost:
-		// Pass raw JSON to LLM â€” structured rich text is more informative than flattened plain text
+		// Pass raw JSON to LLM â€?structured rich text is more informative than flattened plain text
 		return rawContent
 
 	case larkim.MsgTypeImage:
@@ -563,7 +563,7 @@ func (c *FeishuChannel) downloadInboundMedia(
 		case larkim.MsgTypeMedia:
 			ext = ".mp4"
 		default:
-			ext = "" // generic file â€” rely on resp.FileName
+			ext = "" // generic file â€?rely on resp.FileName
 		}
 		ref := c.downloadResource(ctx, messageID, fileKey, "file", ext, store, scope)
 		if ref != "" {
@@ -623,8 +623,8 @@ func (c *FeishuChannel) downloadResource(
 		filename += fallbackExt
 	}
 
-	// Write to the shared picoclaw_media directory using a unique name to avoid collisions.
-	mediaDir := filepath.Join(os.TempDir(), "picoclaw_media")
+	// Write to the shared ANYCLAW_media directory using a unique name to avoid collisions.
+	mediaDir := filepath.Join(os.TempDir(), "ANYCLAW_media")
 	if mkdirErr := os.MkdirAll(mediaDir, 0o700); mkdirErr != nil {
 		logger.ErrorCF("feishu", "Failed to create media directory", map[string]any{
 			"error": mkdirErr.Error(),

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/media"
+	"github.com/anyclaw/anyclaw-server/pkg/config"
+	"github.com/anyclaw/anyclaw-server/pkg/media"
 )
 
 func TestSendFileTool_MissingPath(t *testing.T) {
@@ -154,7 +154,7 @@ func TestDetectMediaType_FallbackToExtension(t *testing.T) {
 	}
 
 	got := detectMediaType(txtFile)
-	// text/plain or similar â€” just verify it's not application/octet-stream
+	// text/plain or similar â€?just verify it's not application/octet-stream
 	if got == "application/octet-stream" {
 		t.Errorf("expected extension-based MIME for .txt, got %q", got)
 	}

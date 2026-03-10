@@ -51,7 +51,8 @@ func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string, api
 	log.Printf("[scheduler] instance %d: using host %q (%s:%d), image=%s, apiURL=%s",
 		instanceID, host.Name, host.Addr, host.SSHPort, image, apiURL)
 
-	// Ensure 1GB workspace volume exists (loop device) and is mounted
+	// Ensure 1GB workspace volume exists (loop device) and is mounted.
+	// Container runs as uid 1000 (picoclaw), so chown workspace for write access.
 	ensureWorkspace := fmt.Sprintf(`export PATH=/usr/local/bin:/usr/bin:$PATH; mkdir -p /var/lib/anyclaw && \
 		FILE="/var/lib/anyclaw/ws-%d.img" && \
 		MOUNT="/var/lib/anyclaw/ws-%d" && \
@@ -61,7 +62,8 @@ func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string, api
 			mkdir -p "$MOUNT" && mount -o loop "$FILE" "$MOUNT"; \
 		elif ! mountpoint -q "$MOUNT" 2>/dev/null; then \
 			mkdir -p "$MOUNT" && mount -o loop "$FILE" "$MOUNT"; \
-		fi`, instanceID, instanceID)
+		fi && \
+		chown -R 1000:1000 "$MOUNT"`, instanceID, instanceID)
 	if _, err := runSSH(host, ensureWorkspace); err != nil {
 		log.Printf("[scheduler] ensure workspace on %s failed: %v", host.Addr, err)
 		return "", "", fmt.Errorf("ensure workspace: %w", err)

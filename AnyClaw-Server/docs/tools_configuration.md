@@ -1,6 +1,6 @@
 # Tools Configuration
 
-PicoClaw's tools configuration is located in the `tools` field of `config.json`.
+AnyClaw's tools configuration is located in the `tools` field of `config.json`.
 
 ## Directory Structure
 
@@ -59,7 +59,7 @@ The exec tool is used to execute shell commands.
 
 ### Default Blocked Command Patterns
 
-By default, PicoClaw blocks the following dangerous commands:
+By default, AnyClaw blocks the following dangerous commands:
 
 - Delete commands: `rm -rf`, `del /f/q`, `rmdir /s`
 - Disk operations: `format`, `mkfs`, `diskpart`, `dd if=`, writing to `/dev/sd*`
@@ -122,8 +122,8 @@ The MCP tool enables integration with external Model Context Protocol servers.
 ### Transport Behavior
 
 - If `type` is omitted, transport is auto-detected:
-  - `url` is set â†’ `sse`
-  - `command` is set â†’ `stdio`
+  - `url` is set â†?`sse`
+  - `command` is set â†?`stdio`
 - `http` and `sse` both use `url` + optional `headers`.
 - `env` and `env_file` are only applied to `stdio` servers.
 
@@ -208,13 +208,13 @@ The skills tool configures skill discovery and installation via registries like 
 
 ## Environment Variables
 
-All configuration options can be overridden via environment variables with the format `PICOCLAW_TOOLS_<SECTION>_<KEY>`:
+All configuration options can be overridden via environment variables with the format `AnyClaw_TOOLS_<SECTION>_<KEY>`:
 
 For example:
 
-- `PICOCLAW_TOOLS_WEB_BRAVE_ENABLED=true`
-- `PICOCLAW_TOOLS_EXEC_ENABLE_DENY_PATTERNS=false`
-- `PICOCLAW_TOOLS_CRON_EXEC_TIMEOUT_MINUTES=10`
-- `PICOCLAW_TOOLS_MCP_ENABLED=true`
+- `AnyClaw_TOOLS_WEB_BRAVE_ENABLED=true`
+- `AnyClaw_TOOLS_EXEC_ENABLE_DENY_PATTERNS=false`
+- `AnyClaw_TOOLS_CRON_EXEC_TIMEOUT_MINUTES=10`
+- `AnyClaw_TOOLS_MCP_ENABLED=true`
 
 Note: Nested map-style config (for example `tools.mcp.servers.<name>.*`) is configured in `config.json` rather than environment variables.

@@ -3,30 +3,30 @@ package channels
 import (
 	"context"
 
-	"github.com/sipeed/picoclaw/pkg/commands"
+	"github.com/anyclaw/anyclaw-server/pkg/commands"
 )
 
-// TypingCapable â€” channels that can show a typing/thinking indicator.
+// TypingCapable â€?channels that can show a typing/thinking indicator.
 // StartTyping begins the indicator and returns a stop function.
 // The stop function MUST be idempotent and safe to call multiple times.
 type TypingCapable interface {
 	StartTyping(ctx context.Context, chatID string) (stop func(), err error)
 }
 
-// MessageEditor â€” channels that can edit an existing message.
+// MessageEditor â€?channels that can edit an existing message.
 // messageID is always string; channels convert platform-specific types internally.
 type MessageEditor interface {
 	EditMessage(ctx context.Context, chatID string, messageID string, content string) error
 }
 
-// ReactionCapable â€” channels that can add a reaction (e.g. ðŸ‘€) to an inbound message.
+// ReactionCapable â€?channels that can add a reaction (e.g. ðŸ‘€) to an inbound message.
 // ReactToMessage adds a reaction and returns an undo function to remove it.
 // The undo function MUST be idempotent and safe to call multiple times.
 type ReactionCapable interface {
 	ReactToMessage(ctx context.Context, chatID, messageID string) (undo func(), err error)
 }
 
-// PlaceholderCapable â€” channels that can send a placeholder message
+// PlaceholderCapable â€?channels that can send a placeholder message
 // (e.g. "Thinking... ðŸ’­") that will later be edited to the actual response.
 // The channel MUST also implement MessageEditor for the placeholder to be useful.
 // SendPlaceholder returns the platform message ID of the placeholder so that

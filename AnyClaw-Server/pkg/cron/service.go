@@ -12,7 +12,7 @@ import (
 
 	"github.com/adhocore/gronx"
 
-	"github.com/sipeed/picoclaw/pkg/fileutil"
+	"github.com/anyclaw/anyclaw-server/pkg/fileutil"
 )
 
 type CronSchedule struct {
@@ -195,7 +195,7 @@ func (cs *CronService) executeJobByID(jobID string) {
 	}
 
 	// Log job execution start
-	log.Printf("[cron] â–¶ executing job '%s' (id: %s, schedule: %s, channel: %s)",
+	log.Printf("[cron] â–?executing job '%s' (id: %s, schedule: %s, channel: %s)",
 		callbackJob.Name, jobID, callbackJob.Schedule.Kind, callbackJob.Payload.Channel)
 
 	var err error
@@ -227,7 +227,7 @@ func (cs *CronService) executeJobByID(jobID string) {
 	if err != nil {
 		job.State.LastStatus = "error"
 		job.State.LastError = err.Error()
-		log.Printf("[cron] âœ— job '%s' failed after %dms: %v", job.Name, execDuration, err)
+		log.Printf("[cron] âœ?job '%s' failed after %dms: %v", job.Name, execDuration, err)
 	} else {
 		job.State.LastStatus = "ok"
 		job.State.LastError = ""
@@ -255,7 +255,7 @@ func (cs *CronService) executeJobByID(jobID string) {
 	}
 
 	if err == nil {
-		log.Printf("[cron] âœ“ job '%s' completed in %dms, next run: %s", job.Name, execDuration, nextRunStr)
+		log.Printf("[cron] âœ?job '%s' completed in %dms, next run: %s", job.Name, execDuration, nextRunStr)
 	}
 
 	if err := cs.saveStoreUnsafe(); err != nil {

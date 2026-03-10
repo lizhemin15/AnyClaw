@@ -1,7 +1,7 @@
 <div align="center">
-<img src="assets/logo.jpg" alt="PicoClaw" width="512">
+<img src="assets/logo.jpg" alt="AnyClaw" width="512">
 
-<h1>PicoClaw: Assistente de IA Ultra-Eficiente em Go</h1>
+<h1>AnyClaw: Assistente de IA Ultra-Eficiente em Go</h1>
 
 <h3>Hardware de $10 · 10MB de RAM · Boot em 1s · 皮皮虾，我们走！</h3>
 
@@ -10,7 +10,7 @@
     <img src="https://img.shields.io/badge/Arch-x86__64%2C%20ARM64%2C%20MIPS%2C%20RISC--V-blue" alt="Hardware">
     <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
     <br>
-    <a href="https://picoclaw.io"><img src="https://img.shields.io/badge/Website-picoclaw.io-blue?style=flat&logo=google-chrome&logoColor=white" alt="Website"></a>
+    <a href="https://AnyClaw.io"><img src="https://img.shields.io/badge/Website-AnyClaw.io-blue?style=flat&logo=google-chrome&logoColor=white" alt="Website"></a>
     <a href="https://x.com/SipeedIO"><img src="https://img.shields.io/badge/X_(Twitter)-SipeedIO-black?style=flat&logo=x&logoColor=white" alt="Twitter"></a>
   </p>
 
@@ -19,7 +19,7 @@
 
 ---
 
-🦐 **PicoClaw** é um assistente pessoal de IA ultra-leve inspirado no [nanobot](https://github.com/HKUDS/nanobot), reescrito do zero em **Go** por meio de um processo de "auto-inicialização" (self-bootstrapping) — onde o próprio agente de IA conduziu toda a migração de arquitetura e otimização de código.
+🦐 **AnyClaw** é um assistente pessoal de IA ultra-leve inspirado no [nanobot](https://github.com/HKUDS/nanobot), reescrito do zero em **Go** por meio de um processo de "auto-inicialização" (self-bootstrapping) �?onde o próprio agente de IA conduziu toda a migração de arquitetura e otimização de código.
 
 ⚡️ **Extremamente leve:** Roda em hardware de apenas **$10** com **<10MB** de RAM. Isso é 99% menos memória que o OpenClaw e 98% mais barato que um Mac mini!
 
@@ -27,7 +27,7 @@
 <tr align="center">
 <td align="center" valign="top">
 <p align="center">
-<img src="assets/picoclaw_mem.gif" width="360" height="240">
+<img src="assets/AnyClaw_mem.gif" width="360" height="240">
 </p>
 </td>
 <td align="center" valign="top">
@@ -41,88 +41,88 @@
 > [!CAUTION]
 > **🚨 DECLARAÇÃO DE SEGURANÇA & CANAIS OFICIAIS**
 >
-> * **SEM CRIPTOMOEDAS:** O PicoClaw **NÃO** possui nenhum token/moeda oficial. Todas as alegações no `pump.fun` ou outras plataformas de negociação são **GOLPES**.
-> * **DOMÍNIO OFICIAL:** O **ÚNICO** site oficial é o **[picoclaw.io](https://picoclaw.io)**, e o site da empresa é o **[sipeed.com](https://sipeed.com)**.
+> * **SEM CRIPTOMOEDAS:** O AnyClaw **NÃO** possui nenhum token/moeda oficial. Todas as alegações no `pump.fun` ou outras plataformas de negociação são **GOLPES**.
+> * **DOMÍNIO OFICIAL:** O **ÚNICO** site oficial é o **[AnyClaw.io](https://AnyClaw.io)**, e o site da empresa é o **[sipeed.com](https://sipeed.com)**.
 > * **Aviso:** Muitos domínios `.ai/.org/.com/.net/...` foram registrados por terceiros, não são nossos.
-> * **Aviso:** O PicoClaw está em fase inicial de desenvolvimento e pode ter problemas de segurança de rede não resolvidos. Não implante em ambientes de produção antes da versão v1.0.
-> * **Nota:** O PicoClaw recentemente fez merge de muitos PRs, o que pode resultar em maior consumo de memória (10-20MB) nas versões mais recentes. Planejamos priorizar a otimização de recursos assim que o conjunto de funcionalidades estiver estável.
+> * **Aviso:** O AnyClaw está em fase inicial de desenvolvimento e pode ter problemas de segurança de rede não resolvidos. Não implante em ambientes de produção antes da versão v1.0.
+> * **Nota:** O AnyClaw recentemente fez merge de muitos PRs, o que pode resultar em maior consumo de memória (10-20MB) nas versões mais recentes. Planejamos priorizar a otimização de recursos assim que o conjunto de funcionalidades estiver estável.
 
 
 ## 📢 Novidades
 
-2026-02-16 🎉 PicoClaw atingiu 12K stars em uma semana! Obrigado a todos pelo apoio! O PicoClaw está crescendo mais rápido do que jamais imaginamos. Dado o alto volume de PRs, precisamos urgentemente de maintainers da comunidade. Nossos papéis de voluntários e roadmap foram publicados oficialmente [aqui](docs/ROADMAP.md) — estamos ansiosos para ter você a bordo!
+2026-02-16 🎉 AnyClaw atingiu 12K stars em uma semana! Obrigado a todos pelo apoio! O AnyClaw está crescendo mais rápido do que jamais imaginamos. Dado o alto volume de PRs, precisamos urgentemente de maintainers da comunidade. Nossos papéis de voluntários e roadmap foram publicados oficialmente [aqui](docs/ROADMAP.md) �?estamos ansiosos para ter você a bordo!
 
-2026-02-13 🎉 PicoClaw atingiu 5000 stars em 4 dias! Obrigado à comunidade! Estamos finalizando o **Roadmap do Projeto** e configurando o **Grupo de Desenvolvedores** para acelerar o desenvolvimento do PicoClaw.
+2026-02-13 🎉 AnyClaw atingiu 5000 stars em 4 dias! Obrigado à comunidade! Estamos finalizando o **Roadmap do Projeto** e configurando o **Grupo de Desenvolvedores** para acelerar o desenvolvimento do AnyClaw.
 
 🚀 **Chamada para Ação:** Envie suas solicitações de funcionalidades nas GitHub Discussions. Revisaremos e priorizaremos na próxima reunião semanal.
 
-2026-02-09 🎉 PicoClaw lançado oficialmente! Construído em 1 dia para trazer Agentes de IA para hardware de $10 com <10MB de RAM. 🦐 PicoClaw, Partiu!
+2026-02-09 🎉 AnyClaw lançado oficialmente! Construído em 1 dia para trazer Agentes de IA para hardware de $10 com <10MB de RAM. 🦐 AnyClaw, Partiu!
 
-## ✨ Funcionalidades
+## �?Funcionalidades
 
-🪶 **Ultra-Leve**: Consumo de memória <10MB — 99% menor que o Clawdbot para funcionalidades essenciais.
+🪶 **Ultra-Leve**: Consumo de memória <10MB �?99% menor que o Clawdbot para funcionalidades essenciais.
 
-💰 **Custo Mínimo**: Eficiente o suficiente para rodar em hardware de $10 — 98% mais barato que um Mac mini.
+💰 **Custo Mínimo**: Eficiente o suficiente para rodar em hardware de $10 �?98% mais barato que um Mac mini.
 
 ⚡️ **Inicialização Relámpago**: Tempo de inicialização 400X mais rápido, boot em 1 segundo mesmo em CPU single-core de 0.6GHz.
 
 🌍 **Portabilidade Real**: Um único binário auto-contido para RISC-V, ARM, MIPS e x86. Um clique e já era!
 
-🤖 **Auto-Construído por IA**: Implementação nativa em Go de forma autônoma — 95% do núcleo gerado pelo Agente com refinamento humano no loop.
+🤖 **Auto-Construído por IA**: Implementação nativa em Go de forma autônoma �?95% do núcleo gerado pelo Agente com refinamento humano no loop.
 
-|                               | OpenClaw      | NanoBot                  | **PicoClaw**                              |
+|                               | OpenClaw      | NanoBot                  | **AnyClaw**                              |
 | ----------------------------- | ------------- | ------------------------ | ----------------------------------------- |
 | **Linguagem**                 | TypeScript    | Python                   | **Go**                                    |
 | **RAM**                       | >1GB          | >100MB                   | **< 10MB**                                |
 | **Inicialização**</br>(CPU 0.8GHz) | >500s         | >30s                     | **<1s**                                   |
 | **Custo**                     | Mac Mini $599 | Maioria dos SBC Linux </br>~$50 | **Qualquer placa Linux**</br>**A partir de $10** |
 
-<img src="assets/compare.jpg" alt="PicoClaw" width="512">
+<img src="assets/compare.jpg" alt="AnyClaw" width="512">
 
 ## 🦾 Demonstração
 
-### 🛠️ Fluxos de Trabalho Padrão do Assistente
+### 🛠�?Fluxos de Trabalho Padrão do Assistente
 
 <table align="center">
 <tr align="center">
 <th><p align="center">🧩 Engenharia Full-Stack</p></th>
-<th><p align="center">🗂️ Gerenciamento de Logs & Planejamento</p></th>
+<th><p align="center">🗂�?Gerenciamento de Logs & Planejamento</p></th>
 <th><p align="center">🔎 Busca Web & Aprendizado</p></th>
 </tr>
 <tr>
-<td align="center"><p align="center"><img src="assets/picoclaw_code.gif" width="240" height="180"></p></td>
-<td align="center"><p align="center"><img src="assets/picoclaw_memory.gif" width="240" height="180"></p></td>
-<td align="center"><p align="center"><img src="assets/picoclaw_search.gif" width="240" height="180"></p></td>
+<td align="center"><p align="center"><img src="assets/AnyClaw_code.gif" width="240" height="180"></p></td>
+<td align="center"><p align="center"><img src="assets/AnyClaw_memory.gif" width="240" height="180"></p></td>
+<td align="center"><p align="center"><img src="assets/AnyClaw_search.gif" width="240" height="180"></p></td>
 </tr>
 <tr>
-<td align="center">Desenvolver • Implantar • Escalar</td>
-<td align="center">Agendar • Automatizar • Memorizar</td>
-<td align="center">Descobrir • Analisar • Tendências</td>
+<td align="center">Desenvolver �?Implantar �?Escalar</td>
+<td align="center">Agendar �?Automatizar �?Memorizar</td>
+<td align="center">Descobrir �?Analisar �?Tendências</td>
 </tr>
 </table>
 
 ### 📱 Rode em celulares Android antigos
 
-Dê uma segunda vida ao seu celular de dez anos atrás! Transforme-o em um assistente de IA inteligente com o PicoClaw. Início rápido:
+Dê uma segunda vida ao seu celular de dez anos atrás! Transforme-o em um assistente de IA inteligente com o AnyClaw. Início rápido:
 
 1. **Instale o Termux** (Disponível no F-Droid ou Google Play).
 2. **Execute os comandos**
 
 ```bash
 # Nota: Substitua v0.1.1 pela versao mais recente da pagina de Releases
-wget https://github.com/sipeed/picoclaw/releases/download/v0.1.1/picoclaw-linux-arm64
-chmod +x picoclaw-linux-arm64
+wget https://github.com/anyclaw/anyclaw-server/releases/download/v0.1.1/AnyClaw-linux-arm64
+chmod +x AnyClaw-linux-arm64
 pkg install proot
-termux-chroot ./picoclaw-linux-arm64 onboard
+termux-chroot ./AnyClaw-linux-arm64 onboard
 ```
 
 Depois siga as instruções na seção "Início Rápido" para completar a configuração!
 
-<img src="assets/termux.jpg" alt="PicoClaw" width="512">
+<img src="assets/termux.jpg" alt="AnyClaw" width="512">
 
 ### 🐜 Implantação Inovadora com Baixo Consumo
 
-O PicoClaw pode ser implantado em praticamente qualquer dispositivo Linux!
+O AnyClaw pode ser implantado em praticamente qualquer dispositivo Linux!
 
 - $9.9 [LicheeRV-Nano](https://www.aliexpress.com/item/1005006519668532.html) versão E (Ethernet) ou W (WiFi6), para Assistente Doméstico Minimalista
 - $30~50 [NanoKVM](https://www.aliexpress.com/item/1005007369816019.html), ou $100 [NanoKVM-Pro](https://www.aliexpress.com/item/1005010048471263.html) para Manutenção Automatizada de Servidores
@@ -136,14 +136,14 @@ https://private-user-images.githubusercontent.com/83055338/547056448-e7b031ff-d6
 
 ### Instalar com binário pré-compilado
 
-Baixe o binário para sua plataforma na página de [releases](https://github.com/sipeed/picoclaw/releases).
+Baixe o binário para sua plataforma na página de [releases](https://github.com/anyclaw/anyclaw-server/releases).
 
 ### Instalar a partir do código-fonte (funcionalidades mais recentes, recomendado para desenvolvimento)
 
 ```bash
-git clone https://github.com/sipeed/picoclaw.git
+git clone https://github.com/anyclaw/anyclaw-server.git
 
-cd picoclaw
+cd AnyClaw
 make deps
 
 # Build, sem necessidade de instalar
@@ -158,14 +158,14 @@ make install
 
 ## 🐳 Docker Compose
 
-Você tambêm pode rodar o PicoClaw usando Docker Compose sem instalar nada localmente.
+Você tambêm pode rodar o AnyClaw usando Docker Compose sem instalar nada localmente.
 
 ```bash
 # 1. Clone este repositorio
-git clone https://github.com/sipeed/picoclaw.git
-cd picoclaw
+git clone https://github.com/anyclaw/anyclaw-server.git
+cd AnyClaw
 
-# 2. Primeiro uso — gera docker/data/config.json automaticamente e para
+# 2. Primeiro uso �?gera docker/data/config.json automaticamente e para
 docker compose -f docker/docker-compose.yml --profile gateway up
 # O contêiner exibe "First-run setup complete." e para.
 
@@ -177,11 +177,11 @@ docker compose -f docker/docker-compose.yml --profile gateway up -d
 ```
 
 > [!TIP]
-> **Usuários Docker**: Por padrão, o Gateway ouve em `127.0.0.1`, o que não é acessível a partir do host. Se você precisar acessar os endpoints de integridade ou expor portas, defina `PICOCLAW_GATEWAY_HOST=0.0.0.0` em seu ambiente ou atualize o `config.json`.
+> **Usuários Docker**: Por padrão, o Gateway ouve em `127.0.0.1`, o que não é acessível a partir do host. Se você precisar acessar os endpoints de integridade ou expor portas, defina `AnyClaw_GATEWAY_HOST=0.0.0.0` em seu ambiente ou atualize o `config.json`.
 
 ```bash
 # 5. Ver logs
-docker compose -f docker/docker-compose.yml logs -f picoclaw-gateway
+docker compose -f docker/docker-compose.yml logs -f AnyClaw-gateway
 
 # 6. Parar
 docker compose -f docker/docker-compose.yml --profile gateway down
@@ -191,10 +191,10 @@ docker compose -f docker/docker-compose.yml --profile gateway down
 
 ```bash
 # Fazer uma pergunta
-docker compose -f docker/docker-compose.yml run --rm picoclaw-agent -m "Quanto e 2+2?"
+docker compose -f docker/docker-compose.yml run --rm AnyClaw-agent -m "Quanto e 2+2?"
 
 # Modo interativo
-docker compose -f docker/docker-compose.yml run --rm picoclaw-agent
+docker compose -f docker/docker-compose.yml run --rm AnyClaw-agent
 ```
 
 ### Atualizar
@@ -207,17 +207,17 @@ docker compose -f docker/docker-compose.yml --profile gateway up -d
 ### 🚀 Início Rápido
 
 > [!TIP]
-> Configure sua API key em `~/.picoclaw/config.json`.
+> Configure sua API key em `~/.AnyClaw/config.json`.
 > Obtenha API keys: [OpenRouter](https://openrouter.ai/keys) (LLM) · [Zhipu](https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys) (LLM)
-> Busca web e **opcional** — obtenha a [Brave Search API](https://brave.com/search/api) gratuita (2000 consultas grátis/mês) ou use o fallback automático integrado.
+> Busca web e **opcional** �?obtenha a [Brave Search API](https://brave.com/search/api) gratuita (2000 consultas grátis/mês) ou use o fallback automático integrado.
 
 **1. Inicializar**
 
 ```bash
-picoclaw onboard
+AnyClaw onboard
 ```
 
-**2. Configurar** (`~/.picoclaw/config.json`)
+**2. Configurar** (`~/.AnyClaw/config.json`)
 
 ```json
 {
@@ -252,7 +252,7 @@ picoclaw onboard
 ```
 
 > **Novo**: O formato de configuração `model_list` permite adicionar provedores sem alterar código. Veja [Configuração de Modelo](#configuração-de-modelo-model_list) para detalhes.
-> `request_timeout` é opcional e usa segundos. Se omitido ou definido como `<= 0`, o PicoClaw usa o timeout padrão (120s).
+> `request_timeout` é opcional e usa segundos. Se omitido ou definido como `<= 0`, o AnyClaw usa o timeout padrão (120s).
 
 **3. Obter API Keys**
 
@@ -264,7 +264,7 @@ picoclaw onboard
 **4. Conversar**
 
 ```bash
-picoclaw agent -m "Quanto e 2+2?"
+AnyClaw agent -m "Quanto e 2+2?"
 ```
 
 Pronto! Você tem um assistente de IA funcionando em 2 minutos.
@@ -273,7 +273,7 @@ Pronto! Você tem um assistente de IA funcionando em 2 minutos.
 
 ## 💬 Integração com Apps de Chat
 
-Converse com seu PicoClaw via Telegram, Discord, DingTalk, LINE ou WeCom.
+Converse com seu AnyClaw via Telegram, Discord, DingTalk, LINE ou WeCom.
 
 | Canal | Nível de Configuração |
 | --- | --- |
@@ -312,7 +312,7 @@ Converse com seu PicoClaw via Telegram, Discord, DingTalk, LINE ou WeCom.
 **3. Executar**
 
 ```bash
-picoclaw gateway
+AnyClaw gateway
 ```
 
 </details>
@@ -323,7 +323,7 @@ picoclaw gateway
 **1. Criar o bot**
 
 * Acesse <https://discord.com/developers/applications>
-* Crie um aplicativo → Bot → Add Bot
+* Crie um aplicativo �?Bot �?Add Bot
 * Copie o token do bot
 
 **2. Habilitar Intents**
@@ -333,8 +333,8 @@ picoclaw gateway
 
 **3. Obter seu User ID**
 
-* Configurações do Discord → Avançado → habilite **Modo Desenvolvedor**
-* Clique com botão direito no seu avatar → **Copiar ID do Usuário**
+* Configurações do Discord �?Avançado �?habilite **Modo Desenvolvedor**
+* Clique com botão direito no seu avatar �?**Copiar ID do Usuário**
 
 **4. Configurar**
 
@@ -352,7 +352,7 @@ picoclaw gateway
 
 **5. Convidar o bot**
 
-* OAuth2 → URL Generator
+* OAuth2 �?URL Generator
 * Scopes: `bot`
 * Bot Permissions: `Send Messages`, `Read Message History`
 * Abra a URL de convite gerada e adicione o bot ao seu servidor
@@ -360,7 +360,7 @@ picoclaw gateway
 **6. Executar**
 
 ```bash
-picoclaw gateway
+AnyClaw gateway
 ```
 
 </details>
@@ -371,7 +371,7 @@ picoclaw gateway
 **1. Criar o bot**
 
 - Acesse a [QQ Open Platform](https://q.qq.com/#)
-- Crie um aplicativo → Obtenha **AppID** e **AppSecret**
+- Crie um aplicativo �?Obtenha **AppID** e **AppSecret**
 
 **2. Configurar**
 
@@ -393,7 +393,7 @@ picoclaw gateway
 **3. Executar**
 
 ```bash
-picoclaw gateway
+AnyClaw gateway
 ```
 
 </details>
@@ -427,7 +427,7 @@ picoclaw gateway
 **3. Executar**
 
 ```bash
-picoclaw gateway
+AnyClaw gateway
 ```
 
 </details>
@@ -438,7 +438,7 @@ picoclaw gateway
 **1. Criar uma Conta Oficial LINE**
 
 - Acesse o [LINE Developers Console](https://developers.line.biz/)
-- Crie um provider → Crie um canal Messaging API
+- Crie um provider �?Crie um canal Messaging API
 - Copie o **Channel Secret** e o **Channel Access Token**
 
 **2. Configurar**
@@ -473,7 +473,7 @@ Em seguida, configure a Webhook URL no LINE Developers Console para `https://seu
 **4. Executar**
 
 ```bash
-picoclaw gateway
+AnyClaw gateway
 ```
 
 > Em chats de grupo, o bot responde apenas quando mencionado com @. As respostas citam a mensagem original.
@@ -485,7 +485,7 @@ picoclaw gateway
 <details>
 <summary><b>WeCom (WeChat Work)</b></summary>
 
-O PicoClaw suporta três tipos de integração WeCom:
+O AnyClaw suporta três tipos de integração WeCom:
 
 **Opção 1: WeCom Bot (Robô)** - Configuração mais fácil, suporta chats em grupo
 **Opção 2: WeCom App (Aplicativo Personalizado)** - Mais recursos, mensagens proativas, somente chat privado
@@ -497,7 +497,7 @@ Veja o [Guia de Configuração WeCom AI Bot](docs/channels/wecom/wecom_aibot/REA
 
 **1. Criar um bot**
 
-* Acesse o Console de Administração WeCom → Chat em Grupo → Adicionar Bot de Grupo
+* Acesse o Console de Administração WeCom �?Chat em Grupo �?Adicionar Bot de Grupo
 * Copie a URL do webhook (formato: `https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx`)
 
 **2. Configurar**
@@ -523,13 +523,13 @@ Veja o [Guia de Configuração WeCom AI Bot](docs/channels/wecom/wecom_aibot/REA
 
 **1. Criar um aplicativo**
 
-* Acesse o Console de Administração WeCom → Gerenciamento de Aplicativos → Criar Aplicativo
+* Acesse o Console de Administração WeCom �?Gerenciamento de Aplicativos �?Criar Aplicativo
 * Copie o **AgentId** e o **Secret**
 * Acesse a página "Minha Empresa", copie o **CorpID**
 
 **2. Configurar recebimento de mensagens**
 
-* Nos detalhes do aplicativo, clique em "Receber Mensagens" → "Configurar API"
+* Nos detalhes do aplicativo, clique em "Receber Mensagens" �?"Configurar API"
 * Defina a URL como `http://your-server:18790/webhook/wecom-app`
 * Gere o **Token** e o **EncodingAESKey**
 
@@ -555,16 +555,16 @@ Veja o [Guia de Configuração WeCom AI Bot](docs/channels/wecom/wecom_aibot/REA
 **4. Executar**
 
 ```bash
-picoclaw gateway
+AnyClaw gateway
 ```
 
-> **Nota**: O WeCom App (callbacks de webhook) é servido pelo Gateway compartilhado (padrão 127.0.0.1:18790). Em produção use um proxy reverso HTTPS para expor a porta do Gateway, ou atualize `PICOCLAW_GATEWAY_HOST` para `0.0.0.0` se necessário.
+> **Nota**: O WeCom App (callbacks de webhook) é servido pelo Gateway compartilhado (padrão 127.0.0.1:18790). Em produção use um proxy reverso HTTPS para expor a porta do Gateway, ou atualize `AnyClaw_GATEWAY_HOST` para `0.0.0.0` se necessário.
 
 **Configuração Rápida - WeCom AI Bot:**
 
 **1. Criar um AI Bot**
 
-* Acesse o Console de Administração WeCom → Gerenciamento de Aplicativos → AI Bot
+* Acesse o Console de Administração WeCom �?Gerenciamento de Aplicativos �?AI Bot
 * Configure a URL de callback: `http://your-server:18791/webhook/wecom-aibot`
 * Copie o **Token** e gere o **EncodingAESKey**
 
@@ -588,54 +588,54 @@ picoclaw gateway
 **3. Executar**
 
 ```bash
-picoclaw gateway
+AnyClaw gateway
 ```
 
-> **Nota**: O WeCom AI Bot usa protocolo de pull em streaming — sem preocupações com timeout de resposta. Tarefas longas (>5,5 min) alternam automaticamente para entrega via `response_url`.
+> **Nota**: O WeCom AI Bot usa protocolo de pull em streaming �?sem preocupações com timeout de resposta. Tarefas longas (>5,5 min) alternam automaticamente para entrega via `response_url`.
 
 </details>
 
 ## <img src="assets/clawdchat-icon.png" width="24" height="24" alt="ClawdChat"> Junte-se a Rede Social de Agentes
 
-Conecte o PicoClaw a Rede Social de Agentes simplesmente enviando uma única mensagem via CLI ou qualquer App de Chat integrado.
+Conecte o AnyClaw a Rede Social de Agentes simplesmente enviando uma única mensagem via CLI ou qualquer App de Chat integrado.
 
 **Leia `https://clawdchat.ai/skill.md` e siga as instruções para entrar no [ClawdChat.ai](https://clawdchat.ai)**
 
 ## ⚙️ Configuração Detalhada
 
-Arquivo de configuração: `~/.picoclaw/config.json`
+Arquivo de configuração: `~/.AnyClaw/config.json`
 
 ### Variáveis de Ambiente
 
-Você pode substituir os caminhos padrão usando variáveis de ambiente. Isso é útil para instalações portáteis, implantações em contêineres ou para executar o picoclaw como um serviço do sistema. Essas variáveis são independentes e controlam caminhos diferentes.
+Você pode substituir os caminhos padrão usando variáveis de ambiente. Isso é útil para instalações portáteis, implantações em contêineres ou para executar o AnyClaw como um serviço do sistema. Essas variáveis são independentes e controlam caminhos diferentes.
 
 | Variável          | Descrição                                                                                                                             | Caminho Padrão            |
 |-------------------|-----------------------------------------------------------------------------------------------------------------------------------------|---------------------------|
-| `PICOCLAW_CONFIG` | Substitui o caminho para o arquivo de configuração. Isso informa diretamente ao picoclaw qual `config.json` carregar, ignorando todos os outros locais. | `~/.picoclaw/config.json` |
-| `PICOCLAW_HOME`   | Substitui o diretório raiz dos dados do picoclaw. Isso altera o local padrão do `workspace` e de outros diretórios de dados.          | `~/.picoclaw`             |
+| `AnyClaw_CONFIG` | Substitui o caminho para o arquivo de configuração. Isso informa diretamente ao AnyClaw qual `config.json` carregar, ignorando todos os outros locais. | `~/.AnyClaw/config.json` |
+| `AnyClaw_HOME`   | Substitui o diretório raiz dos dados do AnyClaw. Isso altera o local padrão do `workspace` e de outros diretórios de dados.          | `~/.AnyClaw`             |
 
 **Exemplos:**
 
 ```bash
-# Executar o picoclaw usando um arquivo de configuração específico
+# Executar o AnyClaw usando um arquivo de configuração específico
 # O caminho do workspace será lido de dentro desse arquivo de configuração
-PICOCLAW_CONFIG=/etc/picoclaw/production.json picoclaw gateway
+AnyClaw_CONFIG=/etc/AnyClaw/production.json AnyClaw gateway
 
-# Executar o picoclaw com todos os seus dados armazenados em /opt/picoclaw
-# A configuração será carregada do ~/.picoclaw/config.json padrão
-# O workspace será criado em /opt/picoclaw/workspace
-PICOCLAW_HOME=/opt/picoclaw picoclaw agent
+# Executar o AnyClaw com todos os seus dados armazenados em /opt/AnyClaw
+# A configuração será carregada do ~/.AnyClaw/config.json padrão
+# O workspace será criado em /opt/AnyClaw/workspace
+AnyClaw_HOME=/opt/AnyClaw AnyClaw agent
 
 # Use ambos para uma configuração totalmente personalizada
-PICOCLAW_HOME=/srv/picoclaw PICOCLAW_CONFIG=/srv/picoclaw/main.json picoclaw gateway
+AnyClaw_HOME=/srv/AnyClaw AnyClaw_CONFIG=/srv/AnyClaw/main.json AnyClaw gateway
 ```
 
 ### Estrutura do Workspace
 
-O PicoClaw armazena dados no workspace configurado (padrão: `~/.picoclaw/workspace`):
+O AnyClaw armazena dados no workspace configurado (padrão: `~/.AnyClaw/workspace`):
 
 ```
-~/.picoclaw/workspace/
+~/.AnyClaw/workspace/
 ├── sessions/          # Sessoes de conversa e historico
 ├── memory/            # Memoria de longo prazo (MEMORY.md)
 ├── state/             # Estado persistente (ultimo canal, etc.)
@@ -651,7 +651,7 @@ O PicoClaw armazena dados no workspace configurado (padrão: `~/.picoclaw/worksp
 
 ### 🔒 Sandbox de Segurança
 
-O PicoClaw roda em um ambiente sandbox por padrão. O agente so pode acessar arquivos e executar comandos dentro do workspace configurado.
+O AnyClaw roda em um ambiente sandbox por padrão. O agente so pode acessar arquivos e executar comandos dentro do workspace configurado.
 
 #### Configuração Padrão
 
@@ -659,7 +659,7 @@ O PicoClaw roda em um ambiente sandbox por padrão. O agente so pode acessar arq
 {
   "agents": {
     "defaults": {
-      "workspace": "~/.picoclaw/workspace",
+      "workspace": "~/.AnyClaw/workspace",
       "restrict_to_workspace": true
     }
   }
@@ -668,7 +668,7 @@ O PicoClaw roda em um ambiente sandbox por padrão. O agente so pode acessar arq
 
 | Opção | Padrão | Descrição |
 |-------|--------|-----------|
-| `workspace` | `~/.picoclaw/workspace` | Diretório de trabalho do agente |
+| `workspace` | `~/.AnyClaw/workspace` | Diretório de trabalho do agente |
 | `restrict_to_workspace` | `true` | Restringir acesso de arquivos/comandos ao workspace |
 
 #### Ferramentas Protegidas
@@ -688,11 +688,11 @@ Quando `restrict_to_workspace: true`, as seguintes ferramentas são restritas ao
 
 Mesmo com `restrict_to_workspace: false`, a ferramenta `exec` bloqueia estes comandos perigosos:
 
-* `rm -rf`, `del /f`, `rmdir /s` — Exclusão em massa
-* `format`, `mkfs`, `diskpart` — Formatação de disco
-* `dd if=` — Criação de imagem de disco
-* Escrita em `/dev/sd[a-z]` — Escrita direta no disco
-* `shutdown`, `reboot`, `poweroff` — Desligamento do sistema
+* `rm -rf`, `del /f`, `rmdir /s` �?Exclusão em massa
+* `format`, `mkfs`, `diskpart` �?Formatação de disco
+* `dd if=` �?Criação de imagem de disco
+* Escrita em `/dev/sd[a-z]` �?Escrita direta no disco
+* `shutdown`, `reboot`, `poweroff` �?Desligamento do sistema
 * Fork bomb `:(){ :|:& };:`
 
 #### Exemplos de Erro
@@ -726,7 +726,7 @@ Se você precisa que o agente acesse caminhos fora do workspace:
 **Método 2: Variável de ambiente**
 
 ```bash
-export PICOCLAW_AGENTS_DEFAULTS_RESTRICT_TO_WORKSPACE=false
+export AnyClaw_AGENTS_DEFAULTS_RESTRICT_TO_WORKSPACE=false
 ```
 
 > ⚠️ **Aviso**: Desabilitar esta restrição permite que o agente acesse qualquer caminho no seu sistema. Use com cuidado apenas em ambientes controlados.
@@ -737,15 +737,15 @@ A configuração `restrict_to_workspace` se aplica consistentemente em todos os 
 
 | Caminho de Execução | Limite de Segurança |
 |----------------------|---------------------|
-| Agente Principal | `restrict_to_workspace` ✅ |
-| Subagente / Spawn | Herda a mesma restrição ✅ |
-| Tarefas Heartbeat | Herda a mesma restrição ✅ |
+| Agente Principal | `restrict_to_workspace` �?|
+| Subagente / Spawn | Herda a mesma restrição �?|
+| Tarefas Heartbeat | Herda a mesma restrição �?|
 
-Todos os caminhos compartilham a mesma restrição de workspace — nao há como contornar o limite de segurança por meio de subagentes ou tarefas agendadas.
+Todos os caminhos compartilham a mesma restrição de workspace �?nao há como contornar o limite de segurança por meio de subagentes ou tarefas agendadas.
 
 ### Heartbeat (Tarefas Periódicas)
 
-O PicoClaw pode executar tarefas periódicas automaticamente. Crie um arquivo `HEARTBEAT.md` no seu workspace:
+O AnyClaw pode executar tarefas periódicas automaticamente. Crie um arquivo `HEARTBEAT.md` no seu workspace:
 
 ```markdown
 # Tarefas Periodicas
@@ -785,16 +785,11 @@ Para tarefas de longa duração (busca web, chamadas de API), use a ferramenta `
 
 ```
 Heartbeat dispara
-    ↓
-Agente lê HEARTBEAT.md
-    ↓
-Para tarefa longa: spawn subagente
-    ↓                           ↓
-Continua próxima tarefa    Subagente trabalha independentemente
-    ↓                           ↓
-Todas tarefas concluídas   Subagente usa ferramenta "message"
-    ↓                           ↓
-Responde HEARTBEAT_OK      Usuário recebe resultado diretamente
+    �?Agente lê HEARTBEAT.md
+    �?Para tarefa longa: spawn subagente
+    �?                          �?Continua próxima tarefa    Subagente trabalha independentemente
+    �?                          �?Todas tarefas concluídas   Subagente usa ferramenta "message"
+    �?                          �?Responde HEARTBEAT_OK      Usuário recebe resultado diretamente
 ```
 
 O subagente tem acesso às ferramentas (message, web_search, etc.) e pode se comunicar com o usuário independentemente sem passar pelo agente principal.
@@ -817,8 +812,8 @@ O subagente tem acesso às ferramentas (message, web_search, etc.) e pode se com
 
 **Variáveis de ambiente:**
 
-* `PICOCLAW_HEARTBEAT_ENABLED=false` para desabilitar
-* `PICOCLAW_HEARTBEAT_INTERVAL=60` para alterar o intervalo
+* `AnyClaw_HEARTBEAT_ENABLED=false` para desabilitar
+* `AnyClaw_HEARTBEAT_INTERVAL=60` para alterar o intervalo
 
 ### Provedores
 
@@ -850,7 +845,7 @@ O subagente tem acesso às ferramentas (message, web_search, etc.) e pode se com
 {
   "agents": {
     "defaults": {
-      "workspace": "~/.picoclaw/workspace",
+      "workspace": "~/.AnyClaw/workspace",
       "model": "glm-4.7",
       "max_tokens": 8192,
       "temperature": 0.7,
@@ -869,7 +864,7 @@ O subagente tem acesso às ferramentas (message, web_search, etc.) e pode se com
 **3. Executar**
 
 ```bash
-picoclaw agent -m "Ola, como vai?"
+AnyClaw agent -m "Ola, como vai?"
 ```
 
 </details>
@@ -948,7 +943,7 @@ picoclaw agent -m "Ola, como vai?"
 
 ### Configuração de Modelo (model_list)
 
-> **Novidade!** PicoClaw agora usa uma abordagem de configuração **centrada no modelo**. Basta especificar o formato `fornecedor/modelo` (ex: `zhipu/glm-4.7`) para adicionar novos provedores—**nenhuma alteração de código necessária!**
+> **Novidade!** AnyClaw agora usa uma abordagem de configuração **centrada no modelo**. Basta especificar o formato `fornecedor/modelo` (ex: `zhipu/glm-4.7`) para adicionar novos provedores�?*nenhuma alteração de código necessária!**
 
 Este design também possibilita o **suporte multi-agent** com seleção flexível de provedores:
 
@@ -1036,7 +1031,7 @@ Este design também possibilita o **suporte multi-agent** com seleção flexíve
   "auth_method": "oauth"
 }
 ```
-> Execute `picoclaw auth login --provider anthropic` para configurar credenciais OAuth.
+> Execute `AnyClaw auth login --provider anthropic` para configurar credenciais OAuth.
 
 **Proxy/API personalizada**
 ```json
@@ -1118,23 +1113,23 @@ Para o guia de migração detalhado, consulte [docs/migration/model-list-migrati
 
 | Comando | Descrição |
 | --- | --- |
-| `picoclaw onboard` | Inicializar configuração & workspace |
-| `picoclaw agent -m "..."` | Conversar com o agente |
-| `picoclaw agent` | Modo de chat interativo |
-| `picoclaw gateway` | Iniciar o gateway (para bots de chat) |
-| `picoclaw status` | Mostrar status |
-| `picoclaw cron list` | Listar todas as tarefas agendadas |
-| `picoclaw cron add ...` | Adicionar uma tarefa agendada |
+| `AnyClaw onboard` | Inicializar configuração & workspace |
+| `AnyClaw agent -m "..."` | Conversar com o agente |
+| `AnyClaw agent` | Modo de chat interativo |
+| `AnyClaw gateway` | Iniciar o gateway (para bots de chat) |
+| `AnyClaw status` | Mostrar status |
+| `AnyClaw cron list` | Listar todas as tarefas agendadas |
+| `AnyClaw cron add ...` | Adicionar uma tarefa agendada |
 
 ### Tarefas Agendadas / Lembretes
 
-O PicoClaw suporta lembretes agendados e tarefas recorrentes por meio da ferramenta `cron`:
+O AnyClaw suporta lembretes agendados e tarefas recorrentes por meio da ferramenta `cron`:
 
-* **Lembretes únicos**: "Remind me in 10 minutes" (Me lembre em 10 minutos) → dispara uma vez após 10min
-* **Tarefas recorrentes**: "Remind me every 2 hours" (Me lembre a cada 2 horas) → dispara a cada 2 horas
-* **Expressões Cron**: "Remind me at 9am daily" (Me lembre às 9h todos os dias) → usa expressão cron
+* **Lembretes únicos**: "Remind me in 10 minutes" (Me lembre em 10 minutos) �?dispara uma vez após 10min
+* **Tarefas recorrentes**: "Remind me every 2 hours" (Me lembre a cada 2 horas) �?dispara a cada 2 horas
+* **Expressões Cron**: "Remind me at 9am daily" (Me lembre às 9h todos os dias) �?usa expressão cron
 
-As tarefas são armazenadas em `~/.picoclaw/workspace/cron/` e processadas automaticamente.
+As tarefas são armazenadas em `~/.AnyClaw/workspace/cron/` e processadas automaticamente.
 
 ## 🤝 Contribuir & Roadmap
 
@@ -1148,20 +1143,20 @@ Grupos de usuários:
 
 Discord: <https://discord.gg/V4sAZ9XWpN>
 
-<img src="assets/wechat.png" alt="PicoClaw" width="512">
+<img src="assets/wechat.png" alt="AnyClaw" width="512">
 
 ## 🐛 Solução de Problemas
 
 ### Busca web mostra "API 配置问题"
 
-Isso é normal se você ainda não configurou uma API key de busca. O PicoClaw fornecerá links úteis para busca manual.
+Isso é normal se você ainda não configurou uma API key de busca. O AnyClaw fornecerá links úteis para busca manual.
 
 Para habilitar a busca web:
 
 1. **Opção 1 (Recomendado)**: Obtenha uma API key gratuita em [https://brave.com/search/api](https://brave.com/search/api) (2000 consultas grátis/mês) para os melhores resultados.
 2. **Opção 2 (Sem Cartão de Crédito)**: Se você não tem uma key, o sistema automaticamente usa o **DuckDuckGo** como fallback (sem necessidade de key).
 
-Adicione a key em `~/.picoclaw/config.json` se usar o Brave:
+Adicione a key em `~/.AnyClaw/config.json` se usar o Brave:
 
 ```json
 {
@@ -1187,7 +1182,7 @@ Alguns provedores (como Zhipu) possuem filtragem de conteúdo. Tente reformular 
 
 ### Bot do Telegram diz "Conflict: terminated by other getUpdates"
 
-Isso acontece quando outra instância do bot está em execução. Certifique-se de que apenas um `picoclaw gateway` esteja rodando por vez.
+Isso acontece quando outra instância do bot está em execução. Certifique-se de que apenas um `AnyClaw gateway` esteja rodando por vez.
 
 ---
 

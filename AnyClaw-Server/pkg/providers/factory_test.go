@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/auth"
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/anyclaw/anyclaw-server/pkg/auth"
+	"github.com/anyclaw/anyclaw-server/pkg/config"
 )
 
 func TestResolveProviderSelection(t *testing.T) {

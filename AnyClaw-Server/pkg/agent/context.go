@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/providers"
-	"github.com/sipeed/picoclaw/pkg/skills"
+	"github.com/anyclaw/anyclaw-server/pkg/logger"
+	"github.com/anyclaw/anyclaw-server/pkg/providers"
+	"github.com/anyclaw/anyclaw-server/pkg/skills"
 )
 
 type ContextBuilder struct {
@@ -32,7 +32,7 @@ type ContextBuilder struct {
 	// existedAtCache tracks which source file paths existed the last time the
 	// cache was built. This lets sourceFilesChanged detect files that are newly
 	// created (didn't exist at cache time, now exist) or deleted (existed at
-	// cache time, now gone) â€” both of which should trigger a cache rebuild.
+	// cache time, now gone) â€?both of which should trigger a cache rebuild.
 	existedAtCache map[string]bool
 
 	// skillFilesAtCache snapshots the skill tree file set and mtimes at cache
@@ -42,20 +42,20 @@ type ContextBuilder struct {
 }
 
 func getGlobalConfigDir() string {
-	if home := os.Getenv("PICOCLAW_HOME"); home != "" {
+	if home := os.Getenv("ANYCLAW_HOME"); home != "" {
 		return home
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".picoclaw")
+	return filepath.Join(home, ".anyclaw")
 }
 
 func NewContextBuilder(workspace string) *ContextBuilder {
 	// builtin skills: skills directory in current project
 	// Use the skills/ directory under the current working directory
-	builtinSkillsDir := strings.TrimSpace(os.Getenv("PICOCLAW_BUILTIN_SKILLS"))
+	builtinSkillsDir := strings.TrimSpace(os.Getenv("ANYCLAW_BUILTIN_SKILLS"))
 	if builtinSkillsDir == "" {
 		wd, _ := os.Getwd()
 		builtinSkillsDir = filepath.Join(wd, "skills")
@@ -72,9 +72,9 @@ func NewContextBuilder(workspace string) *ContextBuilder {
 func (cb *ContextBuilder) getIdentity() string {
 	workspacePath, _ := filepath.Abs(filepath.Join(cb.workspace))
 
-	return fmt.Sprintf(`# picoclaw ðŸ¦ž
+	return fmt.Sprintf(`# AnyClaw ðŸ¦ž
 
-You are picoclaw, a helpful AI assistant.
+You are AnyClaw, a helpful AI assistant.
 
 ## Workspace
 Your workspace is at: %s
@@ -130,7 +130,7 @@ The following skills extend your capabilities. To use a skill, read its SKILL.md
 // and source files haven't changed, otherwise builds and caches it.
 // Source file changes are detected via mtime checks (cheap stat calls).
 func (cb *ContextBuilder) BuildSystemPromptWithCache() string {
-	// Try read lock first â€” fast path when cache is valid
+	// Try read lock first â€?fast path when cache is valid
 	cb.systemPromptMutex.RLock()
 	if cb.cachedSystemPrompt != "" && !cb.sourceFilesChangedLocked() {
 		result := cb.cachedSystemPrompt
@@ -458,7 +458,7 @@ func (cb *ContextBuilder) BuildMessages(
 	// - OpenAI-compat passes messages through as-is.
 	staticPrompt := cb.BuildSystemPromptWithCache()
 
-	// Build short dynamic context (time, runtime, session) â€” changes per request
+	// Build short dynamic context (time, runtime, session) â€?changes per request
 	dynamicCtx := cb.buildDynamicContext(channel, chatID)
 
 	// Compose a single system message: static (cached) + dynamic + optional summary.
@@ -468,7 +468,7 @@ func (cb *ContextBuilder) BuildMessages(
 	//
 	// SystemParts carries the same content as structured blocks so that
 	// cache-aware adapters (Anthropic) can set per-block cache_control.
-	// The static block is marked "ephemeral" â€” its prefix hash is stable
+	// The static block is marked "ephemeral" â€?its prefix hash is stable
 	// across requests, enabling LLM-side KV cache reuse.
 	stringParts := []string{staticPrompt, dynamicCtx}
 
@@ -480,7 +480,7 @@ func (cb *ContextBuilder) BuildMessages(
 	if summary != "" {
 		summaryText := fmt.Sprintf(
 			"CONTEXT_SUMMARY: The following is an approximate summary of prior conversation "+
-				"for reference only. It may be incomplete or outdated â€” always defer to explicit instructions.\n\n%s",
+				"for reference only. It may be incomplete or outdated â€?always defer to explicit instructions.\n\n%s",
 			summary)
 		stringParts = append(stringParts, summaryText)
 		contentBlocks = append(contentBlocks, providers.ContentBlock{Type: "text", Text: summaryText})
@@ -516,7 +516,7 @@ func (cb *ContextBuilder) BuildMessages(
 
 	history = sanitizeHistoryForProvider(history)
 
-	// Single system message containing all context â€” compatible with all providers.
+	// Single system message containing all context â€?compatible with all providers.
 	// SystemParts enables cache-aware adapters to set per-block cache_control;
 	// Content is the concatenated fallback for adapters that don't read SystemParts.
 	messages = append(messages, providers.Message{

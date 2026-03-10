@@ -1,14 +1,14 @@
-# PicoClaw Channel System: Complete Development Guide
+# AnyClaw Channel System: Complete Development Guide
 
-> **Scope**: `pkg/channels/`, `pkg/bus/`, `pkg/media/`, `pkg/identity/`, `cmd/picoclaw/internal/gateway/`
+> **Scope**: `pkg/channels/`, `pkg/bus/`, `pkg/media/`, `pkg/identity/`, `cmd/AnyClaw/internal/gateway/`
 
 ---
 
 ## Table of Contents
 
 - [Part 1: Architecture Overview](#part-1-architecture-overview)
-- [Part 2: Migration Guide — From main Branch to Refactored Branch](#part-2-migration-guide--from-main-branch-to-refactored-branch)
-- [Part 3: New Channel Development Guide — Implementing a Channel from Scratch](#part-3-new-channel-development-guide--implementing-a-channel-from-scratch)
+- [Part 2: Migration Guide �?From main Branch to Refactored Branch](#part-2-migration-guide--from-main-branch-to-refactored-branch)
+- [Part 3: New Channel Development Guide �?Implementing a Channel from Scratch](#part-3-new-channel-development-guide--implementing-a-channel-from-scratch)
 - [Part 4: Core Subsystem Details](#part-4-core-subsystem-details)
 - [Part 5: Key Design Decisions and Conventions](#part-5-key-design-decisions-and-conventions)
 - [Appendix: Complete File Listing and Interface Quick Reference](#appendix-complete-file-listing-and-interface-quick-reference)
@@ -54,14 +54,14 @@ pkg/channels/
 ├── manager.go           # Unified orchestration: Worker queues, rate limiting, retries, Typing/Placeholder, shared HTTP
 ├── split.go             # Smart long-message splitting (preserves code block integrity)
 ├── telegram/            # Each channel in its own sub-package
-│   ├── init.go          # Factory registration
-│   ├── telegram.go      # Implementation
-│   └── telegram_commands.go
+�?  ├── init.go          # Factory registration
+�?  ├── telegram.go      # Implementation
+�?  └── telegram_commands.go
 ├── discord/
-│   ├── init.go
-│   └── discord.go
+�?  ├── init.go
+�?  └── discord.go
 ├── slack/ line/ onebot/ dingtalk/ feishu/ wecom/ qq/ whatsapp/ whatsapp_native/ maixcam/ pico/
-│   └── ...
+�?  └── ...
 
 pkg/bus/
 ├── bus.go               # MessageBus (buffer 64, safe close + drain)
@@ -77,33 +77,15 @@ pkg/identity/
 ### 1.2 Message Flow Overview
 
 ```
-┌────────────┐      InboundMessage       ┌───────────┐      LLM + Tools      ┌────────────┐
-│  Telegram   │──┐                        │           │                        │            │
-│  Discord    │──┤   PublishInbound()     │           │   PublishOutbound()   │            │
-│  Slack      │──┼──────────────────────▶ │ MessageBus │ ◀─────────────────── │ AgentLoop  │
-│  LINE       │──┤   (buffered chan, 64)  │           │   (buffered chan, 64) │            │
-│  ...        │──┘                        │           │                        │            │
-└────────────┘                            └─────┬─────┘                        └────────────┘
-                                                │
-                            SubscribeOutbound() │  SubscribeOutboundMedia()
-                                                ▼
-                                    ┌───────────────────┐
-                                    │   Manager          │
-                                    │   ├── dispatchOutbound()    Route to Worker queues
-                                    │   ├── dispatchOutboundMedia()
-                                    │   ├── runWorker()           Message split + sendWithRetry()
-                                    │   ├── runMediaWorker()      sendMediaWithRetry()
-                                    │   ├── preSend()             Stop Typing + Undo Reaction + Edit Placeholder
-                                    │   └── runTTLJanitor()       Clean up expired Typing/Placeholder
-                                    └────────┬──────────┘
-                                             │
-                                   channel.Send() / SendMedia()
-                                             │
-                                             ▼
-                                    ┌────────────────┐
-                                    │ Platform APIs   │
-                                    └────────────────┘
-```
+┌────────────�?     InboundMessage       ┌───────────�?     LLM + Tools      ┌────────────�?�? Telegram   │──�?                       �?          �?                       �?           �?�? Discord    │──�?  PublishInbound()     �?          �?  PublishOutbound()   �?           �?�? Slack      │──┼──────────────────────�?�?MessageBus �?◀─────────────────── �?AgentLoop  �?�? LINE       │──�?  (buffered chan, 64)  �?          �?  (buffered chan, 64) �?           �?�? ...        │──�?                       �?          �?                       �?           �?└────────────�?                           └─────┬─────�?                       └────────────�?                                                �?                            SubscribeOutbound() �? SubscribeOutboundMedia()
+                                                �?                                    ┌───────────────────�?                                    �?  Manager          �?                                    �?  ├── dispatchOutbound()    Route to Worker queues
+                                    �?  ├── dispatchOutboundMedia()
+                                    �?  ├── runWorker()           Message split + sendWithRetry()
+                                    �?  ├── runMediaWorker()      sendMediaWithRetry()
+                                    �?  ├── preSend()             Stop Typing + Undo Reaction + Edit Placeholder
+                                    �?  └── runTTLJanitor()       Clean up expired Typing/Placeholder
+                                    └────────┬──────────�?                                             �?                                   channel.Send() / SendMedia()
+                                             �?                                             �?                                    ┌────────────────�?                                    �?Platform APIs   �?                                    └────────────────�?```
 
 ### 1.3 Key Design Principles
 
@@ -118,7 +100,7 @@ pkg/identity/
 
 ---
 
-## Part 2: Migration Guide — From main Branch to Refactored Branch
+## Part 2: Migration Guide �?From main Branch to Refactored Branch
 
 ### 2.1 If You Have Unmerged Channel Changes
 
@@ -162,19 +144,19 @@ Using Telegram as an example, the main changes are:
 package channels
 
 import (
-    "github.com/sipeed/picoclaw/pkg/bus"
-    "github.com/sipeed/picoclaw/pkg/config"
+    "github.com/anyclaw/anyclaw-server/pkg/bus"
+    "github.com/anyclaw/anyclaw-server/pkg/config"
 )
 
 // New code (refactored branch)
 package telegram
 
 import (
-    "github.com/sipeed/picoclaw/pkg/bus"
-    "github.com/sipeed/picoclaw/pkg/channels"     // Reference parent package
-    "github.com/sipeed/picoclaw/pkg/config"
-    "github.com/sipeed/picoclaw/pkg/identity"      // New
-    "github.com/sipeed/picoclaw/pkg/media"          // New (if media support needed)
+    "github.com/anyclaw/anyclaw-server/pkg/bus"
+    "github.com/anyclaw/anyclaw-server/pkg/channels"     // Reference parent package
+    "github.com/anyclaw/anyclaw-server/pkg/config"
+    "github.com/anyclaw/anyclaw-server/pkg/identity"      // New
+    "github.com/anyclaw/anyclaw-server/pkg/media"          // New (if media support needed)
 )
 ```
 
@@ -262,7 +244,7 @@ func (c *TelegramChannel) Send(ctx context.Context, msg bus.OutboundMessage) err
 // New code: must return sentinel errors for Manager to determine retry strategy
 func (c *TelegramChannel) Send(ctx context.Context, msg bus.OutboundMessage) error {
     if !c.IsRunning() {
-        return channels.ErrNotRunning    // ← Manager will not retry
+        return channels.ErrNotRunning    // �?Manager will not retry
     }
     // ...
     if err != nil {
@@ -321,9 +303,9 @@ Create `init.go` for your channel:
 package telegram
 
 import (
-    "github.com/sipeed/picoclaw/pkg/bus"
-    "github.com/sipeed/picoclaw/pkg/channels"
-    "github.com/sipeed/picoclaw/pkg/config"
+    "github.com/anyclaw/anyclaw-server/pkg/bus"
+    "github.com/anyclaw/anyclaw-server/pkg/channels"
+    "github.com/anyclaw/anyclaw-server/pkg/config"
 )
 
 func init() {
@@ -336,11 +318,11 @@ func init() {
 **3h. Import sub-package in Gateway**
 
 ```go
-// cmd/picoclaw/internal/gateway/helpers.go
+// cmd/AnyClaw/internal/gateway/helpers.go
 import (
-    _ "github.com/sipeed/picoclaw/pkg/channels/telegram"   // Triggers init() registration
-    _ "github.com/sipeed/picoclaw/pkg/channels/discord"
-    _ "github.com/sipeed/picoclaw/pkg/channels/your_new_channel"  // New addition
+    _ "github.com/anyclaw/anyclaw-server/pkg/channels/telegram"   // Triggers init() registration
+    _ "github.com/anyclaw/anyclaw-server/pkg/channels/discord"
+    _ "github.com/anyclaw/anyclaw-server/pkg/channels/your_new_channel"  // New addition
 )
 ```
 
@@ -374,7 +356,7 @@ if !c.IsAllowedSender(sender) { return }
 if !c.IsAllowed(senderID) { return }
 ```
 
-`BaseChannel.HandleMessage` already handles this logic internally — no need to duplicate the check in your channel.
+`BaseChannel.HandleMessage` already handles this logic internally �?no need to duplicate the check in your channel.
 
 ### 2.2 If You Have Manager Modifications
 
@@ -393,25 +375,25 @@ The Manager has been completely rewritten. Your modifications will need to accou
 
 Main changes to the Agent Loop:
 
-1. **MediaStore injection**: `agentLoop.SetMediaStore(mediaStore)` — Agent resolves media references produced by tools via MediaStore
-2. **ChannelManager injection**: `agentLoop.SetChannelManager(channelManager)` — Agent can query channel state
+1. **MediaStore injection**: `agentLoop.SetMediaStore(mediaStore)` �?Agent resolves media references produced by tools via MediaStore
+2. **ChannelManager injection**: `agentLoop.SetChannelManager(channelManager)` �?Agent can query channel state
 3. **OutboundMediaMessage**: Agent now sends media messages via `bus.PublishOutboundMedia()` instead of embedding them in text replies
 4. **extractPeer**: Routing uses `msg.Peer` structured fields instead of Metadata lookups
 
 ---
 
-## Part 3: New Channel Development Guide — Implementing a Channel from Scratch
+## Part 3: New Channel Development Guide �?Implementing a Channel from Scratch
 
 ### 3.1 Minimum Implementation Checklist
 
 To add a new chat platform (e.g., `matrix`), you need to:
 
-1. ✅ Create sub-package directory `pkg/channels/matrix/`
-2. ✅ Create `init.go` — factory registration
-3. ✅ Create `matrix.go` — channel implementation
-4. ✅ Add blank import in Gateway helpers
-5. ✅ Add config check in Manager.initChannels()
-6. ✅ Add config struct in `pkg/config/`
+1. �?Create sub-package directory `pkg/channels/matrix/`
+2. �?Create `init.go` �?factory registration
+3. �?Create `matrix.go` �?channel implementation
+4. �?Add blank import in Gateway helpers
+5. �?Add config check in Manager.initChannels()
+6. �?Add config struct in `pkg/config/`
 
 ### 3.2 Complete Template
 
@@ -421,9 +403,9 @@ To add a new chat platform (e.g., `matrix`), you need to:
 package matrix
 
 import (
-    "github.com/sipeed/picoclaw/pkg/bus"
-    "github.com/sipeed/picoclaw/pkg/channels"
-    "github.com/sipeed/picoclaw/pkg/config"
+    "github.com/anyclaw/anyclaw-server/pkg/bus"
+    "github.com/anyclaw/anyclaw-server/pkg/channels"
+    "github.com/anyclaw/anyclaw-server/pkg/config"
 )
 
 func init() {
@@ -442,11 +424,11 @@ import (
     "context"
     "fmt"
 
-    "github.com/sipeed/picoclaw/pkg/bus"
-    "github.com/sipeed/picoclaw/pkg/channels"
-    "github.com/sipeed/picoclaw/pkg/config"
-    "github.com/sipeed/picoclaw/pkg/identity"
-    "github.com/sipeed/picoclaw/pkg/logger"
+    "github.com/anyclaw/anyclaw-server/pkg/bus"
+    "github.com/anyclaw/anyclaw-server/pkg/channels"
+    "github.com/anyclaw/anyclaw-server/pkg/config"
+    "github.com/anyclaw/anyclaw-server/pkg/identity"
+    "github.com/anyclaw/anyclaw-server/pkg/logger"
 )
 
 // MatrixChannel implements channels.Channel for the Matrix protocol.
@@ -556,7 +538,7 @@ func (c *MatrixChannel) handleIncoming(roomID, senderID, displayName, content st
     var mediaRefs []string
     store := c.GetMediaStore()
     if store != nil {
-        // Download attachment locally → store.Store() → get ref
+        // Download attachment locally �?store.Store() �?get ref
         // mediaRefs = append(mediaRefs, ref)
     }
 
@@ -590,7 +572,7 @@ func (c *MatrixChannel) sendToMatrix(ctx context.Context, roomID, content string
 
 Depending on platform capabilities, your channel can optionally implement the following interfaces:
 
-#### MediaSender — Send Media Attachments
+#### MediaSender �?Send Media Attachments
 
 ```go
 // If the platform supports sending images/files/audio/video
@@ -625,7 +607,7 @@ func (c *MatrixChannel) SendMedia(ctx context.Context, msg bus.OutboundMediaMess
 }
 ```
 
-#### TypingCapable — Typing Indicator
+#### TypingCapable �?Typing Indicator
 
 ```go
 // If the platform supports "typing..." indicators
@@ -642,7 +624,7 @@ func (c *MatrixChannel) StartTyping(ctx context.Context, chatID string) (stop fu
 }
 ```
 
-#### ReactionCapable — Message Reaction Indicator
+#### ReactionCapable �?Message Reaction Indicator
 
 ```go
 // If the platform supports adding emoji reactions to inbound messages (e.g., Slack's 👀, OneBot's emoji 289)
@@ -659,7 +641,7 @@ func (c *MatrixChannel) ReactToMessage(ctx context.Context, chatID, messageID st
 }
 ```
 
-#### MessageEditor — Message Editing
+#### MessageEditor �?Message Editing
 
 ```go
 // If the platform supports editing sent messages (used for Placeholder replacement)
@@ -669,7 +651,7 @@ func (c *MatrixChannel) EditMessage(ctx context.Context, chatID, messageID, cont
 }
 ```
 
-#### PlaceholderCapable — Placeholder Messages
+#### PlaceholderCapable �?Placeholder Messages
 
 ```go
 // If the platform supports sending placeholder messages (e.g. "Thinking... 💭"),
@@ -695,7 +677,7 @@ func (c *MatrixChannel) SendPlaceholder(ctx context.Context, chatID string) (str
 }
 ```
 
-#### WebhookHandler — HTTP Webhook Reception
+#### WebhookHandler �?HTTP Webhook Reception
 
 ```go
 // If the channel receives messages via webhook (rather than long-polling/WebSocket)
@@ -708,7 +690,7 @@ func (c *MatrixChannel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-#### HealthChecker — Health Check Endpoint
+#### HealthChecker �?Health Check Endpoint
 
 ```go
 func (c *MatrixChannel) HealthPath() string {
@@ -732,19 +714,19 @@ func (c *MatrixChannel) HealthHandler(w http.ResponseWriter, r *http.Request) {
 ```go
 // Automatically executed inside BaseChannel.HandleMessage (no manual calls needed):
 if c.owner != nil && c.placeholderRecorder != nil {
-    // Typing — independent pipeline
+    // Typing �?independent pipeline
     if tc, ok := c.owner.(TypingCapable); ok {
         if stop, err := tc.StartTyping(ctx, chatID); err == nil {
             c.placeholderRecorder.RecordTypingStop(c.name, chatID, stop)
         }
     }
-    // Reaction — independent pipeline
+    // Reaction �?independent pipeline
     if rc, ok := c.owner.(ReactionCapable); ok && messageID != "" {
         if undo, err := rc.ReactToMessage(ctx, chatID, messageID); err == nil {
             c.placeholderRecorder.RecordReactionUndo(c.name, chatID, undo)
         }
     }
-    // Placeholder — independent pipeline
+    // Placeholder �?independent pipeline
     if pc, ok := c.owner.(PlaceholderCapable); ok {
         if phID, err := pc.SendPlaceholder(ctx, chatID); err == nil && phID != "" {
             c.placeholderRecorder.RecordPlaceholder(c.name, chatID, phID)
@@ -761,7 +743,7 @@ if c.owner != nil && c.placeholderRecorder != nil {
 - Channels that don't implement these interfaces are unaffected (type assertions will fail and be skipped)
 - `PlaceholderCapable`'s `SendPlaceholder` method internally decides whether to send based on the configured `PlaceholderConfig.Enabled`; returning `("", nil)` skips registration
 
-**Owner Injection**: Manager automatically calls `SetOwner(ch)` in `initChannel` to inject the concrete channel into BaseChannel — no manual setup required from developers.
+**Owner Injection**: Manager automatically calls `SetOwner(ch)` in `initChannel` to inject the concrete channel into BaseChannel �?no manual setup required from developers.
 
 When the Agent finishes processing a message, Manager's `preSend` automatically:
 1. Calls the recorded `stop()` to stop Typing
@@ -810,9 +792,9 @@ if m.config.Channels.Matrix.Enabled && m.config.Channels.Matrix.Token != "" {
 #### Add blank import in Gateway
 
 ```go
-// cmd/picoclaw/internal/gateway/helpers.go
+// cmd/AnyClaw/internal/gateway/helpers.go
 import (
-    _ "github.com/sipeed/picoclaw/pkg/channels/matrix"
+    _ "github.com/anyclaw/anyclaw-server/pkg/channels/matrix"
 )
 ```
 
@@ -838,13 +820,13 @@ type MessageBus struct {
 
 | Method | Behavior |
 |--------|----------|
-| `PublishInbound(ctx, msg)` | Check closed → send to inbound channel → block/timeout/close |
-| `ConsumeInbound(ctx)` | Read from inbound → block/close/cancel |
+| `PublishInbound(ctx, msg)` | Check closed �?send to inbound channel �?block/timeout/close |
+| `ConsumeInbound(ctx)` | Read from inbound �?block/close/cancel |
 | `PublishOutbound(ctx, msg)` | Send to outbound channel |
 | `SubscribeOutbound(ctx)` | Read from outbound (called by Manager dispatcher) |
 | `PublishOutboundMedia(ctx, msg)` | Send to outboundMedia channel |
 | `SubscribeOutboundMedia(ctx)` | Read from outboundMedia (called by Manager media dispatcher) |
-| `Close()` | CAS close → close(done) → drain all channels (**does not close the channels themselves** to avoid concurrent send-on-closed panic) |
+| `Close()` | CAS close �?close(done) �?drain all channels (**does not close the channels themselves** to avoid concurrent send-on-closed panic) |
 
 **Design Notes**:
 - Buffer size increased from 16 to 64 to reduce blocking under burst load
@@ -926,7 +908,7 @@ BaseChannel is the shared abstraction layer for all channels, providing the foll
 | `IsAllowed(senderID string) bool` | Legacy allow-list check (supports `"id\|username"` and `"@username"` formats) |
 | `IsAllowedSender(sender SenderInfo) bool` | New allow-list check (delegates to `identity.MatchAllowed`) |
 | `ShouldRespondInGroup(isMentioned, content) (bool, string)` | Unified group chat trigger filtering logic |
-| `HandleMessage(...)` | Unified inbound message handling: permission check → build MediaScope → auto-trigger Typing/Reaction/Placeholder → publish to Bus |
+| `HandleMessage(...)` | Unified inbound message handling: permission check �?build MediaScope �?auto-trigger Typing/Reaction/Placeholder �?publish to Bus |
 | `SetMediaStore(s) / GetMediaStore()` | MediaStore injected by Manager |
 | `SetPlaceholderRecorder(r) / GetPlaceholderRecorder()` | PlaceholderRecorder injected by Manager |
 | `SetOwner(ch)` | Concrete channel reference injected by Manager (used for Typing/Reaction/Placeholder type assertions in HandleMessage) |
@@ -972,14 +954,14 @@ var (
 ```go
 // Automatically classify based on HTTP status code
 func ClassifySendError(statusCode int, rawErr error) error {
-    // 429 → ErrRateLimit
-    // 5xx → ErrTemporary
-    // 4xx → ErrSendFailed
+    // 429 �?ErrRateLimit
+    // 5xx �?ErrTemporary
+    // 4xx �?ErrSendFailed
 }
 
 // Wrap network errors as temporary
 func ClassifyNetError(err error) error {
-    // → ErrTemporary
+    // �?ErrTemporary
 }
 ```
 
@@ -992,11 +974,11 @@ Base backoff:      500 milliseconds
 Max backoff:       8 seconds
 
 Retry logic:
-  ErrNotRunning → Fail immediately, no retry
-  ErrSendFailed → Fail immediately, no retry
-  ErrRateLimit  → Wait 1s → retry
-  ErrTemporary  → Wait 500ms * 2^attempt (max 8s) → retry
-  Other unknown → Wait 500ms * 2^attempt (max 8s) → retry
+  ErrNotRunning �?Fail immediately, no retry
+  ErrSendFailed �?Fail immediately, no retry
+  ErrRateLimit  �?Wait 1s �?retry
+  ErrTemporary  �?Wait 500ms * 2^attempt (max 8s) �?retry
+  Other unknown �?Wait 500ms * 2^attempt (max 8s) �?retry
 ```
 
 ### 4.6 Manager Orchestration
@@ -1033,7 +1015,7 @@ var channelRateConfig = map[string]float64{
 
 ```
 StartAll:
-  1. Iterate registered channels → channel.Start(ctx)
+  1. Iterate registered channels �?channel.Start(ctx)
   2. Create channelWorker for each successfully started channel
   3. Start goroutines:
      - runWorker (per-channel outbound text)
@@ -1046,8 +1028,8 @@ StartAll:
 StopAll:
   1. Shut down shared HTTP server (5s timeout)
   2. Cancel dispatcher context
-  3. Close text worker queues → wait for drain to complete
-  4. Close media worker queues → wait for drain to complete
+  3. Close text worker queues �?wait for drain to complete
+  4. Close media worker queues �?wait for drain to complete
   5. Stop each channel (channel.Stop)
 ```
 
@@ -1061,9 +1043,9 @@ func (m *Manager) RecordReactionUndo(channel, chatID string, undo func())
 
 // Inbound side: BaseChannel.HandleMessage auto-orchestrates
 // BaseChannel.HandleMessage, before PublishInbound, auto-triggers via owner type assertions:
-//   - TypingCapable.StartTyping       → RecordTypingStop
-//   - ReactionCapable.ReactToMessage  → RecordReactionUndo
-//   - PlaceholderCapable.SendPlaceholder → RecordPlaceholder
+//   - TypingCapable.StartTyping       �?RecordTypingStop
+//   - ReactionCapable.ReactToMessage  �?RecordReactionUndo
+//   - PlaceholderCapable.SendPlaceholder �?RecordPlaceholder
 // All three are independent and do not interfere with each other. Channels don't need to call these manually.
 
 // Outbound side: pre-send processing
@@ -1072,8 +1054,8 @@ func (m *Manager) preSend(ctx, name, msg, ch) bool {
     // 1. Stop Typing (call stored stop function)
     // 2. Undo Reaction (call stored undo function)
     // 3. Attempt to edit Placeholder (if channel implements MessageEditor)
-    //    Success → return true (skip Send)
-    //    Failure → return false (proceed with Send)
+    //    Success �?return true (skip Send)
+    //    Failure �?return false (proceed with Send)
 }
 ```
 
@@ -1081,9 +1063,9 @@ Manager storage is fully separated; three pipelines do not interfere:
 
 ```go
 Manager {
-    typingStops   sync.Map  // "channel:chatID" → typingEntry    ← manages TypingCapable
-    reactionUndos sync.Map  // "channel:chatID" → reactionEntry  ← manages ReactionCapable
-    placeholders  sync.Map  // "channel:chatID" → placeholderEntry
+    typingStops   sync.Map  // "channel:chatID" �?typingEntry    �?manages TypingCapable
+    reactionUndos sync.Map  // "channel:chatID" �?reactionEntry  �?manages ReactionCapable
+    placeholders  sync.Map  // "channel:chatID" �?placeholderEntry
 }
 ```
 
@@ -1130,7 +1112,7 @@ type MediaStore interface {
   - Phase 1 (holding lock): collect and delete entries from map
   - Phase 2 (no lock): delete files from disk
   - Purpose: minimize lock contention
-- **TTL Cleanup**: `NewFileMediaStoreWithCleanup` → `Start()` launches background cleanup goroutine
+- **TTL Cleanup**: `NewFileMediaStoreWithCleanup` �?`Start()` launches background cleanup goroutine
 - Cleanup interval and max TTL are controlled by configuration
 
 ### 4.9 Identity
@@ -1140,7 +1122,7 @@ type MediaStore interface {
 ```go
 // Build canonical ID
 func BuildCanonicalID(platform, platformID string) string
-// → "telegram:123456"
+// �?"telegram:123456"
 
 // Parse canonical ID
 func ParseCanonicalID(canonical string) (platform, id string, ok bool)
@@ -1162,8 +1144,8 @@ func MatchAllowed(sender bus.SenderInfo, allowed string) bool
 **File**: `pkg/channels/manager.go`'s `SetupHTTPServer`
 
 Manager creates a single `http.Server` and auto-discovers and registers:
-- Channels implementing `WebhookHandler` → mounted at `wh.WebhookPath()`
-- Channels implementing `HealthChecker` → mounted at `hc.HealthPath()`
+- Channels implementing `WebhookHandler` �?mounted at `wh.WebhookPath()`
+- Channels implementing `HealthChecker` �?mounted at `hc.HealthPath()`
 - Global health endpoint registered by `health.Server.RegisterOnMux`
 
 Timeout configuration: ReadTimeout = 30s, WriteTimeout = 30s
@@ -1189,9 +1171,9 @@ Timeout configuration: ReadTimeout = 30s, WriteTimeout = 30s
 ### 5.2 Metadata Field Usage Conventions
 
 **Do NOT put the following information in Metadata anymore**:
-- `peer_kind` / `peer_id` → Use `InboundMessage.Peer`
-- `message_id` → Use `InboundMessage.MessageID`
-- `sender_platform` / `sender_username` → Use `InboundMessage.Sender`
+- `peer_kind` / `peer_id` �?Use `InboundMessage.Peer`
+- `message_id` �?Use `InboundMessage.MessageID`
+- `sender_platform` / `sender_username` �?Use `InboundMessage.Sender`
 
 **Metadata should only be used for**:
 - Channel-specific extension information (e.g., Telegram's `reply_to_message_id`)
@@ -1209,11 +1191,11 @@ Timeout configuration: ReadTimeout = 30s, WriteTimeout = 30s
 ### 5.4 Testing Conventions
 
 Existing test files:
-- `pkg/channels/base_test.go` — BaseChannel unit tests
-- `pkg/channels/manager_test.go` — Manager unit tests
-- `pkg/channels/split_test.go` — Message splitting tests
-- `pkg/channels/errors_test.go` — Error type tests
-- `pkg/channels/errutil_test.go` — Error classification tests
+- `pkg/channels/base_test.go` �?BaseChannel unit tests
+- `pkg/channels/manager_test.go` �?Manager unit tests
+- `pkg/channels/split_test.go` �?Message splitting tests
+- `pkg/channels/errors_test.go` �?Error type tests
+- `pkg/channels/errutil_test.go` �?Error classification tests
 
 To add tests for a new channel:
 ```bash
@@ -1253,14 +1235,14 @@ make test                                       # Full test suite
 | `pkg/channels/slack/` | `"slack"` | ReactionCapable, MediaSender |
 | `pkg/channels/line/` | `"line"` | TypingCapable, MediaSender, WebhookHandler |
 | `pkg/channels/onebot/` | `"onebot"` | ReactionCapable, MediaSender |
-| `pkg/channels/dingtalk/` | `"dingtalk"` | — |
-| `pkg/channels/feishu/` | `"feishu"` | — (architecture-specific build tags: `feishu_32.go` / `feishu_64.go`) |
+| `pkg/channels/dingtalk/` | `"dingtalk"` | �?|
+| `pkg/channels/feishu/` | `"feishu"` | �?(architecture-specific build tags: `feishu_32.go` / `feishu_64.go`) |
 | `pkg/channels/wecom/` | `"wecom"` | WebhookHandler, HealthChecker |
 | `pkg/channels/wecom/` | `"wecom_app"` | MediaSender, WebhookHandler, HealthChecker |
-| `pkg/channels/qq/` | `"qq"` | — |
-| `pkg/channels/whatsapp/` | `"whatsapp"` | — (Bridge mode) |
-| `pkg/channels/whatsapp_native/` | `"whatsapp_native"` | — (Native whatsmeow mode) |
-| `pkg/channels/maixcam/` | `"maixcam"` | — |
+| `pkg/channels/qq/` | `"qq"` | �?|
+| `pkg/channels/whatsapp/` | `"whatsapp"` | �?(Bridge mode) |
+| `pkg/channels/whatsapp_native/` | `"whatsapp_native"` | �?(Native whatsmeow mode) |
+| `pkg/channels/maixcam/` | `"maixcam"` | �?|
 | `pkg/channels/pico/` | `"pico"` | TypingCapable, PlaceholderCapable, MessageEditor, WebhookHandler |
 
 ### A.3 Interface Quick Reference
@@ -1333,7 +1315,7 @@ agentLoop  := agent.NewAgentLoop(cfg, msgBus, provider)
 mediaStore := media.NewFileMediaStoreWithCleanup(cleanerConfig)
 mediaStore.Start()
 
-// 3. Create Channel Manager (triggers initChannels → factory lookup → construct → inject MediaStore/PlaceholderRecorder/Owner)
+// 3. Create Channel Manager (triggers initChannels �?factory lookup �?construct �?inject MediaStore/PlaceholderRecorder/Owner)
 channelManager := channels.NewManager(cfg, msgBus, mediaStore)
 
 // 4. Inject references
@@ -1373,7 +1355,7 @@ agentLoop.Stop()               // Stop Agent
 
 3. **WeCom has two factories**: `"wecom"` (Bot mode, webhook only) and `"wecom_app"` (App mode, supports MediaSender) are registered separately. Both implement `WebhookHandler` and `HealthChecker`.
 
-4. **Pico Protocol**: `pkg/channels/pico/` implements a custom PicoClaw native protocol channel that receives messages via WebSocket webhook (`/pico/ws`).
+4. **Pico Protocol**: `pkg/channels/pico/` implements a custom AnyClaw native protocol channel that receives messages via WebSocket webhook (`/pico/ws`).
 
 5. **WhatsApp has two modes**: `"whatsapp"` (Bridge mode, communicates via external bridge URL) and `"whatsapp_native"` (native whatsmeow mode, connects directly to WhatsApp). Manager selects which to initialize based on `WhatsAppConfig.UseNative`.
 

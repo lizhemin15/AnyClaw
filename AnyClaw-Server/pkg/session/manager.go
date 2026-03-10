@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/anyclaw/anyclaw-server/pkg/providers"
 )
 
 type Session struct {
@@ -162,7 +162,7 @@ func (sm *SessionManager) Save(key string) error {
 	filename := sanitizeFilename(key)
 
 	// filepath.IsLocal rejects empty names, "..", absolute paths, and
-	// OS-reserved device names (NUL, COM1 â€¦ on Windows).
+	// OS-reserved device names (NUL, COM1 â€?on Windows).
 	// The extra checks reject "." and any directory separators so that
 	// the session file is always written directly inside sm.storage.
 	if filename == "." || !filepath.IsLocal(filename) || strings.ContainsAny(filename, `/\`) {

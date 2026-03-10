@@ -13,11 +13,11 @@ import (
 	"github.com/tencent-connect/botgo/token"
 	"golang.org/x/oauth2"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/channels"
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/identity"
-	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/anyclaw/anyclaw-server/pkg/bus"
+	"github.com/anyclaw/anyclaw-server/pkg/channels"
+	"github.com/anyclaw/anyclaw-server/pkg/config"
+	"github.com/anyclaw/anyclaw-server/pkg/identity"
+	"github.com/anyclaw/anyclaw-server/pkg/logger"
 )
 
 type QQChannel struct {
@@ -232,8 +232,7 @@ func (c *QQChannel) handleGroupATMessage() event.GroupATMessageEventHandler {
 			"length": len(content),
 		})
 
-		// 转发到消息总线（使用 GroupID 作为 ChatID）
-		metadata := map[string]string{
+		// 转发到消息总线（使�?GroupID 作为 ChatID�?		metadata := map[string]string{
 			"group_id": data.GroupID,
 		}
 
@@ -262,8 +261,7 @@ func (c *QQChannel) handleGroupATMessage() event.GroupATMessageEventHandler {
 	}
 }
 
-// isDuplicate 检查消息是否重复
-func (c *QQChannel) isDuplicate(messageID string) bool {
+// isDuplicate 检查消息是否重�?func (c *QQChannel) isDuplicate(messageID string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -275,8 +273,7 @@ func (c *QQChannel) isDuplicate(messageID string) bool {
 
 	// 简单清理：限制 map 大小
 	if len(c.processedIDs) > 10000 {
-		// 清空一半
-		count := 0
+		// 清空一�?		count := 0
 		for id := range c.processedIDs {
 			if count >= 5000 {
 				break

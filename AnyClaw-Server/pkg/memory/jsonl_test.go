@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/anyclaw/anyclaw-server/pkg/providers"
 )
 
 func newTestStore(t *testing.T) *JSONLStore {
@@ -313,7 +313,7 @@ func TestTruncateHistory_KeepMoreThanExists(t *testing.T) {
 		}
 	}
 
-	// Keep 100, but only 3 exist â€” should keep all.
+	// Keep 100, but only 3 exist â€?should keep all.
 	err := store.TruncateHistory(ctx, "few", 100)
 	if err != nil {
 		t.Fatalf("TruncateHistory: %v", err)
@@ -487,7 +487,7 @@ func TestCompact_NoOpWhenNoSkip(t *testing.T) {
 		}
 	}
 
-	// Compact without prior truncation â€” should be a no-op.
+	// Compact without prior truncation â€?should be a no-op.
 	err := store.Compact(ctx, "noop")
 	if err != nil {
 		t.Fatalf("Compact: %v", err)
@@ -705,7 +705,7 @@ func TestConcurrent_AddAndRead(t *testing.T) {
 
 func TestConcurrent_SummarizeRace(t *testing.T) {
 	// Simulates the #704 race: one goroutine adds messages while
-	// another truncates + sets summary â€” like summarizeSession().
+	// another truncates + sets summary â€?like summarizeSession().
 	store := newTestStore(t)
 	ctx := context.Background()
 

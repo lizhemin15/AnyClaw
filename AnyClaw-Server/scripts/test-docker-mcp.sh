@@ -4,7 +4,7 @@
 set -e
 
 COMPOSE_FILE="docker/docker-compose.full.yml"
-SERVICE="picoclaw-agent"
+SERVICE="anyclaw-agent"
 
 echo "ðŸ§ª Testing MCP tools in Docker container (full-featured image)..."
 echo ""
@@ -14,31 +14,31 @@ echo "ðŸ“¦ Building Docker image..."
 docker compose -f "$COMPOSE_FILE" build "$SERVICE"
 
 # Test npx
-echo "âœ… Testing npx..."
+echo "âœ?Testing npx..."
 docker compose -f "$COMPOSE_FILE" run --rm --entrypoint sh "$SERVICE" -c 'npx --version'
 
 # Test npm
-echo "âœ… Testing npm..."
+echo "âœ?Testing npm..."
 docker compose -f "$COMPOSE_FILE" run --rm --entrypoint sh "$SERVICE" -c 'npm --version'
 
 # Test node
-echo "âœ… Testing Node.js..."
+echo "âœ?Testing Node.js..."
 docker compose -f "$COMPOSE_FILE" run --rm --entrypoint sh "$SERVICE" -c 'node --version'
 
 # Test git
-echo "âœ… Testing git..."
+echo "âœ?Testing git..."
 docker compose -f "$COMPOSE_FILE" run --rm --entrypoint sh "$SERVICE" -c 'git --version'
 
 # Test python
-echo "âœ… Testing Python..."
+echo "âœ?Testing Python..."
 docker compose -f "$COMPOSE_FILE" run --rm --entrypoint sh "$SERVICE" -c 'python3 --version'
 
 # Test uv
-echo "âœ… Testing uv..."
+echo "âœ?Testing uv..."
 docker compose -f "$COMPOSE_FILE" run --rm --entrypoint sh "$SERVICE" -c 'uv --version'
 
 # Test MCP server installation (quick)
-echo "âœ… Testing @modelcontextprotocol/server-filesystem MCP server install with npx..."
+echo "âœ?Testing @modelcontextprotocol/server-filesystem MCP server install with npx..."
 docker compose -f "$COMPOSE_FILE" run --rm --entrypoint sh "$SERVICE" -c '</dev/null timeout 5 npx -y @modelcontextprotocol/server-filesystem /tmp || true'
 
 echo ""

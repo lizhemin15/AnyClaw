@@ -4,15 +4,15 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/anyclaw/anyclaw-server/pkg/providers"
 )
 
 // lookbackWindow is the number of recent history entries scanned for tool calls.
-// Six entries covers roughly one full tool-use round-trip (user â†’ assistant+tool_call â†’ tool_result â†’ assistant).
+// Six entries covers roughly one full tool-use round-trip (user â†?assistant+tool_call â†?tool_result â†?assistant).
 const lookbackWindow = 6
 
 // Features holds the structural signals extracted from a message and its session context.
-// Every dimension is language-agnostic by construction â€” no keyword or pattern matching
+// Every dimension is language-agnostic by construction â€?no keyword or pattern matching
 // against natural-language content. This ensures consistent routing for all locales.
 type Features struct {
 	// TokenEstimate is a proxy for token count.
@@ -52,7 +52,7 @@ func ExtractFeatures(msg string, history []providers.Message) Features {
 
 // estimateTokens returns a token count proxy that handles both CJK and Latin text.
 // CJK runes (U+2E80â€“U+9FFF, U+F900â€“U+FAFF, U+AC00â€“U+D7AF) map to roughly one
-// token each, while non-CJK runes average ~0.25 tokens/rune (â‰ˆ4 chars per token
+// token each, while non-CJK runes average ~0.25 tokens/rune (â‰? chars per token
 // for English). Splitting the count this way avoids the 3x underestimation that a
 // flat rune_count/3 would produce for Chinese, Japanese, and Korean text.
 func estimateTokens(msg string) int {
@@ -98,8 +98,7 @@ func countRecentToolCalls(history []providers.Message) int {
 
 // hasAttachments returns true when the message content contains embedded media.
 // It checks for base64 data URIs (data:image/, data:audio/, data:video/) and
-// common image/audio URL extensions. This is intentionally conservative â€”
-// false negatives (missing an attachment) just mean the routing falls back to
+// common image/audio URL extensions. This is intentionally conservative â€?// false negatives (missing an attachment) just mean the routing falls back to
 // the primary model anyway.
 func hasAttachments(msg string) bool {
 	lower := strings.ToLower(msg)

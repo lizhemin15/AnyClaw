@@ -10,7 +10,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 
-	"github.com/sipeed/picoclaw/pkg/providers/protocoltypes"
+	"github.com/anyclaw/anyclaw-server/pkg/providers/protocoltypes"
 )
 
 type (
@@ -233,8 +233,8 @@ func buildParams(
 
 	// Extended Thinking / Adaptive Thinking
 	// The thinking_level value directly determines the API parameter format:
-	//   "adaptive" â†’ {thinking: {type: "adaptive"}} + output_config.effort
-	//   "low/medium/high/xhigh" â†’ {thinking: {type: "enabled", budget_tokens: N}}
+	//   "adaptive" â†?{thinking: {type: "adaptive"}} + output_config.effort
+	//   "low/medium/high/xhigh" â†?{thinking: {type: "enabled", budget_tokens: N}}
 	if level, ok := options["thinking_level"].(string); ok && level != "" && level != "off" {
 		applyThinkingConfig(&params, level)
 	}
@@ -284,10 +284,10 @@ func applyThinkingConfig(params *anthropic.MessageNewParams, level string) {
 // levelToBudget maps a thinking level to budget_tokens.
 // Values are based on Anthropic's recommendations and community best practices:
 //
-//	low    =  4,096  â€” simple reasoning, quick debugging (Claude Code "think")
-//	medium = 16,384  â€” Anthropic recommended sweet spot for most tasks
-//	high   = 32,000  â€” complex architecture, deep analysis (diminishing returns above this)
-//	xhigh  = 64,000  â€” extreme reasoning, research problems, benchmarks
+//	low    =  4,096  â€?simple reasoning, quick debugging (Claude Code "think")
+//	medium = 16,384  â€?Anthropic recommended sweet spot for most tasks
+//	high   = 32,000  â€?complex architecture, deep analysis (diminishing returns above this)
+//	xhigh  = 64,000  â€?extreme reasoning, research problems, benchmarks
 //
 // Note: For Claude 4.6+, prefer adaptive thinking over manual budget_tokens.
 func levelToBudget(level string) int {

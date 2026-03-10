@@ -11,15 +11,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/channels"
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/identity"
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/anyclaw/anyclaw-server/pkg/bus"
+	"github.com/anyclaw/anyclaw-server/pkg/channels"
+	"github.com/anyclaw/anyclaw-server/pkg/config"
+	"github.com/anyclaw/anyclaw-server/pkg/identity"
+	"github.com/anyclaw/anyclaw-server/pkg/logger"
+	"github.com/anyclaw/anyclaw-server/pkg/utils"
 )
 
-// WeComBotChannel implements the Channel interface for WeCom Bot (企业微信智能机器人)
+// WeComBotChannel implements the Channel interface for WeCom Bot (企业微信智能机器�?
 // Uses webhook callback mode - simpler than WeCom App but only supports passive replies
 type WeComBotChannel struct {
 	*channels.BaseChannel
@@ -223,7 +223,7 @@ func (c *WeComBotChannel) handleVerification(ctx context.Context, w http.Respons
 	}
 
 	// Decrypt echostr
-	// For AIBOT (智能机器人), receiveid should be empty string ""
+	// For AIBOT (智能机器�?, receiveid should be empty string ""
 	// Reference: https://developer.work.weixin.qq.com/document/path/101033
 	decryptedEchoStr, err := decryptMessageWithVerify(echostr, c.config.EncodingAESKey, "")
 	if err != nil {
@@ -285,7 +285,7 @@ func (c *WeComBotChannel) handleMessageCallback(ctx context.Context, w http.Resp
 	}
 
 	// Decrypt message
-	// For AIBOT (智能机器人), receiveid should be empty string ""
+	// For AIBOT (智能机器�?, receiveid should be empty string ""
 	// Reference: https://developer.work.weixin.qq.com/document/path/101033
 	decryptedMsg, err := decryptMessageWithVerify(encryptedMsg.Encrypt, c.config.EncodingAESKey, "")
 	if err != nil {
