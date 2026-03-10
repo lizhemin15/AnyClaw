@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAdminConfig, putAdminConfig, type AdminConfig, type Channel } from '../api'
+import { getAdminConfig, putAdminConfig, testChannelConfig, type AdminConfig, type Channel } from '../api'
 
 function genId() {
   return 'c-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
@@ -19,6 +19,10 @@ export default function AdminConfig() {
   const [addingChannel, setAddingChannel] = useState(false)
   const [newChannel, setNewChannel] = useState({ name: '', api_key: '', api_base: '', model: 'gpt-4o' })
   const [editingChannel, setEditingChannel] = useState<string | null>(null)
+  const [testingChannel, setTestingChannel] = useState<string | null>(null)
+  const [testResult, setTestResult] = useState<{ id: string; ok: boolean; message: string } | null>(null)
+  const [testingNew, setTestingNew] = useState(false)
+  const [newTestResult, setNewTestResult] = useState<{ ok: boolean; message: string } | null>(null)
 
   useEffect(() => {
     getAdminConfig()
@@ -55,6 +59,7 @@ export default function AdminConfig() {
 
   const addChannel = () => {
     if (!form || !newChannel.name.trim() || !newChannel.api_key.trim()) return
+    setNewTestResult(null)
     const ch: Channel = {
       id: genId(),
       name: newChannel.name.trim(),
@@ -115,6 +120,49 @@ export default function AdminConfig() {
             : (c.models || []),
       })),
     })
+  }
+
+  const handleTestNewChannel = async () => {
+    if (!newChannel.api_key?.trim()) {
+      setNewTestResult({ ok: false, message: '请先填写 API Key' })
+      return
+    }
+    setTestingNew(true)
+    setNewTestResult(null)
+    try {
+      const res = await testChannelConfig({
+        api_base: newChannel.api_base?.trim() || 'https://api.openai.com/v1',
+        api_key: newChannel.api_key.trim(),
+        model: (newChannel.model || 'gpt-4o').trim(),
+      })
+      setNewTestResult({ ok: res.ok, message: res.message })
+    } catch (err) {
+      setNewTestResult({ ok: false, message: err instanceof Error ? err.message : '测试失败' })
+    } finally {
+      setTestingNew(false)
+    }
+  }
+
+  const handleTestChannel = async (ch: Channel) => {
+    const model = (ch.models || [])[0]?.name || 'gpt-4o'
+    if (!ch.api_key?.trim()) {
+      setTestResult({ id: ch.id, ok: false, message: '请先填写 API Key' })
+      return
+    }
+    setTestingChannel(ch.id)
+    setTestResult(null)
+    try {
+      const res = await testChannelConfig({
+        api_base: ch.api_base?.trim() || 'https://api.openai.com/v1',
+        api_key: ch.api_key.trim(),
+        model,
+      })
+      setTestResult({ id: ch.id, ok: res.ok, message: res.message })
+    } catch (err) {
+      setTestResult({ id: ch.id, ok: false, message: err instanceof Error ? err.message : '测试失败' })
+    } finally {
+      setTestingChannel(null)
+    }
   }
 
   const channels = form?.channels ?? []
@@ -198,12 +246,37 @@ export default function AdminConfig() {
                   placeholder="模型，如 gpt-4o"
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-32 font-mono"
                 />
+                <button
+                  type="button"
+                  onClick={handleTestNewChannel}
+                  disabled={testingNew || !newChannel.api_key?.trim()}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50"
+                >
+                  {testingNew ? '测试中...' : '测试连通性'}
+                </button>
                 <button type="button" onClick={addChannel} className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
                   添加
                 </button>
-                <button type="button" onClick={() => setAddingChannel(false)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddingChannel(false)
+                    setNewTestResult(null)
+                  }}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+                >
                   取消
                 </button>
+                {newTestResult && (
+                  <span
+                    className={`text-xs px-2 py-1 rounded ${
+                      newTestResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+                    }`}
+                  >
+                    {newTestResult.ok ? '✓ ' : '✗ '}
+                    {newTestResult.message}
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -274,10 +347,28 @@ export default function AdminConfig() {
                         编辑
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => handleTestChannel(ch)}
+                      disabled={testingChannel === ch.id || !ch.api_key?.trim()}
+                      className="text-sm text-slate-600 hover:text-slate-800 disabled:opacity-50"
+                    >
+                      {testingChannel === ch.id ? '测试中...' : '测试连通性'}
+                    </button>
                     <button type="button" onClick={() => removeChannel(ch.id)} className="text-sm text-red-600 hover:text-red-700">
                       删除
                     </button>
                   </div>
+                  {testResult?.id === ch.id && (
+                    <div
+                      className={`mt-2 text-xs px-3 py-1.5 rounded ${
+                        testResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+                      }`}
+                    >
+                      {testResult.ok ? '✓ ' : '✗ '}
+                      {testResult.message}
+                    </div>
+                  )}
                 </div>
               ))
             )}

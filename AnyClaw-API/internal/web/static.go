@@ -21,19 +21,24 @@ func SPAHandler() (http.Handler, error) {
 		return nil, err
 	}
 	fileServer := http.FileServer(http.FS(sub))
+	indexHTML, _ := fs.ReadFile(sub, "index.html")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		if path == "/" {
 			path = "/index.html"
 		}
-		f, err := fs.Stat(sub, path[1:])
+		cleanPath := path
+		if len(cleanPath) > 1 && cleanPath[0] == '/' {
+			cleanPath = cleanPath[1:]
+		}
+		f, err := fs.Stat(sub, cleanPath)
 		if err == nil && !f.IsDir() {
 			fileServer.ServeHTTP(w, r)
 			return
 		}
-		// SPA fallback
-		r.URL.Path = "/index.html"
-		r.URL.RawPath = "/index.html"
-		fileServer.ServeHTTP(w, r)
+		// SPA fallback: serve index.html directly to avoid FileServer 301 on non-file paths
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write(indexHTML)
 	}), nil
 }

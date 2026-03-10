@@ -366,15 +366,20 @@ export default function Chat() {
               })}
             </div>
             {typing && (
-              <div className="flex justify-start mt-3">
-                <div className="typing-breathe bg-white border border-slate-200 rounded-2xl rounded-bl-md px-4 py-2.5 shadow-sm flex items-center gap-1">
-                  <span className="text-slate-500 text-sm italic">{TYPING_PHRASES[typingPhraseIndex]}</span>
-                  <span className="flex gap-0.5">
-                    {[1, 2, 3].map((i) => (
-                      <span key={i} className="typing-dot w-1 h-1 rounded-full bg-slate-400 inline-block" />
-                    ))}
-                  </span>
+              <div className="flex flex-col gap-2 mt-3">
+                <div className="flex justify-start">
+                  <div className="typing-breathe bg-white border border-slate-200 rounded-2xl rounded-bl-md px-4 py-2.5 shadow-sm flex items-center gap-1">
+                    <span className="text-slate-500 text-sm italic">{TYPING_PHRASES[typingPhraseIndex]}</span>
+                    <span className="flex gap-0.5">
+                      {[1, 2, 3].map((i) => (
+                        <span key={i} className="typing-dot w-1 h-1 rounded-full bg-slate-400 inline-block" />
+                      ))}
+                    </span>
+                  </div>
                 </div>
+                <p className="text-slate-400 text-xs text-center px-2">
+                  可离开页面，回答会继续。请耐心等待～
+                </p>
               </div>
             )}
           </>
