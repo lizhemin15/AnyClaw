@@ -67,6 +67,33 @@ func (c *Config) FindChannelForModel(model string) (apiBase, apiKey string) {
 			}
 		}
 	}
+	// 无精确匹配时，按模型名推断渠道（gpt->openai风格, claude->anthropic风格）
+	for _, ch := range c.Channels {
+		if !ch.Enabled || ch.APIKey == "" {
+			continue
+		}
+		base := ch.APIBase
+		if base == "" {
+			base = "https://api.openai.com/v1"
+		}
+		chLower := strings.ToLower(ch.Name)
+		if (strings.Contains(model, "gpt") || strings.Contains(model, "openai")) && (strings.Contains(chLower, "openai") || strings.Contains(chLower, "openrouter")) {
+			return strings.TrimSuffix(base, "/"), ch.APIKey
+		}
+		if strings.Contains(model, "claude") && strings.Contains(chLower, "anthropic") {
+			return strings.TrimSuffix(base, "/"), ch.APIKey
+		}
+	}
+	// 最后尝试：任意有模型的已启用渠道
+	for _, ch := range c.Channels {
+		if ch.Enabled && ch.APIKey != "" && len(ch.Models) > 0 {
+			base := ch.APIBase
+			if base == "" {
+				base = "https://api.openai.com/v1"
+			}
+			return strings.TrimSuffix(base, "/"), ch.APIKey
+		}
+	}
 	return "", ""
 }
 

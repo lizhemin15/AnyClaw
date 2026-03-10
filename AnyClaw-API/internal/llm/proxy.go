@@ -108,16 +108,18 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	model, _ := req["model"].(string)
-	if model == "" {
-		http.Error(w, `{"error":{"message":"model required"}}`, http.StatusBadRequest)
-		return
-	}
-
 	cfg, cfgErr := p.loadConfig()
 	if cfgErr != nil {
 		http.Error(w, `{"error":{"message":"config error"}}`, http.StatusInternalServerError)
 		return
 	}
+	if model == "" {
+		model = cfg.GetEnabledModel()
+	}
+	if model == "" {
+		model = "gpt-4o"
+	}
+	req["model"] = model
 	apiBase, apiKey := cfg.FindChannelForModel(model)
 	if apiBase == "" || apiKey == "" {
 		log.Printf("[llm] no key for model %q", model)
@@ -125,8 +127,9 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	bodyBytes, _ := json.Marshal(req)
 	url := strings.TrimSuffix(apiBase, "/") + "/chat/completions"
-	proxyReq, err := http.NewRequestWithContext(r.Context(), "POST", url, bytes.NewReader(body))
+	proxyReq, err := http.NewRequestWithContext(r.Context(), "POST", url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		http.Error(w, `{"error":{"message":"internal error"}}`, http.StatusInternalServerError)
 		return

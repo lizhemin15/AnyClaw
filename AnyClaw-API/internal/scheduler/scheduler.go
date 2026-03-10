@@ -96,8 +96,14 @@ func (s *Scheduler) Stop(ctx context.Context, hostID, containerID string, instan
 		return nil
 	}
 	if hostID == "" {
-		log.Printf("[scheduler] skip stop: host_id empty for container %s", containerID)
-		return nil
+		// host_id 可能为空（旧实例），尝试在首个已启用 host 上执行 docker rm
+		list, err := s.hosts.ListEnabledHosts()
+		if err != nil || len(list) == 0 {
+			log.Printf("[scheduler] skip stop: host_id empty and no enabled hosts for container %s", containerID)
+			return nil
+		}
+		hostID = list[0].ID
+		log.Printf("[scheduler] host_id empty, trying first enabled host %s for container %s", hostID, containerID)
 	}
 	host, err := s.hosts.GetHost(hostID)
 	if err != nil || host == nil {
