@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAdminConfig, putAdminConfig, type AdminConfig, type Channel } from '../api'
+import { getAdminConfig, putAdminConfig, testChannelConfig, type AdminConfig, type Channel } from '../api'
 
 function genId() {
   return 'c-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
@@ -20,6 +20,7 @@ export default function AdminConfig() {
   const [newChannel, setNewChannel] = useState({ name: '', api_key: '', api_base: '' })
   const [editingChannel, setEditingChannel] = useState<string | null>(null)
   const [newModelByChannel, setNewModelByChannel] = useState<Record<string, string>>({})
+  const [testingKey, setTestingKey] = useState<string | null>(null)
 
   useEffect(() => {
     getAdminConfig()
@@ -135,6 +136,30 @@ export default function AdminConfig() {
     })
   }
 
+  const handleTest = async (ch: Channel, modelName: string) => {
+    const key = `${ch.id}:${modelName}`
+    setTestingKey(key)
+    setError('')
+    setSuccess('')
+    try {
+      const isEditing = editingChannel === ch.id
+      const res = await testChannelConfig(
+        isEditing && ch.api_key && !ch.api_key.startsWith('****')
+          ? { api_base: ch.api_base || 'https://api.openai.com/v1', api_key: ch.api_key, model: modelName }
+          : { channel_id: ch.id, model: modelName }
+      )
+      if (res.ok) {
+        setSuccess(`模型 ${modelName} 连接正常`)
+      } else {
+        setError(`模型 ${modelName} 测试失败: ${res.message}`)
+      }
+    } catch (err) {
+      setError(`测试失败: ${err instanceof Error ? err.message : '未知错误'}`)
+    } finally {
+      setTestingKey(null)
+    }
+  }
+
   const channels = form?.channels ?? []
   const enabledModel = channels.flatMap((c) => c.models || []).find((m) => m.enabled)
 
@@ -157,7 +182,7 @@ export default function AdminConfig() {
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-slate-800">渠道管理</h1>
         <p className="text-sm text-slate-500 mt-1">
-          添加渠道并配置 API，每个渠道可添加多个模型。一次只能启用一个模型作为新宠物默认。当前默认：{enabledModel ? enabledModel.name : '无（gpt-4o）'}
+          添加渠道并配置 API，每个渠道可添加多个模型。一次只能启用一个模型作为新宠物默认。当前默认：{enabledModel ? enabledModel.name : '无（gpt-4o）'}。点击「测试」可验证模型连通性，区分是配置问题还是分发问题。
         </p>
       </div>
 
@@ -320,6 +345,15 @@ export default function AdminConfig() {
                             className="px-2 py-1 border border-slate-200 rounded text-sm font-mono w-44"
                           />
                           <span className="text-xs text-slate-400">{m.enabled ? '默认' : ''}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleTest(ch, m.name)}
+                            disabled={!!testingKey || !ch.api_key}
+                            title={!ch.api_key ? '请先配置 API Key' : editingChannel !== ch.id ? '使用已保存配置测试' : '使用当前配置测试'}
+                            className="text-xs text-indigo-600 hover:text-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {testingKey === `${ch.id}:${m.name}` ? '测试中...' : '测试'}
+                          </button>
                           <button type="button" onClick={() => removeModel(ch.id, m.id)} className="text-xs text-red-500 hover:text-red-600">
                             删除
                           </button>

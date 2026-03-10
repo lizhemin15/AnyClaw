@@ -240,6 +240,18 @@ export async function putAdminConfig(config: AdminConfig): Promise<void> {
   });
 }
 
+export async function testChannelConfig(params: {
+  channel_id?: string;
+  model?: string;
+  api_base?: string;
+  api_key?: string;
+}): Promise<{ ok: boolean; message: string }> {
+  return fetchApi<{ ok: boolean; message: string }>('/admin/config/test', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
 export interface ModelUsage {
   model: string;
   calls: number;

@@ -137,6 +137,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Use(authSvc.AdminMiddleware)
 		r.Get("/config", adminConfigHandler.GetConfig)
 		r.Put("/config", adminConfigHandler.PutConfig)
+		r.Post("/config/test", adminConfigHandler.TestChannel)
 		r.Get("/stats", adminStatsHandler.GetStats)
 		r.Get("/energy/users", energyHandler.ListUsers)
 		r.Post("/energy/recharge", energyHandler.Recharge)

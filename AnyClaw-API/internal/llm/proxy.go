@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/anyclaw/anyclaw-api/internal/config"
 	"github.com/anyclaw/anyclaw-api/internal/db"
@@ -44,7 +45,9 @@ func New(configPath string, resolver TokenResolver, database *db.DB) *Proxy {
 		configPath: configPath,
 		resolver:   resolver,
 		db:         database,
-		client:     &http.Client{},
+		client: &http.Client{
+			Timeout: 120 * time.Second,
+		},
 	}
 }
 
@@ -139,7 +142,7 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := p.client.Do(proxyReq)
 	if err != nil {
-		log.Printf("[llm] proxy error: %v", err)
+		log.Printf("[llm] proxy error: url=%s model=%s err=%v", url, model, err)
 		http.Error(w, `{"error":{"message":"upstream error"}}`, http.StatusBadGateway)
 		return
 	}
@@ -155,6 +158,9 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(resp.StatusCode)
 
 	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[llm] upstream non-200: url=%s model=%s status=%d body=%s", url, model, resp.StatusCode, string(respBody))
+	}
 	w.Write(respBody)
 
 	if resp.StatusCode == http.StatusOK {

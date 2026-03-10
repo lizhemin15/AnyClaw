@@ -5,7 +5,7 @@ import { getToken, getWebSocketUrl } from '../api'
 interface PicoMessage {
   type: string;
   id?: string;
-  payload?: { content?: string; role?: string; [key: string]: unknown };
+  payload?: { content?: string; role?: string; message_id?: string; [key: string]: unknown };
 }
 
 interface ChatMessage {
@@ -53,10 +53,11 @@ export default function Chat() {
         switch (msg.type) {
           case 'message.create':
             if (msg.payload?.content != null) {
+              const id = msg.payload.message_id ?? msg.id ?? String(Date.now());
               setMessages((prev) => [
                 ...prev,
                 {
-                  id: msg.id ?? String(Date.now()),
+                  id,
                   content: String(msg.payload!.content),
                   role: msg.payload!.role as string | undefined,
                 },
@@ -65,13 +66,16 @@ export default function Chat() {
             break;
           case 'message.update':
             if (msg.payload?.content != null) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === msg.id
-                    ? { ...m, content: String(msg.payload!.content) }
-                    : m
-                )
-              );
+              const targetId = msg.payload.message_id ?? msg.id;
+              if (targetId) {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === targetId
+                      ? { ...m, content: String(msg.payload!.content) }
+                      : m
+                  )
+                );
+              }
             }
             break;
           case 'typing.start':
