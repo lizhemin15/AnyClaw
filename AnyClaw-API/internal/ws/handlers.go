@@ -40,13 +40,8 @@ func (h *Handler) HandleContainerConnect(w http.ResponseWriter, r *http.Request)
 		h.hub.Unregister(instanceID)
 		conn.Close()
 	}()
-	h.hub.Register(instanceID, conn)
-	// Keep connection alive; container sends/receives as needed
-	for {
-		if _, _, err := conn.ReadMessage(); err != nil {
-			break
-		}
-	}
+	done := h.hub.Register(instanceID, conn)
+	<-done
 }
 
 // HandleUserWS: user connects with Bearer JWT to /instances/:id/ws
@@ -84,10 +79,13 @@ func (h *Handler) HandleUserWS(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer userConn.Close()
-	// Bidirectional bridge: user<->container
-	go h.bridgeTo(userConn, containerConn, false) // user->container, don't close container on user disconnect
-	h.bridgeTo(containerConn, userConn, true)     // container->user, close user when container disconnects
+	defer func() {
+		h.hub.DetachUser(instanceID)
+		userConn.Close()
+	}()
+	h.hub.AttachUser(instanceID, userConn)
+	// user->container: read from user, write to container (container->user is handled by Hub's single reader)
+	h.bridgeTo(containerConn, userConn, false)
 }
 
 func (h *Handler) bridgeTo(dst, src *websocket.Conn, closeDstOnDone bool) {
