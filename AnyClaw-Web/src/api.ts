@@ -230,6 +230,29 @@ export async function checkHostStatus(id: string): Promise<{ status: string }> {
   return fetchApi<{ status: string }>(`/admin/hosts/${id}/check`, { method: 'POST' });
 }
 
+export interface AdminInstance {
+  id: number;
+  user_id: number;
+  name: string;
+  status: string;
+  energy: number;
+  daily_consume: number;
+  container_id?: string;
+  host_id?: string;
+  created_at: string;
+  user_email: string;
+  host_name: string;
+}
+
+export async function getAdminInstances(): Promise<AdminInstance[]> {
+  const data = await fetchApi<AdminInstance[] | null>('/admin/instances');
+  return Array.isArray(data) ? data : [];
+}
+
+export async function adminDeleteInstance(id: number): Promise<void> {
+  await fetchApi(`/admin/instances/${id}`, { method: 'DELETE' });
+}
+
 export interface UserWithInstances extends User {
   instance_count: number;
 }

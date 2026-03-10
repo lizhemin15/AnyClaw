@@ -84,14 +84,18 @@ func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string, api
 // Stop stops and removes a container on the given host.
 // If instanceID > 0, also unmounts and removes the workspace volume.
 // When hostID is empty, tries ALL hosts (including disabled) until docker rm succeeds.
-// When containerID is empty but instanceID > 0, tries removing by name anyclaw-inst-{id}.
+// Prefer container name anyclaw-inst-{id} when instanceID known (more reliable than stored container_id).
 func (s *Scheduler) Stop(ctx context.Context, hostID, containerID string, instanceID int64) error {
-	rmTarget := containerID
-	if rmTarget == "" && instanceID > 0 {
-		rmTarget = fmt.Sprintf("anyclaw-inst-%d", instanceID)
-		log.Printf("[scheduler] container_id empty, trying remove by name %s", rmTarget)
+	containerName := fmt.Sprintf("anyclaw-inst-%d", instanceID)
+	rmTarget := ""
+	if instanceID > 0 {
+		rmTarget = containerName
+		log.Printf("[scheduler] Stop instance %d: removing container %s (host=%q)", instanceID, rmTarget, hostID)
+	} else if containerID != "" {
+		rmTarget = strings.TrimSpace(strings.Split(containerID, "\n")[0])
 	}
 	if rmTarget == "" {
+		log.Printf("[scheduler] Stop: no rm target (instanceID=%d containerID=%q)", instanceID, containerID)
 		return nil
 	}
 	allHosts, err := s.hosts.ListAllHostsWithCredentials()

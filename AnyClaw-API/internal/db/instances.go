@@ -81,6 +81,43 @@ func (d *DB) CountInstancesByUserID(userID int64) (int, error) {
 	return n, err
 }
 
+// AdminInstance 管理员查看的实例，含用户邮箱和宿主机名
+type AdminInstance struct {
+	Instance
+	UserEmail string `json:"user_email"`
+	HostName  string `json:"host_name"`
+}
+
+func (d *DB) ListAllInstancesAdmin() ([]*AdminInstance, error) {
+	rows, err := d.Query(
+		`SELECT i.id, i.user_id, i.name, i.status, COALESCE(i.energy,100), COALESCE(i.daily_consume,10), i.zero_energy_since,
+		 i.container_id, i.host_id, i.created_at,
+		 COALESCE(u.email,'') as user_email,
+		 COALESCE(h.name,'') as host_name
+		 FROM instances i
+		 LEFT JOIN users u ON i.user_id = u.id
+		 LEFT JOIN hosts h ON i.host_id = h.id
+		 ORDER BY i.created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []*AdminInstance
+	for rows.Next() {
+		var a AdminInstance
+		var zeroSince sql.NullString
+		if err := rows.Scan(&a.ID, &a.UserID, &a.Name, &a.Status, &a.Energy, &a.DailyConsume, &zeroSince,
+			&a.ContainerID, &a.HostID, &a.CreatedAt, &a.UserEmail, &a.HostName); err != nil {
+			return nil, err
+		}
+		if zeroSince.Valid {
+			a.ZeroEnergySince = &zeroSince.String
+		}
+		list = append(list, &a)
+	}
+	return list, nil
+}
+
 func (d *DB) ListInstancesByUserID(userID int64) ([]*Instance, error) {
 	rows, err := d.Query(
 		`SELECT id, user_id, name, status, COALESCE(energy,100), COALESCE(daily_consume,10), zero_energy_since,

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAdminConfig, putAdminConfig, testChannelConfig, type AdminConfig, type Channel } from '../api'
+import { getAdminConfig, putAdminConfig, type AdminConfig, type Channel } from '../api'
 
 function genId() {
   return 'c-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
@@ -19,13 +19,14 @@ export default function AdminConfig() {
   const [addingChannel, setAddingChannel] = useState(false)
   const [newChannel, setNewChannel] = useState({ name: '', api_key: '', api_base: '' })
   const [editingChannel, setEditingChannel] = useState<string | null>(null)
-  const [newModelByChannel, setNewModelByChannel] = useState<Record<string, string>>({})
-  const [testingKey, setTestingKey] = useState<string | null>(null)
 
   useEffect(() => {
     getAdminConfig()
       .then((c) => {
-        const channels = Array.isArray(c.channels) ? c.channels : []
+        const channels = (Array.isArray(c.channels) ? c.channels : []).map((ch) => {
+          const models = ch.models && ch.models.length > 0 ? ch.models : [{ id: genModelId(), name: 'gpt-4o', enabled: ch.enabled }]
+          return { ...ch, models }
+        })
         setConfig({ channels })
         setForm({ channels: JSON.parse(JSON.stringify(channels)) })
       })
@@ -60,9 +61,12 @@ export default function AdminConfig() {
       api_key: newChannel.api_key.trim(),
       api_base: newChannel.api_base.trim() || 'https://api.openai.com/v1',
       enabled: true,
-      models: [],
+      models: [{ id: genModelId(), name: 'gpt-4o', enabled: true }],
     }
-    setForm({ channels: [...(form.channels || []), ch] })
+    const prev = form.channels || []
+    setForm({
+      channels: [...prev.map((c) => ({ ...c, enabled: false, models: (c.models || []).map((m) => ({ ...m, enabled: false })) })), ch],
+    })
     setNewChannel({ name: '', api_key: '', api_base: '' })
     setAddingChannel(false)
   }
@@ -81,83 +85,18 @@ export default function AdminConfig() {
   }
 
   const setChannelEnabled = (id: string, enabled: boolean) => {
-    updateChannel(id, { enabled })
-  }
-
-  const addModel = (channelId: string) => {
-    const name = (newModelByChannel[channelId] || '').trim()
-    if (!form || !name) return
-    const channels = form.channels || []
-    const ch = channels.find((c) => c.id === channelId)
-    if (!ch || (ch.models || []).some((m) => m.name === name)) return
-    const models = [...(ch.models || []), { id: genModelId(), name, enabled: false }]
-    setForm({
-      channels: channels.map((c) => (c.id === channelId ? { ...c, models } : c)),
-    })
-    setNewModelByChannel((prev) => ({ ...prev, [channelId]: '' }))
-  }
-
-  const removeModel = (channelId: string, modelId: string) => {
     if (!form) return
     const channels = form.channels || []
-    const ch = channels.find((c) => c.id === channelId)
-    if (!ch) return
-    const hadEnabled = (ch.models || []).find((m) => m.id === modelId)?.enabled
-    let models = (ch.models || []).filter((m) => m.id !== modelId)
-    if (hadEnabled && models.length > 0 && !models.some((m) => m.enabled)) {
-      models = models.map((m, i) => ({ ...m, enabled: i === 0 }))
-    }
     setForm({
-      channels: channels.map((c) => (c.id === channelId ? { ...c, models } : c)),
-    })
-  }
-
-  const setModelEnabled = (channelId: string, modelId: string) => {
-    if (!form) return
-    setForm({
-      channels: (form.channels || []).map((c) => ({
+      channels: channels.map((c) => ({
         ...c,
-        models: (c.models || []).map((m) => ({
-          ...m,
-          enabled: c.id === channelId && m.id === modelId,
-        })),
+        enabled: c.id === id ? enabled : (enabled ? false : c.enabled),
+        models:
+          c.id === id && enabled
+            ? (c.models || []).map((m, i) => ({ ...m, enabled: i === 0 }))
+            : (c.models || []),
       })),
     })
-  }
-
-  const updateModelName = (channelId: string, modelId: string, name: string) => {
-    if (!form) return
-    setForm({
-      channels: (form.channels || []).map((c) =>
-        c.id === channelId
-          ? { ...c, models: (c.models || []).map((m) => (m.id === modelId ? { ...m, name } : m)) }
-          : c
-      ),
-    })
-  }
-
-  const handleTest = async (ch: Channel, modelName: string) => {
-    const key = `${ch.id}:${modelName}`
-    setTestingKey(key)
-    setError('')
-    setSuccess('')
-    try {
-      const isEditing = editingChannel === ch.id
-      const res = await testChannelConfig(
-        isEditing && ch.api_key && !ch.api_key.startsWith('****')
-          ? { api_base: ch.api_base || 'https://api.openai.com/v1', api_key: ch.api_key, model: modelName }
-          : { channel_id: ch.id, model: modelName }
-      )
-      if (res.ok) {
-        setSuccess(`模型 ${modelName} 连接正常`)
-      } else {
-        setError(`模型 ${modelName} 测试失败: ${res.message}`)
-      }
-    } catch (err) {
-      setError(`测试失败: ${err instanceof Error ? err.message : '未知错误'}`)
-    } finally {
-      setTestingKey(null)
-    }
   }
 
   const channels = form?.channels ?? []
@@ -182,7 +121,7 @@ export default function AdminConfig() {
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-slate-800">渠道管理</h1>
         <p className="text-sm text-slate-500 mt-1">
-          添加渠道并配置 API，每个渠道可添加多个模型。一次只能启用一个模型作为新宠物默认。当前默认：{enabledModel ? enabledModel.name : '无（gpt-4o）'}。点击「测试」可验证模型连通性，区分是配置问题还是分发问题。
+          添加渠道并配置 API，一次只能启用一个渠道。当前启用：{enabledModel ? enabledModel.name : '无'}。
         </p>
       </div>
 
@@ -303,63 +242,6 @@ export default function AdminConfig() {
                     <button type="button" onClick={() => removeChannel(ch.id)} className="text-sm text-red-600 hover:text-red-700">
                       删除
                     </button>
-                  </div>
-
-                  {/* 模型列表 */}
-                  <div className="mt-3 ml-14 pl-4 border-l-2 border-slate-100">
-                    <div className="flex gap-2 items-center mb-2">
-                      <input
-                        type="text"
-                        value={newModelByChannel[ch.id] || ''}
-                        onChange={(e) => setNewModelByChannel((p) => ({ ...p, [ch.id]: e.target.value }))}
-                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addModel(ch.id))}
-                        placeholder="添加模型，如 gpt-4o"
-                        className="px-3 py-1.5 border border-slate-300 rounded text-sm font-mono w-40"
-                      />
-                      <button type="button" onClick={() => addModel(ch.id)} className="text-sm text-indigo-600 hover:text-indigo-700">
-                        添加
-                      </button>
-                    </div>
-                    <div className="space-y-1">
-                      {(ch.models || []).map((m) => (
-                        <div key={m.id} className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            role="radio"
-                            aria-checked={m.enabled}
-                            onClick={() => setModelEnabled(ch.id, m.id)}
-                            className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${
-                              m.enabled ? 'bg-indigo-600' : 'bg-slate-200'
-                            }`}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition ${
-                                m.enabled ? 'translate-x-4' : 'translate-x-0.5'
-                              }`}
-                            />
-                          </button>
-                          <input
-                            type="text"
-                            value={m.name}
-                            onChange={(e) => updateModelName(ch.id, m.id, e.target.value)}
-                            className="px-2 py-1 border border-slate-200 rounded text-sm font-mono w-44"
-                          />
-                          <span className="text-xs text-slate-400">{m.enabled ? '默认' : ''}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleTest(ch, m.name)}
-                            disabled={!!testingKey || !ch.api_key}
-                            title={!ch.api_key ? '请先配置 API Key' : editingChannel !== ch.id ? '使用已保存配置测试' : '使用当前配置测试'}
-                            className="text-xs text-indigo-600 hover:text-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {testingKey === `${ch.id}:${m.name}` ? '测试中...' : '测试'}
-                          </button>
-                          <button type="button" onClick={() => removeModel(ch.id, m.id)} className="text-xs text-red-500 hover:text-red-600">
-                            删除
-                          </button>
-                        </div>
-                      ))}
-                    </div>
                   </div>
                 </div>
               ))

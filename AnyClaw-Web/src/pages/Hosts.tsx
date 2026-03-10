@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import {
   getHosts,
   createHost,
   updateHost,
   deleteHost,
   checkHostStatus,
+  getAdminInstances,
+  adminDeleteInstance,
   type Host,
   type CreateHostRequest,
+  type AdminInstance,
 } from '../api'
 
 export default function Hosts() {
@@ -27,6 +31,9 @@ export default function Hosts() {
   })
   const [submitting, setSubmitting] = useState(false)
   const [checking, setChecking] = useState<string | null>(null)
+  const [instances, setInstances] = useState<AdminInstance[]>([])
+  const [instancesLoading, setInstancesLoading] = useState(true)
+  const [deletingInst, setDeletingInst] = useState<number | null>(null)
 
   const loadHosts = () => {
     setLoading(true)
@@ -36,8 +43,17 @@ export default function Hosts() {
       .finally(() => setLoading(false))
   }
 
+  const loadInstances = () => {
+    setInstancesLoading(true)
+    getAdminInstances()
+      .then(setInstances)
+      .catch(() => setInstances([]))
+      .finally(() => setInstancesLoading(false))
+  }
+
   useEffect(() => {
     loadHosts()
+    loadInstances()
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,6 +109,19 @@ export default function Hosts() {
       loadHosts()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete')
+    }
+  }
+
+  const handleDeleteInstance = async (inst: AdminInstance) => {
+    if (!confirm(`删除实例 #${inst.id}「${inst.name}」？将停止容器并删除数据。`)) return
+    setDeletingInst(inst.id)
+    try {
+      await adminDeleteInstance(inst.id)
+      loadInstances()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除失败')
+    } finally {
+      setDeletingInst(null)
     }
   }
 
@@ -181,6 +210,52 @@ export default function Hosts() {
           ))}
         </div>
       )}
+
+      {/* 实例列表 */}
+      <div className="mt-10">
+        <h2 className="text-lg font-semibold text-slate-800 mb-3">实例列表（AnyClaw 容器）</h2>
+        {instancesLoading ? (
+          <p className="text-slate-500 py-6">加载中...</p>
+        ) : instances.length === 0 ? (
+          <p className="text-slate-500 py-6">暂无实例</p>
+        ) : (
+          <div className="space-y-2">
+            {instances.map((inst) => (
+              <div
+                key={inst.id}
+                className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-slate-800">#{inst.id} {inst.name}</span>
+                    <span className={`px-2.5 py-1 text-xs rounded-full ${inst.status === 'running' ? 'bg-green-100 text-green-800' : inst.status === 'creating' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>
+                      {inst.status === 'running' ? '运行中' : inst.status === 'creating' ? '创建中' : inst.status}
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-500 mt-1">
+                    用户: {inst.user_email || '—'} · 宿主机: {inst.host_name || '—'} · 活力: {inst.energy}
+                  </p>
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <Link
+                    to={`/instances/${inst.id}`}
+                    className="px-4 py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50 min-h-[44px] inline-block"
+                  >
+                    打开
+                  </Link>
+                  <button
+                    onClick={() => handleDeleteInstance(inst)}
+                    disabled={deletingInst === inst.id}
+                    className="px-4 py-2 text-sm border border-red-200 text-red-600 rounded-lg active:bg-red-50 disabled:opacity-50 min-h-[44px]"
+                  >
+                    {deletingInst === inst.id ? '删除中...' : '删除'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {modal && (
         <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => setModal(null)}>

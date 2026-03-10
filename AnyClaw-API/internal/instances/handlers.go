@@ -183,6 +183,41 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *Handler) AdminList(w http.ResponseWriter, r *http.Request) {
+	list, err := h.db.ListAllInstancesAdmin()
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	if list == nil {
+		list = []*db.AdminInstance{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(list)
+}
+
+func (h *Handler) AdminDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, `{"error":"invalid instance id"}`, http.StatusBadRequest)
+		return
+	}
+	inst, err := h.db.GetInstanceByID(id)
+	if err != nil || inst == nil {
+		http.Error(w, `{"error":"instance not found"}`, http.StatusNotFound)
+		return
+	}
+	if err := h.scheduler.Stop(r.Context(), inst.HostID, inst.ContainerID, id); err != nil {
+		log.Printf("[instances] Admin Stop failed for instance %d: %v", id, err)
+	}
+	_ = h.db.DeleteMessagesByInstance(id)
+	if err := h.db.DeleteInstance(id); err != nil {
+		http.Error(w, `{"error":"failed to delete"}`, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *Handler) Feed(w http.ResponseWriter, r *http.Request) {
 	claims := request.FromContext(r.Context())
 	if claims == nil {

@@ -157,6 +157,11 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Delete("/{id}", hostHandler.Delete)
 		r.Post("/{id}/check", hostHandler.CheckStatus)
 	})
+	r.Route("/admin/instances", func(r chi.Router) {
+		r.Use(authSvc.AdminMiddleware)
+		r.Get("/", instHandler.AdminList)
+		r.Delete("/{id}", instHandler.AdminDelete)
+	})
 
 	r.Get("/containers/connect", wsHandler.HandleContainerConnect)
 
