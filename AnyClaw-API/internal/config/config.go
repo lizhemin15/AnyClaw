@@ -11,7 +11,7 @@ type Config struct {
 	DBDSN     string `json:"db_dsn"`
 	JWTSecret string `json:"jwt_secret"`
 	APIURL      string       `json:"api_url"`       // e.g. http://localhost:8080 for Docker containers
-	DockerImage string       `json:"docker_image"` // anyclaw/anyclaw or picoclaw
+	DockerImage string       `json:"docker_image"` // openclaw/openclaw
 	KeyPool     KeyPool      `json:"key_pool"`
 	InstanceMap InstanceMap  `json:"instance_map"` // legacy: tokens from config (merged with DB)
 }
@@ -48,7 +48,7 @@ func Load(path string) (*Config, error) {
 	cfg := &Config{
 		Port:        8080,
 		DBDSN:       "",
-		DockerImage: "anyclaw/anyclaw",
+		DockerImage: "openclaw/openclaw",
 	}
 	if path == "" {
 		path = ConfigPath()
@@ -57,7 +57,7 @@ func Load(path string) (*Config, error) {
 		if json.Unmarshal(data, cfg) == nil {
 			// ensure required defaults
 			if cfg.DockerImage == "" {
-				cfg.DockerImage = "anyclaw/anyclaw"
+				cfg.DockerImage = "openclaw/openclaw"
 			}
 		}
 	}

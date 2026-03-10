@@ -210,7 +210,7 @@ func (c *DingTalkChannel) SendDirectReply(ctx context.Context, sessionWebhook, c
 
 	// Convert string content to []byte for the API
 	contentBytes := []byte(content)
-	titleBytes := []byte("AnyClaw")
+	titleBytes := []byte("OpenClaw")
 
 	// Send markdown formatted reply
 	err := replier.SimpleReplyMarkdown(

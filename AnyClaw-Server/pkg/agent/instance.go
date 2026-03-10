@@ -202,7 +202,7 @@ func NewAgentInstance(
 			})
 			lightCandidates = resolved
 		} else {
-			log.Printf("routing: light_model %q not found in model_list â€?routing disabled for agent %q",
+			log.Printf("routing: light_model %q not found in model_list -routing disabled for agent %q",
 				rc.LightModel, agentID)
 		}
 	}

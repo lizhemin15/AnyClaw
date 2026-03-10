@@ -11,14 +11,14 @@ const defaultThreshold = 0.35
 
 // RouterConfig holds the validated model routing settings.
 // It mirrors config.RoutingConfig but lives in pkg/routing to keep the
-// dependency graph simple: pkg/agent resolves config â†?routing, not the reverse.
+// dependency graph simple: pkg/agent resolves config ->routing, not the reverse.
 type RouterConfig struct {
 	// LightModel is the model_name (from model_list) used for simple tasks.
 	LightModel string
 
 	// Threshold is the complexity score cutoff in [0, 1].
-	// score >= Threshold â†?primary (heavy) model.
-	// score <  Threshold â†?light model.
+	// score >= Threshold ->primary (heavy) model.
+	// score <  Threshold ->light model.
 	Threshold float64
 }
 

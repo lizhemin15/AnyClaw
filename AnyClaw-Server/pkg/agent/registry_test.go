@@ -28,7 +28,7 @@ func testCfg(agents []config.AgentConfig) *config.Config {
 	return &config.Config{
 		Agents: config.AgentsConfig{
 			Defaults: config.AgentDefaults{
-				Workspace:         "/tmp/AnyClaw-test-registry",
+				Workspace:         "/tmp/openclaw-test-registry",
 				Model:             "gpt-4",
 				MaxTokens:         8192,
 				MaxToolIterations: 10,

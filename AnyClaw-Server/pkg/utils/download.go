@@ -46,7 +46,7 @@ func DownloadToFile(ctx context.Context, client *http.Client, req *http.Request,
 	}
 
 	// Create temp file.
-	tmpFile, err := os.CreateTemp("", "AnyClaw-dl-*")
+	tmpFile, err := os.CreateTemp("", "openclaw-dl-*")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}
@@ -56,7 +56,7 @@ func DownloadToFile(ctx context.Context, client *http.Client, req *http.Request,
 		"path": tmpPath,
 	})
 
-	// Cleanup helper â€?removes the temp file on any error.
+	// Cleanup helper -removes the temp file on any error.
 	cleanup := func() {
 		_ = tmpFile.Close()
 		_ = os.Remove(tmpPath)

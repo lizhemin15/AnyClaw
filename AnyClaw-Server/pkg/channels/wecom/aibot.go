@@ -22,7 +22,7 @@ import (
 	"github.com/anyclaw/anyclaw-server/pkg/utils"
 )
 
-// WeComAIBotChannel implements the Channel interface for WeCom AI Bot (企业微信智能机器�?
+// WeComAIBotChannel implements the Channel interface for WeCom AI Bot (企业微信智能机器人).
 type WeComAIBotChannel struct {
 	*channels.BaseChannel
 	config      config.WeComAIBotConfig
@@ -51,7 +51,7 @@ type streamTask struct {
 	ctx         context.Context    // canceled when task is removed; used to interrupt the agent goroutine
 	cancel      context.CancelFunc // call on task removal to cancel ctx
 
-	// mutable �?guarded by WeComAIBotChannel.taskMu
+	// mutable -guarded by WeComAIBotChannel.taskMu
 	StreamClosed   bool      // stream returned finish:true; waiting for agent to reply via response_url
 	StreamClosedAt time.Time // set when StreamClosed becomes true; used for accelerated cleanup
 	Finished       bool      // fully done
@@ -338,7 +338,7 @@ func (c *WeComAIBotChannel) handleVerification(
 	}
 
 	// Decrypt echostr
-	// For WeCom AI Bot (智能机器�?, receiveid should be empty string
+	// For WeCom AI Bot (智能机器人, receiveid should be empty string
 	decrypted, err := decryptMessageWithVerify(echostr, c.config.EncodingAESKey, "")
 	if err != nil {
 		logger.ErrorCF("wecom_aibot", "Failed to decrypt echostr", map[string]any{
@@ -405,7 +405,7 @@ func (c *WeComAIBotChannel) handleMessageCallback(
 	}
 
 	// Decrypt message
-	// For WeCom AI Bot (智能机器�?, receiveid is empty string
+	// For WeCom AI Bot (智能机器人, receiveid is empty string
 	decrypted, err := decryptMessageWithVerify(encryptedMsg.Encrypt, c.config.EncodingAESKey, "")
 	if err != nil {
 		logger.ErrorCF("wecom_aibot", "Failed to decrypt message", map[string]any{
@@ -687,13 +687,13 @@ func (c *WeComAIBotChannel) getStreamResponse(task *streamTask, timestamp, nonce
 
 	select {
 	case answer := <-task.answerCh:
-		// Agent replied before deadline �?normal finish.
+		// Agent replied before deadline -normal finish.
 		content = answer
 		finish = true
 	default:
 		if time.Now().After(task.Deadline) {
 			// Deadline reached: close the stream with a notice, then wait for agent via response_url.
-			content = "�?Processing, please wait. The results will be sent shortly."
+			content = "�?Processing, please wait. The results will be sent shortly."
 			finish = true
 			closeStreamOnly = true
 			logger.InfoCF(
@@ -930,7 +930,7 @@ func (c *WeComAIBotChannel) cleanupLoop() {
 //     preventing chatTasks from filling up when many requests time out in quick succession.
 const (
 	streamClosedGracePeriod = 10 * time.Minute // max wait for agent after stream closes
-	taskMaxLifetime         = 1 * time.Hour    // absolute max (�?response_url validity)
+	taskMaxLifetime         = 1 * time.Hour    // absolute max (->response_url validity)
 )
 
 func (c *WeComAIBotChannel) cleanupOldTasks() {
@@ -978,7 +978,7 @@ func (c *WeComAIBotChannel) cleanupOldTasks() {
 				if i > 0 {
 					logger.WarnCF("wecom_aibot",
 						"Found stranded Finished task in the middle of chatTasks queue; "+
-							"this should not happen �?removeTask() should have spliced it out",
+							"this should not happen -removeTask() should have spliced it out",
 						map[string]any{
 							"chat_id":   chatID,
 							"stream_id": t.StreamID,

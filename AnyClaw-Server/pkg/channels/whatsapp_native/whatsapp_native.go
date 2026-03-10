@@ -217,7 +217,7 @@ func (c *WhatsAppNativeChannel) Stop(ctx context.Context) error {
 	// eventHandler atomically with respect to its wg.Add(1) call.
 	// This closes the TOCTOU window where eventHandler could check
 	// stopping (false), then Stop sets it true + enters wg.Wait,
-	// then eventHandler calls wg.Add(1) â€?causing a panic.
+	// then eventHandler calls wg.Add(1) -causing a panic.
 	c.reconnectMu.Lock()
 	c.stopping.Store(true)
 	c.reconnectMu.Unlock()

@@ -17,7 +17,7 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
     <div className="min-h-screen bg-slate-50 flex flex-col pb-16 sm:pb-0">
       <header className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200 px-4 py-3 flex items-center justify-between">
         <Link to="/" className="text-lg font-semibold text-slate-800 active:opacity-70">
-          AnyClaw
+          OpenClaw
         </Link>
         {user && (
           <span className="text-sm text-amber-600 font-medium">⚡ {user.energy ?? 0}</span>

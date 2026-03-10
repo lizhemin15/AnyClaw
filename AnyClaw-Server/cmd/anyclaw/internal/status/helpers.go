@@ -17,7 +17,7 @@ func statusCmd() {
 
 	configPath := internal.GetConfigPath()
 
-	fmt.Printf("%s AnyClaw Status\n", internal.Logo)
+	fmt.Printf("%s OpenClaw Status\n", internal.Logo)
 	fmt.Printf("Version: %s\n", internal.FormatVersion())
 	build, _ := internal.FormatBuildInfo()
 	if build != "" {
@@ -26,16 +26,16 @@ func statusCmd() {
 	fmt.Println()
 
 	if _, err := os.Stat(configPath); err == nil {
-		fmt.Println("Config:", configPath, "âœ?)
+		fmt.Println("Config:", configPath, "âœ”)
 	} else {
-		fmt.Println("Config:", configPath, "âœ?)
+		fmt.Println("Config:", configPath, "âœ”)
 	}
 
 	workspace := cfg.WorkspacePath()
 	if _, err := os.Stat(workspace); err == nil {
-		fmt.Println("Workspace:", workspace, "âœ?)
+		fmt.Println("Workspace:", workspace, "âœ”)
 	} else {
-		fmt.Println("Workspace:", workspace, "âœ?)
+		fmt.Println("Workspace:", workspace, "âœ”)
 	}
 
 	if _, err := os.Stat(configPath); err == nil {
@@ -57,7 +57,7 @@ func statusCmd() {
 
 		status := func(enabled bool) string {
 			if enabled {
-				return "âœ?
+				return "âœ”
 			}
 			return "not set"
 		}
@@ -73,12 +73,12 @@ func statusCmd() {
 		fmt.Println("VolcEngine API:", status(hasVolcEngine))
 		fmt.Println("Nvidia API:", status(hasNvidia))
 		if hasVLLM {
-			fmt.Printf("vLLM/Local: âœ?%s\n", cfg.Providers.VLLM.APIBase)
+			fmt.Printf("vLLM/Local: âœ”%s\n", cfg.Providers.VLLM.APIBase)
 		} else {
 			fmt.Println("vLLM/Local: not set")
 		}
 		if hasOllama {
-			fmt.Printf("Ollama: âœ?%s\n", cfg.Providers.Ollama.APIBase)
+			fmt.Printf("Ollama: âœ”%s\n", cfg.Providers.Ollama.APIBase)
 		} else {
 			fmt.Println("Ollama: not set")
 		}

@@ -34,10 +34,10 @@ func ParseCanonicalID(canonical string) (platform, id string, ok bool) {
 // MatchAllowed checks whether the given sender matches a single allow-list entry.
 // It is backward-compatible with all legacy formats:
 //
-//   - "123456"              â†?matches sender.PlatformID
-//   - "@alice"              â†?matches sender.Username
-//   - "123456|alice"        â†?matches PlatformID or Username
-//   - "telegram:123456"     â†?exact match on sender.CanonicalID
+//   - "123456"              ->matches sender.PlatformID
+//   - "@alice"              ->matches sender.Username
+//   - "123456|alice"        ->matches PlatformID or Username
+//   - "telegram:123456"     ->exact match on sender.CanonicalID
 func MatchAllowed(sender bus.SenderInfo, allowed string) bool {
 	allowed = strings.TrimSpace(allowed)
 	if allowed == "" {

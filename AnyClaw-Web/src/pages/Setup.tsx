@@ -64,7 +64,7 @@ export default function Setup() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 py-8">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-6 sm:p-8">
-        <h1 className="text-xl font-semibold text-slate-800 mb-2">AnyClaw 初始化</h1>
+        <h1 className="text-xl font-semibold text-slate-800 mb-2">OpenClaw 初始化</h1>
         <p className="text-sm text-slate-500 mb-6">首次使用请配置数据库和管理员账号</p>
 
         {error && (
@@ -116,7 +116,7 @@ export default function Setup() {
                 value={dbForm.database}
                 onChange={(e) => setDbForm((f) => ({ ...f, database: e.target.value }))}
                 className="w-full px-4 py-3 border border-slate-300 rounded-xl"
-                placeholder="anyclaw"
+                placeholder="openclaw"
                 required
               />
             </div>

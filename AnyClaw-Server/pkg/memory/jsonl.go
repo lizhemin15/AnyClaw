@@ -22,7 +22,7 @@ const (
 	// numLockShards is the fixed number of mutexes used to serialize
 	// per-session access. Using a sharded array instead of a map keeps
 	// memory bounded regardless of how many sessions are created over
-	// the lifetime of the process â€?important for a long-running daemon.
+	// the lifetime of the process -important for a long-running daemon.
 	numLockShards = 64
 
 	// maxLineSize is the maximum size of a single JSON line in a .jsonl
@@ -46,8 +46,8 @@ type sessionMeta struct {
 //
 // Each session is stored as two files:
 //
-//	{sanitized_key}.jsonl      â€?one JSON-encoded message per line, append-only
-//	{sanitized_key}.meta.json  â€?session metadata (summary, logical truncation offset)
+//	{sanitized_key}.jsonl      -one JSON-encoded message per line, append-only
+//	{sanitized_key}.meta.json  -session metadata (summary, logical truncation offset)
 //
 // Messages are never physically deleted from the JSONL file. Instead,
 // TruncateHistory records a "skip" offset in the metadata file and
@@ -87,7 +87,7 @@ func (s *JSONLStore) metaPath(key string) string {
 // sanitizeKey converts a session key to a safe filename component.
 // Mirrors pkg/session.sanitizeFilename so that migration paths match.
 //
-// Note: this is a lossy mapping â€?"telegram:123" and "telegram_123"
+// Note: this is a lossy mapping -"telegram:123" and "telegram_123"
 // both produce the same filename. This is an intentional tradeoff:
 // keys with colons (e.g. from channels) are by far the common case,
 // and a bidirectional encoding (like URL-encoding) would complicate
@@ -155,7 +155,7 @@ func readMessages(path string, skip int) ([]providers.Message, error) {
 		}
 		var msg providers.Message
 		if err := json.Unmarshal(line, &msg); err != nil {
-			// Corrupt line â€?likely a partial write from a crash.
+			// Corrupt line -likely a partial write from a crash.
 			// Log so operators know data was skipped, but don't
 			// fail the entire read; this is the standard JSONL
 			// recovery pattern.
@@ -243,7 +243,7 @@ func (s *JSONLStore) addMsg(sessionKey string, msg providers.Message) error {
 	// Flush to physical storage before closing. This matches the
 	// durability guarantee of writeMeta and rewriteJSONL (which use
 	// WriteFileAtomic with fsync). Without Sync, a power loss could
-	// leave the append in the kernel page cache only â€?lost on reboot.
+	// leave the append in the kernel page cache only -lost on reboot.
 	if syncErr := f.Sync(); syncErr != nil {
 		f.Close()
 		return fmt.Errorf("memory: sync jsonl: %w", syncErr)
@@ -280,7 +280,7 @@ func (s *JSONLStore) GetHistory(
 	}
 
 	// Pass meta.Skip so readMessages skips those lines without
-	// unmarshaling them â€?avoids wasted CPU on truncated messages.
+	// unmarshaling them -avoids wasted CPU on truncated messages.
 	msgs, err := readMessages(s.jsonlPath(sessionKey), meta.Skip)
 	if err != nil {
 		return nil, err
@@ -339,7 +339,7 @@ func (s *JSONLStore) TruncateHistory(
 	// Always reconcile meta.Count with the actual line count on disk.
 	// A crash between the JSONL append and the meta update in addMsg
 	// leaves meta.Count stale (e.g. file has 101 lines but meta says
-	// 100). Counting lines is cheap â€?no unmarshal, just a scan â€?and
+	// 100). Counting lines is cheap -no unmarshal, just a scan -and
 	// TruncateHistory is not a hot path, so always re-count.
 	n, countErr := countLines(s.jsonlPath(sessionKey))
 	if countErr != nil {
@@ -383,7 +383,7 @@ func (s *JSONLStore) SetHistory(
 
 	// Write meta BEFORE rewriting the JSONL file. If we crash between
 	// the two writes, meta has Skip=0 and the old file is still intact,
-	// so GetHistory reads from line 1 â€?returning "too many" messages
+	// so GetHistory reads from line 1 -returning "too many" messages
 	// rather than losing data. The next SetHistory call corrects this.
 	err = s.writeMeta(sessionKey, meta)
 	if err != nil {
@@ -424,7 +424,7 @@ func (s *JSONLStore) Compact(
 	// Write meta BEFORE rewriting the JSONL file. If the process
 	// crashes between the two writes, meta has Skip=0 and the old
 	// (uncompacted) file is still intact, so GetHistory reads from
-	// line 1 â€?returning previously-truncated messages rather than
+	// line 1 -returning previously-truncated messages rather than
 	// losing data. The next Compact or TruncateHistory corrects this.
 	meta.Skip = 0
 	meta.Count = len(active)

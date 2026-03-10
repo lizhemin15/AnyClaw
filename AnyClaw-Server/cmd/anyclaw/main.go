@@ -25,12 +25,12 @@ import (
 )
 
 func NewAnyClawCommand() *cobra.Command {
-	short := fmt.Sprintf("%s AnyClaw - Personal AI Assistant v%s\n\n", internal.Logo, internal.GetVersion())
+	short := fmt.Sprintf("%s OpenClaw - Personal AI Assistant v%s\n\n", internal.Logo, internal.GetVersion())
 
 	cmd := &cobra.Command{
-		Use:     "anyclaw",
+		Use:     "openclaw",
 		Short:   short,
-		Example: "anyclaw version",
+		Example: "openclaw version",
 	}
 
 	cmd.AddCommand(

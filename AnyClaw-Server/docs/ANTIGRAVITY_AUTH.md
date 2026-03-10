@@ -28,7 +28,7 @@
 Antigravity uses **OAuth 2.0 with PKCE (Proof Key for Code Exchange)** for secure authentication:
 
 ```
-┌─────────────�?                                   ┌─────────────────�?�?  Client    �?───(1) Generate PKCE Pair────────> �?                �?�?            �?───(2) Open Auth URL─────────────> �? Google OAuth   �?�?            �?                                   �?   Server       �?�?            �?<──(3) Redirect with Code───────── �?                �?�?            �?                                   └─────────────────�?�?            �?───(4) Exchange Code for Tokens──> �?  Token URL     �?�?            �?                                   �?                �?�?            �?<──(5) Access + Refresh Tokens──── �?                �?└─────────────�?                                   └─────────────────�?```
+????????????????                                   ??????????????????????  Client    ?????(1) Generate PKCE Pair????????> ??                ????            ?????(2) Open Auth URL?????????????> ?? Google OAuth   ????            ??                                   ??   Server       ????            ??<??(3) Redirect with Code????????? ??                ????            ??                                   ??????????????????????            ?????(4) Exchange Code for Tokens??> ??  Token URL     ????            ??                                   ??                ????            ??<??(5) Access + Refresh Tokens???? ??                ??????????????????                                   ????????????????????```
 
 ### 2. Detailed Steps
 
@@ -428,7 +428,7 @@ type ProviderAuthResult = {
 
 ### 1. Required Environment/Dependencies
 
-- Go �?1.21
+- Go ??1.21
 - AnyClaw codebase (`pkg/providers/` and `pkg/auth/`)
 - `crypto` and `net/http` standard library packages
 
@@ -614,7 +614,7 @@ Create a new Go file in `pkg/providers/`:
 
 ```
 pkg/providers/
-└── your_provider.go
+??? your_provider.go
 ```
 
 #### 2. Implement the Provider Interface
@@ -694,10 +694,10 @@ case "your-provider":
 
 ```bash
 # Authenticate with a provider
-AnyClaw auth login --provider your-provider
+openclaw auth login --provider your-provider
 
 # List models (for Antigravity)
-AnyClaw auth models
+openclaw auth models
 
 # Start the gateway
 AnyClaw gateway
@@ -782,7 +782,7 @@ Some models might show up in the available models list but return an empty respo
 ## Troubleshooting
 
 ### "Token expired"
-- Refresh OAuth tokens: `AnyClaw auth login --provider antigravity`
+- Refresh OAuth tokens: `openclaw auth login --provider antigravity`
 
 ### "Gemini for Google Cloud is not enabled"
 - Enable the API in your Google Cloud Console
@@ -794,4 +794,4 @@ Some models might show up in the available models list but return an empty respo
 ### Models not appearing in list
 - Verify OAuth authentication completed successfully
 - Check auth profile storage: `~/.AnyClaw/auth.json`
-- Re-run `AnyClaw auth login --provider antigravity`
+- Re-run `openclaw auth login --provider antigravity`

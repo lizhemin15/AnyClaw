@@ -68,7 +68,7 @@ func MigrateFromJSON(
 		}
 
 		// Use the key from the JSON content, not the filename.
-		// Filenames are sanitized (":" â†?"_") but keys are not.
+		// Filenames are sanitized (":" ->"_") but keys are not.
 		key := sess.Key
 		if key == "" {
 			key = strings.TrimSuffix(name, ".json")

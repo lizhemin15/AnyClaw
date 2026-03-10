@@ -7,7 +7,7 @@ import (
 )
 
 // Store defines an interface for persistent session storage.
-// Each method is an atomic operation â€?there is no separate Save() call.
+// Each method is an atomic operation -there is no separate Save() call.
 type Store interface {
 	// AddMessage appends a simple text message to a session.
 	AddMessage(ctx context.Context, sessionKey, role, content string) error

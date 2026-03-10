@@ -183,7 +183,7 @@ func registerSharedTools(
 			agent.Tools.Register(messageTool)
 		}
 
-		// Send file tool (outbound media via MediaStore â€?store injected later by SetMediaStore)
+		// Send file tool (outbound media via MediaStore -store injected later by SetMediaStore)
 		if cfg.Tools.IsToolEnabled("send_file") {
 			sendFileTool := tools.NewSendFileTool(
 				agent.Workspace,
@@ -847,7 +847,7 @@ func (al *AgentLoop) handleReasoning(
 		// (bus full under load, or parent canceled).  Check the error
 		// itself rather than ctx.Err(), because pubCtx may time out
 		// (5 s) while the parent ctx is still active.
-		// Also treat ErrBusClosed as expected â€?it occurs during normal
+		// Also treat ErrBusClosed as expected -it occurs during normal
 		// shutdown when the bus is closed before all goroutines finish.
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) ||
 			errors.Is(err, bus.ErrBusClosed) {
@@ -969,7 +969,7 @@ func (al *AgentLoop) runLLMIteration(
 
 			errMsg := strings.ToLower(err.Error())
 
-			// Check if this is a network/HTTP timeout â€?not a context window error.
+			// Check if this is a network/HTTP timeout -not a context window error.
 			isTimeoutError := errors.Is(err, context.DeadlineExceeded) ||
 				strings.Contains(errMsg, "deadline exceeded") ||
 				strings.Contains(errMsg, "client.timeout") ||
@@ -1266,7 +1266,7 @@ func (al *AgentLoop) runLLMIteration(
 // candidates instead of the primary ones.
 //
 // The returned (candidates, model) pair is used for all LLM calls within one
-// turn â€?tool follow-up iterations use the same tier as the initial call so
+// turn -tool follow-up iterations use the same tier as the initial call so
 // that a multi-step tool chain doesn't switch models mid-way.
 func (al *AgentLoop) selectCandidates(
 	agent *AgentInstance,
@@ -1718,7 +1718,7 @@ func (al *AgentLoop) handleCommand(
 			return commandReply, true
 		}
 		return "", true
-	default: // OutcomePassthrough â€?let the message fall through to LLM
+	default: // OutcomePassthrough -let the message fall through to LLM
 		return "", false
 	}
 }

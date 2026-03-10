@@ -160,9 +160,9 @@ func authLoginGoogleAntigravity() error {
 		}
 	}
 
-	fmt.Println("\nâœ?Google Antigravity login successful!")
+	fmt.Println("\n?Google Antigravity login successful!")
 	fmt.Println("Default model set to: gemini-flash")
-	fmt.Println("Try it: AnyClaw agent -m \"Hello world\"")
+	fmt.Println("Try it: openclaw agent -m \"Hello world\"")
 
 	return nil
 }
@@ -412,7 +412,7 @@ func authStatusCmd() error {
 
 	if len(store.Credentials) == 0 {
 		fmt.Println("No authenticated providers.")
-		fmt.Println("Run: AnyClaw auth login --provider <name>")
+		fmt.Println("Run: openclaw auth login --provider <name>")
 		return nil
 	}
 
@@ -460,7 +460,7 @@ func authModelsCmd() error {
 	cred, err := auth.GetCredential("google-antigravity")
 	if err != nil || cred == nil {
 		return fmt.Errorf(
-			"not logged in to Google Antigravity.\nrun: AnyClaw auth login --provider google-antigravity",
+			"not logged in to Google Antigravity.\nrun: openclaw auth login --provider google-antigravity",
 		)
 	}
 
@@ -493,9 +493,9 @@ func authModelsCmd() error {
 	fmt.Println("Available Antigravity Models:")
 	fmt.Println("-----------------------------")
 	for _, m := range models {
-		status := "âœ?
+		status := "?
 		if m.IsExhausted {
-			status = "âœ?(quota exhausted)"
+			status = "?(quota exhausted)"
 		}
 		name := m.ID
 		if m.DisplayName != "" {

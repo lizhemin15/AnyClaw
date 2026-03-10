@@ -154,7 +154,7 @@ func TestDetectMediaType_FallbackToExtension(t *testing.T) {
 	}
 
 	got := detectMediaType(txtFile)
-	// text/plain or similar â€?just verify it's not application/octet-stream
+	// text/plain or similar -just verify it's not application/octet-stream
 	if got == "application/octet-stream" {
 		t.Errorf("expected extension-based MIME for .txt, got %q", got)
 	}

@@ -16,9 +16,9 @@ func TestNewAnyClawCommand(t *testing.T) {
 
 	require.NotNil(t, cmd)
 
-	short := fmt.Sprintf("%s AnyClaw - Personal AI Assistant v%s\n\n", internal.Logo, internal.GetVersion())
+	short := fmt.Sprintf("%s OpenClaw - Personal AI Assistant v%s\n\n", internal.Logo, internal.GetVersion())
 
-	assert.Equal(t, "anyclaw", cmd.Use)
+	assert.Equal(t, "openclaw", cmd.Use)
 	assert.Equal(t, short, cmd.Short)
 
 	assert.True(t, cmd.HasSubCommands())

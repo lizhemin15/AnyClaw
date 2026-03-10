@@ -42,7 +42,7 @@ func newAddCommand(storePath func() string) *cobra.Command {
 				return fmt.Errorf("error adding job: %w", err)
 			}
 
-			fmt.Printf("âœ?Added job '%s' (%s)\n", job.Name, job.ID)
+			fmt.Printf("âœ”Added job '%s' (%s)\n", job.Name, job.ID)
 
 			return nil
 		},

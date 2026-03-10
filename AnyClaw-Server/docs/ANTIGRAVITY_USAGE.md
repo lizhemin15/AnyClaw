@@ -12,7 +12,7 @@ This guide explains how to set up and use the **Antigravity** (Google Cloud Code
 To authenticate with Antigravity, run the following command:
 
 ```bash
-AnyClaw auth login --provider antigravity
+openclaw auth login --provider antigravity
 ```
 
 ### Manual Authentication (Headless/VPS)
@@ -60,7 +60,7 @@ If you are deploying via Coolify or Docker, follow these steps to test:
 
 *   **Empty Response**: If a model returns an empty reply, it may be restricted for your project. Try `gemini-3-flash` or `claude-opus-4-6-thinking`.
 *   **429 Rate Limit**: Antigravity has strict quotas. AnyClaw will display the "reset time" in the error message if you hit a limit.
-*   **404 Not Found**: Ensure you are using a model ID from the `AnyClaw auth models` list. Use the short ID (e.g., `gemini-3-flash`) not the full path.
+*   **404 Not Found**: Ensure you are using a model ID from the `openclaw auth models` list. Use the short ID (e.g., `gemini-3-flash`) not the full path.
 
 ## 5. Summary of Working Models
 

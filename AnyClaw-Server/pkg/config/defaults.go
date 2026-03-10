@@ -294,7 +294,7 @@ func DefaultConfig() *Config {
 				APIKey:    "",
 			},
 
-			// ShengsuanYun (神算�?
+			// ShengsuanYun (神算人
 			{
 				ModelName: "deepseek-v3",
 				Model:     "shengsuanyun/deepseek-v3",

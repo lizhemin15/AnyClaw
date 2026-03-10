@@ -152,7 +152,7 @@ export default function Home({ user }: { user: User | null }) {
 
       {/* 领养新宠物 */}
       <div className="mb-6">
-        <h2 className="text-lg font-semibold text-slate-800 mb-3">领养 AnyClaw</h2>
+        <h2 className="text-lg font-semibold text-slate-800 mb-3">领养 OpenClaw</h2>
         <form onSubmit={handleAdopt} className="flex flex-col sm:flex-row gap-3">
           <input
             type="text"
@@ -185,7 +185,7 @@ export default function Home({ user }: { user: User | null }) {
       ) : instances.length === 0 ? (
         <div className="text-center py-12 bg-slate-50 rounded-xl">
           <p className="text-slate-500 mb-2">暂无宠物</p>
-          <p className="text-sm text-slate-400">领养一只 AnyClaw 开始对话吧</p>
+          <p className="text-sm text-slate-400">领养一只 OpenClaw 开始对话吧</p>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">

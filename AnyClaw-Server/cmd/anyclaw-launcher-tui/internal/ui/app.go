@@ -181,7 +181,7 @@ func refreshMainMenu(menu *Menu, s *appState) {
 		},
 		{
 			Label:       "Start Talk",
-			Description: "Open AnyClaw agent in terminal",
+			Description: "Open OpenClaw agent in terminal",
 			Action: func() {
 				s.requestStartTalk()
 			},
@@ -346,7 +346,7 @@ func (s *appState) startTalk() {
 		return
 	}
 	s.app.Suspend(func() {
-		cmd := exec.Command("AnyClaw", "agent")
+		cmd := exec.Command("openclaw", "agent")
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -367,7 +367,7 @@ func (s *appState) startGateway() {
 		return
 	}
 	_ = stopGatewayProcess()
-	cmd := exec.Command("AnyClaw", "gateway")
+	cmd := exec.Command("openclaw", "gateway")
 	logFile, err := os.OpenFile(s.logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		s.showMessage("Gateway failed", err.Error())

@@ -71,7 +71,7 @@ func runSetupMode(cfgPath string, cfg *config.Config) {
 	}
 
 	addr := ":" + fmt.Sprintf("%d", cfg.Port)
-	log.Printf("AnyClaw setup mode on %s - configure database at /setup", addr)
+	log.Printf("OpenClaw setup mode on %s - configure database at /setup", addr)
 	log.Fatal(http.ListenAndServe(addr, r))
 }
 
@@ -156,6 +156,6 @@ func runApp(cfg *config.Config, database *db.DB) {
 	}
 
 	addr := ":" + fmt.Sprintf("%d", cfg.Port)
-	log.Printf("AnyClaw-API listening on %s", addr)
+	log.Printf("OpenClaw-API listening on %s", addr)
 	log.Fatal(http.ListenAndServe(addr, r))
 }

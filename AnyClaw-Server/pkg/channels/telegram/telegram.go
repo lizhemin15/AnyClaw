@@ -177,7 +177,7 @@ func (c *TelegramChannel) Send(ctx context.Context, msg bus.OutboundMessage) err
 		return nil
 	}
 
-	// The Manager already splits messages to â‰?000 chars (WithMaxMessageLength),
+	// The Manager already splits messages to ->000 chars (WithMaxMessageLength),
 	// so msg.Content is guaranteed to be within that limit. We still need to
 	// check if HTML expansion pushes it beyond Telegram's 4096-char API limit.
 	queue := []string{msg.Content}
@@ -622,7 +622,7 @@ func markdownToTelegramHTML(text string) string {
 
 	text = reStrike.ReplaceAllString(text, "<s>$1</s>")
 
-	text = reListItem.ReplaceAllString(text, "â€?")
+	text = reListItem.ReplaceAllString(text, "-")
 
 	for i, code := range inlineCodes.codes {
 		escaped := escapeHTML(code)

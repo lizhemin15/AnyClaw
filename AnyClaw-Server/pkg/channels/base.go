@@ -34,7 +34,7 @@ func init() {
 
 // uniqueID generates a process-unique ID using a random prefix and an atomic counter.
 // This ID is intended for internal correlation (e.g. media scope keys) and is NOT
-// cryptographically secure â€?it must not be used in contexts where unpredictability matters.
+// cryptographically secure -it must not be used in contexts where unpredictability matters.
 func uniqueID() string {
 	n := atomic.AddUint64(&uniqueIDCounter, 1)
 	return uniqueIDPrefix + strconv.FormatUint(n, 16)
@@ -124,20 +124,20 @@ func (c *BaseChannel) MaxMessageLength() int {
 //  3. Calling this method to get the group response decision
 //
 // Logic:
-//   - If isMentioned â†?always respond
-//   - If mention_only configured and not mentioned â†?ignore
-//   - If prefixes configured â†?respond if content starts with any prefix (strip it)
-//   - If prefixes configured but no match and not mentioned â†?ignore
-//   - Otherwise (no group_trigger configured) â†?respond to all (permissive default)
+//   - If isMentioned ->always respond
+//   - If mention_only configured and not mentioned ->ignore
+//   - If prefixes configured ->respond if content starts with any prefix (strip it)
+//   - If prefixes configured but no match and not mentioned ->ignore
+//   - Otherwise (no group_trigger configured) ->respond to all (permissive default)
 func (c *BaseChannel) ShouldRespondInGroup(isMentioned bool, content string) (bool, string) {
 	gt := c.groupTrigger
 
-	// Mentioned â†?always respond
+	// Mentioned ->always respond
 	if isMentioned {
 		return true, strings.TrimSpace(content)
 	}
 
-	// mention_only â†?require mention
+	// mention_only ->require mention
 	if gt.MentionOnly {
 		return false, content
 	}
@@ -149,11 +149,11 @@ func (c *BaseChannel) ShouldRespondInGroup(isMentioned bool, content string) (bo
 				return true, strings.TrimSpace(strings.TrimPrefix(content, prefix))
 			}
 		}
-		// Prefixes configured but none matched and not mentioned â†?ignore
+		// Prefixes configured but none matched and not mentioned ->ignore
 		return false, content
 	}
 
-	// No group_trigger configured â†?permissive (respond to all)
+	// No group_trigger configured ->permissive (respond to all)
 	return true, strings.TrimSpace(content)
 }
 
@@ -270,21 +270,21 @@ func (c *BaseChannel) HandleMessage(
 	}
 
 	// Auto-trigger typing indicator, message reaction, and placeholder before publishing.
-	// Each capability is independent â€?all three may fire for the same message.
+	// Each capability is independent -all three may fire for the same message.
 	if c.owner != nil && c.placeholderRecorder != nil {
-		// Typing â€?independent pipeline
+		// Typing -independent pipeline
 		if tc, ok := c.owner.(TypingCapable); ok {
 			if stop, err := tc.StartTyping(ctx, chatID); err == nil {
 				c.placeholderRecorder.RecordTypingStop(c.name, chatID, stop)
 			}
 		}
-		// Reaction â€?independent pipeline
+		// Reaction -independent pipeline
 		if rc, ok := c.owner.(ReactionCapable); ok && messageID != "" {
 			if undo, err := rc.ReactToMessage(ctx, chatID, messageID); err == nil {
 				c.placeholderRecorder.RecordReactionUndo(c.name, chatID, undo)
 			}
 		}
-		// Placeholder â€?independent pipeline
+		// Placeholder -independent pipeline
 		if pc, ok := c.owner.(PlaceholderCapable); ok {
 			if phID, err := pc.SendPlaceholder(ctx, chatID); err == nil && phID != "" {
 				c.placeholderRecorder.RecordPlaceholder(c.name, chatID, phID)

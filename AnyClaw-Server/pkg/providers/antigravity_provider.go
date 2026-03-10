@@ -88,7 +88,7 @@ func (p *AntigravityProvider) Chat(
 		return nil, fmt.Errorf("marshaling request: %w", err)
 	}
 
-	// Build API URL â€?uses Cloud Code Assist v1internal streaming endpoint
+	// Build API URL -uses Cloud Code Assist v1internal streaming endpoint
 	apiURL := fmt.Sprintf("%s/v1internal:streamGenerateContent?alt=sse", antigravityBaseURL)
 
 	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(bodyBytes))
@@ -130,7 +130,7 @@ func (p *AntigravityProvider) Chat(
 		return nil, p.parseAntigravityError(resp.StatusCode, respBody)
 	}
 
-	// Response is always SSE from streamGenerateContent â€?each line is "data: {...}"
+	// Response is always SSE from streamGenerateContent -each line is "data: {...}"
 	// with a "response" wrapper containing the standard Gemini response
 	llmResp, err := p.parseSSEResponse(string(respBody))
 	if err != nil {
@@ -567,7 +567,7 @@ func createAntigravityTokenSource() func() (string, string, error) {
 		}
 		if cred == nil {
 			return "", "", fmt.Errorf(
-				"no credentials for google-antigravity. Run: AnyClaw auth login --provider google-antigravity",
+				"no credentials for google-antigravity. Run: openclaw auth login --provider google-antigravity",
 			)
 		}
 
@@ -590,7 +590,7 @@ func createAntigravityTokenSource() func() (string, string, error) {
 
 		if cred.IsExpired() {
 			return "", "", fmt.Errorf(
-				"antigravity credentials expired. Run: AnyClaw auth login --provider google-antigravity",
+				"antigravity credentials expired. Run: openclaw auth login --provider google-antigravity",
 			)
 		}
 

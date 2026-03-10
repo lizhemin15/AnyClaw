@@ -21,7 +21,7 @@ import (
 )
 
 // resolveMediaRefs replaces media:// refs in message Media fields with base64 data URLs.
-// Uses streaming base64 encoding (file handle â†?encoder â†?buffer) to avoid holding
+// Uses streaming base64 encoding (file handle ->encoder ->buffer) to avoid holding
 // both raw bytes and encoded string in memory simultaneously.
 // Returns a new slice; original messages are not mutated.
 func resolveMediaRefs(messages []providers.Message, store media.MediaStore, maxSize int) []providers.Message {
@@ -83,7 +83,7 @@ func resolveMediaRefs(messages []providers.Message, store media.MediaStore, maxS
 				mime = kind.MIME.Value
 			}
 
-			// Streaming base64: open file â†?base64 encoder â†?buffer
+			// Streaming base64: open file ->base64 encoder ->buffer
 			// Peak memory: ~1.33x file size (buffer only, no raw bytes copy)
 			f, err := os.Open(localPath)
 			if err != nil {

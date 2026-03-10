@@ -260,7 +260,7 @@ export default function Hosts() {
                   value={form.docker_image}
                   onChange={(e) => setForm((f) => ({ ...f, docker_image: e.target.value }))}
                   className="w-full px-4 py-3 border border-slate-300 rounded-xl"
-                  placeholder="anyclaw/anyclaw"
+                  placeholder="openclaw/openclaw"
                 />
               </div>
               <div className="flex items-center gap-3 min-h-[44px]">

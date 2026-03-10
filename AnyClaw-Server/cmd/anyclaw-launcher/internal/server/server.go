@@ -28,7 +28,7 @@ type providerStatus struct {
 // ── Route registration ───────────────────────────────────────────
 
 func RegisterConfigAPI(mux *http.ServeMux, absPath string) {
-	// GET /api/config �?read config
+	// GET /api/config -read config
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
 		cfg, err := config.LoadConfig(absPath)
 		if err != nil {
@@ -47,7 +47,7 @@ func RegisterConfigAPI(mux *http.ServeMux, absPath string) {
 		}
 	})
 
-	// PUT /api/config �?save config
+	// PUT /api/config -save config
 	mux.HandleFunc("PUT /api/config", func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 		if err != nil {
@@ -73,7 +73,7 @@ func RegisterConfigAPI(mux *http.ServeMux, absPath string) {
 }
 
 func RegisterAuthAPI(mux *http.ServeMux, absPath string) {
-	// GET /api/auth/status �?all authenticated providers + pending login state
+	// GET /api/auth/status -all authenticated providers + pending login state
 	mux.HandleFunc("GET /api/auth/status", func(w http.ResponseWriter, r *http.Request) {
 		store, err := auth.LoadStore()
 		if err != nil {
@@ -133,7 +133,7 @@ func RegisterAuthAPI(mux *http.ServeMux, absPath string) {
 		})
 	})
 
-	// POST /api/auth/login �?initiate provider login
+	// POST /api/auth/login -initiate provider login
 	mux.HandleFunc("POST /api/auth/login", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Provider string `json:"provider"`
@@ -163,7 +163,7 @@ func RegisterAuthAPI(mux *http.ServeMux, absPath string) {
 		}
 	})
 
-	// POST /api/auth/logout �?logout a provider
+	// POST /api/auth/logout -logout a provider
 	mux.HandleFunc("POST /api/auth/logout", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Provider string `json:"provider"`
@@ -191,6 +191,6 @@ func RegisterAuthAPI(mux *http.ServeMux, absPath string) {
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
-	// GET /auth/callback �?OAuth browser callback for Google Antigravity
+	// GET /auth/callback -OAuth browser callback for Google Antigravity
 	mux.HandleFunc("GET /auth/callback", handleOAuthCallback)
 }

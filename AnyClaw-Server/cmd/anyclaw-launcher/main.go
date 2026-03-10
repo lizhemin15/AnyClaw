@@ -33,7 +33,7 @@ var staticFiles embed.FS
 func main() {
 	public := flag.Bool("public", false, "Listen on all interfaces (0.0.0.0) instead of localhost only")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "AnyClaw Launcher - A web-based configuration editor\n\n")
+		fmt.Fprintf(os.Stderr, "OpenClaw Launcher - A web-based configuration editor\n\n")
 		fmt.Fprintf(os.Stderr, "Usage: %s [options] [config.json]\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "Arguments:\n")
 		fmt.Fprintf(os.Stderr, "  config.json    Path to the configuration file (default: ~/.anyclaw/config.json)\n\n")
@@ -80,7 +80,7 @@ func main() {
 
 	// Print startup banner
 	fmt.Println("=============================================")
-	fmt.Println("  AnyClaw Launcher")
+	fmt.Println("  OpenClaw Launcher")
 	fmt.Println("=============================================")
 	fmt.Printf("  Config file : %s\n", absPath)
 	fmt.Printf("  Listen addr : %s\n\n", addr)

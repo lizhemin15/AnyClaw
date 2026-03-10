@@ -22,7 +22,7 @@ type Scheduler struct {
 
 func New(apiURL, defaultImage string, hosts HostStore) *Scheduler {
 	if defaultImage == "" {
-		defaultImage = "anyclaw/anyclaw"
+		defaultImage = "openclaw/openclaw"
 	}
 	return &Scheduler{apiURL: apiURL, defaultImg: defaultImage, hosts: hosts}
 }
@@ -52,7 +52,7 @@ func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string, api
 		instanceID, host.Name, host.Addr, host.SSHPort, image, apiURL)
 
 	// Ensure 1GB workspace volume exists (loop device) and is mounted.
-	// Container runs as uid 1000 (picoclaw), so chown workspace for write access.
+	// Container runs as uid 1000 (openclaw), so chown workspace for write access.
 	ensureWorkspace := fmt.Sprintf(`export PATH=/usr/local/bin:/usr/bin:$PATH; mkdir -p /var/lib/anyclaw && \
 		FILE="/var/lib/anyclaw/ws-%d.img" && \
 		MOUNT="/var/lib/anyclaw/ws-%d" && \

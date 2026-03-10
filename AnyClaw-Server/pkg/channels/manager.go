@@ -85,9 +85,9 @@ type Manager struct {
 	mux           *http.ServeMux
 	httpServer    *http.Server
 	mu            sync.RWMutex
-	placeholders  sync.Map // "channel:chatID" â†?placeholderID (string)
-	typingStops   sync.Map // "channel:chatID" â†?func()
-	reactionUndos sync.Map // "channel:chatID" â†?reactionEntry
+	placeholders  sync.Map // "channel:chatID" ->placeholderID (string)
+	typingStops   sync.Map // "channel:chatID" ->func()
+	reactionUndos sync.Map // "channel:chatID" ->reactionEntry
 }
 
 type asyncTask struct {
@@ -141,7 +141,7 @@ func (m *Manager) preSend(ctx context.Context, name string, msg bus.OutboundMess
 				if err := editor.EditMessage(ctx, msg.ChatID, entry.id, msg.Content); err == nil {
 					return true // edited successfully, skip Send
 				}
-				// edit failed â†?fall through to normal Send
+				// edit failed ->fall through to normal Send
 			}
 		}
 	}
@@ -272,9 +272,9 @@ func (m *Manager) initChannels() error {
 		m.initChannel("wecom_app", "WeCom App")
 	}
 
-	// AnyClaw outbound bridge takes precedence when env vars are set (container mode).
+	// OpenClaw outbound bridge takes precedence when env vars are set (container mode).
 	if m.config.Channels.AnyClawBridge.IsEnabled() {
-		m.initChannel("anyclaw_bridge", "AnyClaw Bridge")
+		m.initChannel("anyclaw_bridge", "OpenClaw Bridge")
 	} else if m.config.Channels.Pico.Enabled && m.config.Channels.Pico.Token != "" {
 		m.initChannel("pico", "Pico")
 	}
@@ -521,17 +521,17 @@ func (m *Manager) sendWithRetry(ctx context.Context, name string, w *channelWork
 			return
 		}
 
-		// Permanent failures â€?don't retry
+		// Permanent failures -don't retry
 		if errors.Is(lastErr, ErrNotRunning) || errors.Is(lastErr, ErrSendFailed) {
 			break
 		}
 
-		// Last attempt exhausted â€?don't sleep
+		// Last attempt exhausted -don't sleep
 		if attempt == maxRetries {
 			break
 		}
 
-		// Rate limit error â€?fixed delay
+		// Rate limit error -fixed delay
 		if errors.Is(lastErr, ErrRateLimit) {
 			select {
 			case <-time.After(rateLimitDelay):
@@ -541,7 +541,7 @@ func (m *Manager) sendWithRetry(ctx context.Context, name string, w *channelWork
 			}
 		}
 
-		// ErrTemporary or unknown error â€?exponential backoff
+		// ErrTemporary or unknown error -exponential backoff
 		backoff := min(time.Duration(float64(baseBackoff)*math.Pow(2, float64(attempt))), maxBackoff)
 		select {
 		case <-time.After(backoff):
@@ -682,17 +682,17 @@ func (m *Manager) sendMediaWithRetry(ctx context.Context, name string, w *channe
 			return
 		}
 
-		// Permanent failures â€?don't retry
+		// Permanent failures -don't retry
 		if errors.Is(lastErr, ErrNotRunning) || errors.Is(lastErr, ErrSendFailed) {
 			break
 		}
 
-		// Last attempt exhausted â€?don't sleep
+		// Last attempt exhausted -don't sleep
 		if attempt == maxRetries {
 			break
 		}
 
-		// Rate limit error â€?fixed delay
+		// Rate limit error -fixed delay
 		if errors.Is(lastErr, ErrRateLimit) {
 			select {
 			case <-time.After(rateLimitDelay):
@@ -702,7 +702,7 @@ func (m *Manager) sendMediaWithRetry(ctx context.Context, name string, w *channe
 			}
 		}
 
-		// ErrTemporary or unknown error â€?exponential backoff
+		// ErrTemporary or unknown error -exponential backoff
 		backoff := min(time.Duration(float64(baseBackoff)*math.Pow(2, float64(attempt))), maxBackoff)
 		select {
 		case <-time.After(backoff):

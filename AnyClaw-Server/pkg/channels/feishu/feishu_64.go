@@ -510,7 +510,7 @@ func extractContent(messageType, rawContent string) string {
 		return rawContent
 
 	case larkim.MsgTypePost:
-		// Pass raw JSON to LLM â€?structured rich text is more informative than flattened plain text
+		// Pass raw JSON to LLM -structured rich text is more informative than flattened plain text
 		return rawContent
 
 	case larkim.MsgTypeImage:
@@ -563,7 +563,7 @@ func (c *FeishuChannel) downloadInboundMedia(
 		case larkim.MsgTypeMedia:
 			ext = ".mp4"
 		default:
-			ext = "" // generic file â€?rely on resp.FileName
+			ext = "" // generic file -rely on resp.FileName
 		}
 		ref := c.downloadResource(ctx, messageID, fileKey, "file", ext, store, scope)
 		if ref != "" {
@@ -624,7 +624,7 @@ func (c *FeishuChannel) downloadResource(
 	}
 
 	// Write to the shared ANYCLAW_media directory using a unique name to avoid collisions.
-	mediaDir := filepath.Join(os.TempDir(), "ANYCLAW_media")
+	mediaDir := filepath.Join(os.TempDir(), "OPENCLAW_media")
 	if mkdirErr := os.MkdirAll(mediaDir, 0o700); mkdirErr != nil {
 		logger.ErrorCF("feishu", "Failed to create media directory", map[string]any{
 			"error": mkdirErr.Error(),

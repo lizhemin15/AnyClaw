@@ -14,7 +14,7 @@ func NewOnboardCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "onboard",
 		Aliases: []string{"o"},
-		Short:   "Initialize AnyClaw configuration and workspace",
+		Short:   "Initialize OpenClaw configuration and workspace",
 		Run: func(cmd *cobra.Command, args []string) {
 			onboard()
 		},

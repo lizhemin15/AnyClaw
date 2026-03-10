@@ -12,8 +12,8 @@
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AnyClaw Config</title>
-    <meta name="description" content="AnyClaw configuration editor">
+    <title>OpenClaw Config</title>
+    <meta name="description" content="OpenClaw configuration editor">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
@@ -501,7 +501,7 @@
 <header class="header">
     <div class="header-left">
         <div class="logo">P</div>
-        <h1>PicoClaw <span>Config</span></h1>
+        <h1>OpenClaw <span>Config</span></h1>
     </div>
     <div class="header-center">
         <button class="btn btn-run btn-process" id="btnRunStop" disabled>
@@ -679,7 +679,7 @@
 </div>
 
 <footer class="footer">
-    <span>AnyClaw Config</span>
+    <span>OpenClaw Config</span>
     <span id="jsonStatus">-</span>
 </footer>
 
@@ -1416,7 +1416,7 @@ function renderChannelForm(chKey) {
     let html = `<div class="panel-title">${schema.title}</div>`;
     html += `<div class="panel-desc">${t('ch.configure', { name: schema.title })}`;
     if (schema.docSlug) {
-        const docBase = currentLang === 'zh' ? 'https://docs.anyclaw.io/zh-Hans/docs/channels/' : 'https://docs.anyclaw.io/docs/channels/';
+        const docBase = currentLang === 'zh' ? 'https://docs.openclaw.io/zh-Hans/docs/channels/' : 'https://docs.openclaw.io/docs/channels/';
         html += ` <a class="doc-link" href="${docBase}${schema.docSlug}" target="_blank" rel="noopener noreferrer">\u{1F4D6} ${t('ch.docLink')}</a>`;
     }
     html += `</div>`;

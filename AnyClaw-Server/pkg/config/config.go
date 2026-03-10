@@ -172,11 +172,11 @@ type SessionConfig struct {
 // (message length, code blocks, tool call history, conversation depth, attachments).
 // Messages scoring below Threshold are sent to LightModel; all others use the
 // agent's primary model. This reduces cost and latency for simple tasks without
-// requiring any keyword matching â€?all scoring is language-agnostic.
+// requiring any keyword matching -all scoring is language-agnostic.
 type RoutingConfig struct {
 	Enabled    bool    `json:"enabled"`
 	LightModel string  `json:"light_model"` // model_name from model_list to use for simple tasks
-	Threshold  float64 `json:"threshold"`   // complexity score in [0,1]; score >= threshold â†?primary model
+	Threshold  float64 `json:"threshold"`   // complexity score in [0,1]; score >= threshold ->primary model
 }
 
 type AgentDefaults struct {

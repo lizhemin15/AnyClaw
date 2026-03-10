@@ -251,7 +251,7 @@ func (m *Manager) ConnectServer(
 
 	// Create client
 	client := mcp.NewClient(&mcp.Implementation{
-		Name:    "AnyClaw",
+		Name:    "OpenClaw",
 		Version: "1.0.0",
 	}, nil)
 

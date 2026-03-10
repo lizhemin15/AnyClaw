@@ -21,7 +21,7 @@ import (
 // gatewayLogs stores captured stdout/stderr from the gateway process launched by the launcher.
 var gatewayLogs = NewLogBuffer(200)
 
-// RegisterProcessAPI registers endpoints to start, stop and check status of the AnyClaw gateway.
+// RegisterProcessAPI registers endpoints to start, stop and check status of the OpenClaw gateway.
 func RegisterProcessAPI(mux *http.ServeMux, absPath string) {
 	mux.HandleFunc("GET /api/process/status", func(w http.ResponseWriter, r *http.Request) {
 		handleStatusGateway(w, r, absPath)
@@ -31,14 +31,14 @@ func RegisterProcessAPI(mux *http.ServeMux, absPath string) {
 }
 
 func handleStartGateway(w http.ResponseWriter, r *http.Request) {
-	// Locate AnyClaw executable:
+	// Locate OpenClaw executable:
 	// 1. Try same directory as current executable
-	// 2. Fallback to just "AnyClaw" (relies on $PATH)
-	execPath := "AnyClaw"
+	// 2. Fallback to just "openclaw" (relies on $PATH)
+	execPath := "openclaw"
 
 	if exe, err := os.Executable(); err == nil {
 		dir := filepath.Dir(exe)
-		candidate := filepath.Join(dir, "AnyClaw")
+		candidate := filepath.Join(dir, "openclaw")
 		if runtime.GOOS == "windows" {
 			candidate += ".exe"
 		}
@@ -68,7 +68,7 @@ func handleStartGateway(w http.ResponseWriter, r *http.Request) {
 	gatewayLogs.Reset()
 
 	if err := cmd.Start(); err != nil {
-		log.Printf("Failed to start AnyClaw gateway: %v\n", err)
+		log.Printf("Failed to start OpenClaw gateway: %v\n", err)
 		http.Error(w, fmt.Sprintf("Failed to start gateway: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -84,7 +84,7 @@ func handleStartGateway(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	log.Printf("Started AnyClaw gateway (PID: %d) from %s\n", cmd.Process.Pid, execPath)
+	log.Printf("Started OpenClaw gateway (PID: %d) from %s\n", cmd.Process.Pid, execPath)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
@@ -106,13 +106,13 @@ func scanPipe(r io.Reader, buf *LogBuffer) {
 func handleStopGateway(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if runtime.GOOS == "windows" {
-		// Kill via taskkill finding AnyClaw.exe (though it might kill this config tool if it's named AnyClaw-launcher.exe...? No, /IM does exact match usually, but just to be safe let's stop exactly AnyClaw.exe)
+		// Kill via taskkill finding openclaw.exe (though it might kill this config tool if it's named openclaw-launcher.exe...? No, /IM does exact match usually, but just to be safe let's stop exactly openclaw.exe)
 		// Alternatively, we use powershell to kill processes with commandline containing 'gateway'
-		psCmd := `Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -match 'AnyClaw.*gateway' } | ForEach-Object { Stop-Process $_.ProcessId -Force }`
+		psCmd := `Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -match 'openclaw.*gateway' } | ForEach-Object { Stop-Process $_.ProcessId -Force }`
 		err = exec.Command("powershell", "-Command", psCmd).Run()
 	} else {
 		// Linux/macOS
-		err = exec.Command("pkill", "-f", "AnyClaw gateway").Run()
+		err = exec.Command("pkill", "-f", "openclaw gateway").Run()
 	}
 
 	if err != nil {
@@ -127,7 +127,7 @@ func handleStopGateway(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Stopped AnyClaw gateway processes.\n")
+	log.Printf("Stopped OpenClaw gateway processes.\n")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"status": "ok",
@@ -169,7 +169,7 @@ func handleStatusGateway(w http.ResponseWriter, r *http.Request, absPath string)
 				data["process_status"] = "error"
 				data["error"] = "invalid response from gateway"
 			} else {
-				// Gateway is running and responded properly â€?merge health data
+				// Gateway is running and responded properly -merge health data
 				for k, v := range healthData {
 					data[k] = v
 				}

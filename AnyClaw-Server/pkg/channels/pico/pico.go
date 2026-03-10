@@ -52,7 +52,7 @@ type PicoChannel struct {
 	*channels.BaseChannel
 	config      config.PicoConfig
 	upgrader    websocket.Upgrader
-	connections sync.Map // connID â†?*picoConn
+	connections sync.Map // connID ->*picoConn
 	connCount   atomic.Int32
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -137,7 +137,7 @@ func (c *PicoChannel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Send implements Channel â€?sends a message to the appropriate WebSocket connection.
+// Send implements Channel -sends a message to the appropriate WebSocket connection.
 func (c *PicoChannel) Send(ctx context.Context, msg bus.OutboundMessage) error {
 	if !c.IsRunning() {
 		return channels.ErrNotRunning

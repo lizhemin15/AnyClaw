@@ -96,7 +96,7 @@ func (m *MigrateInstance) Run(opts Options) (*Result, error) {
 		return nil, err
 	}
 
-	fmt.Println("Migrating from Source to AnyClaw")
+	fmt.Println("Migrating from Source to OpenClaw")
 	fmt.Printf("  Source:      %s\n", sourceHome)
 	fmt.Printf("  Target: %s\n", targetHome)
 	fmt.Println()
@@ -142,7 +142,7 @@ func (m *MigrateInstance) Plan(opts Options, sourceHome, targetHome string) ([]A
 				Type:        ActionConvertConfig,
 				Source:      configPath,
 				Target:      filepath.Join(targetHome, "config.json"),
-				Description: "convert Source config to AnyClaw format",
+				Description: "convert Source config to OpenClaw format",
 			})
 		}
 	}
@@ -183,10 +183,10 @@ func (m *MigrateInstance) Execute(actions []Action, sourceHome, targetHome strin
 		case ActionConvertConfig:
 			if err := handler.ExecuteConfigMigration(action.Source, action.Target); err != nil {
 				result.Errors = append(result.Errors, fmt.Errorf("config migration: %w", err))
-				fmt.Printf("  âœ?Config migration failed: %v\n", err)
+				fmt.Printf("  âœ”Config migration failed: %v\n", err)
 			} else {
 				result.ConfigMigrated = true
-				fmt.Printf("  âœ?Converted config: %s\n", action.Target)
+				fmt.Printf("  âœ”Converted config: %s\n", action.Target)
 			}
 		case ActionCreateDir:
 			if err := os.MkdirAll(action.Target, 0o755); err != nil {
@@ -198,12 +198,12 @@ func (m *MigrateInstance) Execute(actions []Action, sourceHome, targetHome strin
 			bakPath := action.Target + ".bak"
 			if err := internal.CopyFile(action.Target, bakPath); err != nil {
 				result.Errors = append(result.Errors, fmt.Errorf("backup %s: %w", action.Target, err))
-				fmt.Printf("  âœ?Backup failed: %s\n", action.Target)
+				fmt.Printf("  âœ”Backup failed: %s\n", action.Target)
 				continue
 			}
 			result.BackupsCreated++
 			fmt.Printf(
-				"  âœ?Backed up %s -> %s.bak\n",
+				"  âœ”Backed up %s -> %s.bak\n",
 				filepath.Base(action.Target),
 				filepath.Base(action.Target),
 			)
@@ -214,10 +214,10 @@ func (m *MigrateInstance) Execute(actions []Action, sourceHome, targetHome strin
 			}
 			if err := internal.CopyFile(action.Source, action.Target); err != nil {
 				result.Errors = append(result.Errors, fmt.Errorf("copy %s: %w", action.Source, err))
-				fmt.Printf("  âœ?Copy failed: %s\n", action.Source)
+				fmt.Printf("  âœ”Copy failed: %s\n", action.Source)
 			} else {
 				result.FilesCopied++
-				fmt.Printf("  âœ?Copied %s\n", internal.RelPath(action.Source, sourceHome))
+				fmt.Printf("  âœ”Copied %s\n", internal.RelPath(action.Source, sourceHome))
 			}
 		case ActionCopy:
 			if err := os.MkdirAll(filepath.Dir(action.Target), 0o755); err != nil {
@@ -226,10 +226,10 @@ func (m *MigrateInstance) Execute(actions []Action, sourceHome, targetHome strin
 			}
 			if err := internal.CopyFile(action.Source, action.Target); err != nil {
 				result.Errors = append(result.Errors, fmt.Errorf("copy %s: %w", action.Source, err))
-				fmt.Printf("  âœ?Copy failed: %s\n", action.Source)
+				fmt.Printf("  âœ”Copy failed: %s\n", action.Source)
 			} else {
 				result.FilesCopied++
-				fmt.Printf("  âœ?Copied %s\n", internal.RelPath(action.Source, sourceHome))
+				fmt.Printf("  âœ”Copied %s\n", internal.RelPath(action.Source, sourceHome))
 			}
 		case ActionSkip:
 			result.FilesSkipped++
