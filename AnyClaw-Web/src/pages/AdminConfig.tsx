@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAdminConfig, putAdminConfig, type AdminConfig } from '../api'
+import { getAdminConfig, putAdminConfig, type AdminConfig, type ModelEntry } from '../api'
 
 const PROVIDER_LABELS: Record<string, string> = {
   openai: 'OpenAI',
@@ -13,6 +13,10 @@ const PROVIDER_DEFAULTS: Record<string, string> = {
   openrouter: 'https://openrouter.ai/api/v1',
 }
 
+function genId() {
+  return 'm-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
+}
+
 export default function AdminConfig() {
   const [config, setConfig] = useState<AdminConfig | null>(null)
   const [form, setForm] = useState<AdminConfig | null>(null)
@@ -21,21 +25,18 @@ export default function AdminConfig() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
-  const [modelSwitchOn, setModelSwitchOn] = useState(false)
+  const [newModelName, setNewModelName] = useState('')
 
   useEffect(() => {
     getAdminConfig()
       .then((c) => {
-        setConfig(c)
-        setForm(JSON.parse(JSON.stringify(c)))
+        const modelList = Array.isArray(c.model_list) ? c.model_list : []
+        setConfig({ ...c, model_list: modelList })
+        setForm({ ...c, model_list: JSON.parse(JSON.stringify(modelList)) })
       })
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
       .finally(() => setLoading(false))
   }, [])
-
-  useEffect(() => {
-    if (form) setModelSwitchOn(!!(form.default_model ?? '').trim())
-  }, [form?.default_model])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -66,6 +67,42 @@ export default function AdminConfig() {
     })
   }
 
+  const addModel = () => {
+    if (!form || !newModelName.trim()) return
+    const name = newModelName.trim()
+    const list = form.model_list ?? []
+    if (list.some((m) => m.name === name)) return
+    const next: ModelEntry[] = list.map((m) => ({ ...m, enabled: false }))
+    next.push({ id: genId(), name, enabled: true })
+    setForm({ ...form, model_list: next })
+    setNewModelName('')
+  }
+
+  const removeModel = (id: string) => {
+    if (!form) return
+    const list = (form.model_list ?? []).filter((m) => m.id !== id)
+    const hadEnabled = (form.model_list ?? []).find((m) => m.id === id)?.enabled
+    if (hadEnabled && list.length > 0 && !list.some((m) => m.enabled)) {
+      list[0].enabled = true
+    }
+    setForm({ ...form, model_list: list })
+  }
+
+  const setModelEnabled = (id: string) => {
+    if (!form) return
+    const list = (form.model_list ?? []).map((m) => ({
+      ...m,
+      enabled: m.id === id,
+    }))
+    setForm({ ...form, model_list: list })
+  }
+
+  const updateModelName = (id: string, name: string) => {
+    if (!form) return
+    const list = (form.model_list ?? []).map((m) => (m.id === id ? { ...m, name } : m))
+    setForm({ ...form, model_list: list })
+  }
+
   const statusBadge = (hasKey: boolean) =>
     hasKey ? (
       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
@@ -92,15 +129,8 @@ export default function AdminConfig() {
     )
   }
 
-  const setModelEnabled = (on: boolean) => {
-    if (!form) return
-    setModelSwitchOn(on)
-    if (!on) setForm({ ...form, default_model: '' })
-  }
-  const updateDefaultModel = (v: string) => {
-    if (!form) return
-    setForm({ ...form, default_model: v })
-  }
+  const modelList = form?.model_list ?? []
+  const enabledModel = modelList.find((m) => m.enabled)
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -109,42 +139,76 @@ export default function AdminConfig() {
         <p className="text-sm text-slate-500 mt-1">管理 LLM API 渠道，宠物实例将使用此处配置的密钥调用模型</p>
       </div>
 
-      {/* 默认模型 - 滑纽启动 */}
-      <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm p-5">
-        <div className="flex items-center justify-between">
+      {/* 模型列表 - One API 风格 */}
+      <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
           <div>
-            <h2 className="font-semibold text-slate-800">默认模型</h2>
+            <h2 className="font-semibold text-slate-800">模型管理</h2>
             <p className="text-sm text-slate-500 mt-0.5">
-              {modelSwitchOn ? '已启用，添加模型后新领养宠物将使用' : '未启用，新领养宠物将使用 gpt-4o'}
+              添加模型后启用，一次只能启用一个。当前启用：{enabledModel ? enabledModel.name : '无（新宠物将用 gpt-4o）'}
             </p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={modelSwitchOn}
-            onClick={() => setModelEnabled(!modelSwitchOn)}
-            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-              modelSwitchOn ? 'bg-indigo-600' : 'bg-slate-200'
-            }`}
-          >
-            <span
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
-                modelSwitchOn ? 'translate-x-5' : 'translate-x-1'
-              }`}
-            />
-          </button>
-        </div>
-        {modelSwitchOn && (
-          <div className="mt-4 pt-4 border-t border-slate-100">
+          <div className="flex gap-2">
             <input
               type="text"
-              value={form?.default_model ?? ''}
-              onChange={(e) => updateDefaultModel(e.target.value)}
-              placeholder="gpt-4o、claude-3-5-sonnet、openrouter/auto 等"
-              className="w-full max-w-md px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              value={newModelName}
+              onChange={(e) => setNewModelName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addModel())}
+              placeholder="gpt-4o、claude-3-5-sonnet 等"
+              className="px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono w-56 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
+            <button
+              type="button"
+              onClick={addModel}
+              disabled={!newModelName.trim()}
+              className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              添加
+            </button>
           </div>
-        )}
+        </div>
+        <div className="divide-y divide-slate-100">
+          {modelList.length === 0 ? (
+            <div className="px-5 py-8 text-center text-slate-500 text-sm">暂无模型，点击上方添加</div>
+          ) : (
+            modelList.map((m) => (
+              <div
+                key={m.id}
+                className="px-5 py-3 flex items-center gap-4 hover:bg-slate-50/50"
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={m.enabled}
+                  onClick={() => setModelEnabled(m.id)}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 ${
+                    m.enabled ? 'bg-indigo-600' : 'bg-slate-200'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition ${
+                      m.enabled ? 'translate-x-4' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+                <input
+                  type="text"
+                  value={m.name}
+                  onChange={(e) => updateModelName(m.id, e.target.value)}
+                  className="flex-1 min-w-0 px-3 py-1.5 border border-slate-300 rounded text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+                <span className="text-xs text-slate-400 w-12">{m.enabled ? '已启用' : '未启用'}</span>
+                <button
+                  type="button"
+                  onClick={() => removeModel(m.id)}
+                  className="text-sm text-red-600 hover:text-red-700"
+                >
+                  删除
+                </button>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       {error && (
@@ -232,7 +296,7 @@ export default function AdminConfig() {
               </table>
             </div>
             <div className="px-4 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
-              {(editing || form !== config) && (
+              {(editing || JSON.stringify(form) !== JSON.stringify(config)) && (
                 <button
                   type="button"
                   onClick={() => {

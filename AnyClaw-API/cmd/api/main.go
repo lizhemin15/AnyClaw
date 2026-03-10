@@ -83,7 +83,7 @@ func runApp(cfg *config.Config, database *db.DB) {
 	if apiURL == "" {
 		apiURL = fmt.Sprintf("http://localhost:%d", cfg.Port)
 	}
-	sched := scheduler.New(apiURL, cfg.DockerImage, cfg.DefaultModel, database)
+	sched := scheduler.New(apiURL, cfg.DockerImage, cfg.GetEnabledModel(), database)
 	instHandler := instances.New(database, sched, apiURL)
 	hostChecker := scheduler.HostChecker{}
 	hostHandler := hosts.New(database, hostChecker)

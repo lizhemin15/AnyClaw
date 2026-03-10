@@ -7,14 +7,34 @@ import (
 )
 
 type Config struct {
-	Port        int    `json:"port" env:"ANYCLAW_API_PORT"`
-	DBDSN       string `json:"db_dsn"`
-	JWTSecret   string `json:"jwt_secret"`
+	Port        int         `json:"port" env:"ANYCLAW_API_PORT"`
+	DBDSN       string      `json:"db_dsn"`
+	JWTSecret   string      `json:"jwt_secret"`
 	APIURL      string      `json:"api_url"`       // e.g. http://localhost:8080 for Docker containers
-	DockerImage string      `json:"docker_image"`  // openclaw/openclaw
-	DefaultModel string    `json:"default_model"`  // 宠物默认使用的模型，如 gpt-4o
+	DockerImage string      `json:"docker_image"` // openclaw/openclaw
+	DefaultModel string     `json:"default_model"` // deprecated, use model_list
+	ModelList   []ModelEntry `json:"model_list"`   // 可添加的模型列表，仅一个可启用
 	KeyPool     KeyPool     `json:"key_pool"`
 	InstanceMap InstanceMap `json:"instance_map"`  // legacy: tokens from config (merged with DB)
+}
+
+type ModelEntry struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`    // 如 gpt-4o, claude-3-5-sonnet
+	Enabled bool   `json:"enabled"` // 一次只能启用一个
+}
+
+// GetEnabledModel 返回当前启用的模型名，若无则返回空（scheduler 会用 gpt-4o）
+func (c *Config) GetEnabledModel() string {
+	for _, m := range c.ModelList {
+		if m.Enabled && m.Name != "" {
+			return m.Name
+		}
+	}
+	if c.DefaultModel != "" {
+		return c.DefaultModel
+	}
+	return ""
 }
 
 type KeyPool struct {
@@ -66,6 +86,12 @@ func Load(path string) (*Config, error) {
 	if cfg.InstanceMap.Tokens == nil {
 		cfg.InstanceMap.Tokens = make(map[string]InstanceInfo)
 	}
+	if cfg.ModelList == nil && cfg.DefaultModel != "" {
+		cfg.ModelList = []ModelEntry{{ID: "migrated", Name: cfg.DefaultModel, Enabled: true}}
+	}
+	if cfg.ModelList == nil {
+		cfg.ModelList = []ModelEntry{}
+	}
 	// Env can override file
 	if s := os.Getenv("ANYCLAW_INSTANCE_TOKENS"); s != "" {
 		var m map[string]InstanceInfo
@@ -102,8 +128,8 @@ func Save(path string, c *SaveConfig) error {
 	return os.WriteFile(path, data, 0600)
 }
 
-// SaveKeyPool merges KeyPool and optionally default_model into config file and writes. Preserves other fields.
-func SaveKeyPool(path string, pool KeyPool, defaultModel string) error {
+// SaveAdminConfig saves key_pool and model_list to config file. Preserves other fields.
+func SaveAdminConfig(path string, pool KeyPool, modelList []ModelEntry) error {
 	if path == "" {
 		path = ConfigPath()
 	}
@@ -125,7 +151,7 @@ func SaveKeyPool(path string, pool KeyPool, defaultModel string) error {
 		raw = make(map[string]any)
 	}
 	raw["key_pool"] = pool
-	raw["default_model"] = defaultModel
+	raw["model_list"] = modelList
 	data, err := json.MarshalIndent(raw, "", "  ")
 	if err != nil {
 		return err
