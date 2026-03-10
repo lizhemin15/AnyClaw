@@ -7,6 +7,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// OnContainerMessage is called when a message is received from the container (before forwarding to user).
+type OnContainerMessage func(instanceID int64, data []byte)
+
 type containerEntry struct {
 	conn   *websocket.Conn
 	userMu sync.RWMutex
@@ -15,12 +18,19 @@ type containerEntry struct {
 }
 
 type Hub struct {
-	mu         sync.RWMutex
-	containers map[int64]*containerEntry
+	mu               sync.RWMutex
+	containers       map[int64]*containerEntry
+	onContainerMsg   OnContainerMessage
 }
 
 func NewHub() *Hub {
 	return &Hub{containers: make(map[int64]*containerEntry)}
+}
+
+func (h *Hub) SetOnContainerMessage(f OnContainerMessage) {
+	h.mu.Lock()
+	h.onContainerMsg = f
+	h.mu.Unlock()
 }
 
 // Register stores the container conn and starts a reader. Returns a channel that
@@ -52,6 +62,12 @@ func (h *Hub) containerReader(instanceID int64, entry *containerEntry) {
 				log.Printf("[ws] container %d disconnected: %v", instanceID, err)
 			}
 			return
+		}
+		h.mu.RLock()
+		onMsg := h.onContainerMsg
+		h.mu.RUnlock()
+		if onMsg != nil {
+			onMsg(instanceID, data)
 		}
 		entry.userMu.RLock()
 		user := entry.user

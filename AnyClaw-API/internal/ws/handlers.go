@@ -1,9 +1,11 @@
 package ws
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/anyclaw/anyclaw-api/internal/request"
 	"github.com/go-chi/chi/v5"
@@ -85,10 +87,10 @@ func (h *Handler) HandleUserWS(w http.ResponseWriter, r *http.Request) {
 	}()
 	h.hub.AttachUser(instanceID, userConn)
 	// user->container: read from user, write to container (container->user is handled by Hub's single reader)
-	h.bridgeTo(containerConn, userConn, false)
+	h.bridgeTo(containerConn, userConn, instanceID, false)
 }
 
-func (h *Handler) bridgeTo(dst, src *websocket.Conn, closeDstOnDone bool) {
+func (h *Handler) bridgeTo(dst, src *websocket.Conn, instanceID int64, closeDstOnDone bool) {
 	if closeDstOnDone {
 		defer dst.Close()
 	}
@@ -97,6 +99,17 @@ func (h *Handler) bridgeTo(dst, src *websocket.Conn, closeDstOnDone bool) {
 		if err != nil {
 			log.Printf("[ws] bridge read error: %v", err)
 			return
+		}
+		if mt == websocket.TextMessage {
+			var msg struct {
+				Type    string `json:"type"`
+				Payload struct {
+					Content string `json:"content"`
+				} `json:"payload"`
+			}
+			if json.Unmarshal(data, &msg) == nil && msg.Type == "message.send" && strings.TrimSpace(msg.Payload.Content) != "" {
+				_, _ = h.db.InsertMessage(instanceID, "user", msg.Payload.Content)
+			}
 		}
 		if err := dst.WriteMessage(mt, data); err != nil {
 			log.Printf("[ws] bridge write error: %v", err)

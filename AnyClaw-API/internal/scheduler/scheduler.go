@@ -12,6 +12,7 @@ import (
 
 type HostStore interface {
 	ListEnabledHosts() ([]*db.Host, error)
+	ListAllHostsWithCredentials() ([]*db.Host, error)
 	GetHost(id string) (*db.Host, error)
 }
 
@@ -78,8 +79,9 @@ func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string, api
 		}
 	}
 	mountPath := fmt.Sprintf("/var/lib/anyclaw/ws-%d", instanceID)
-	cmd := fmt.Sprintf("export PATH=/usr/local/bin:/usr/bin:$PATH; docker run -d --pull always -v %s:/workspace -e PICOCLAW_AGENTS_DEFAULTS_WORKSPACE=/workspace -e ANYCLAW_AGENTS_DEFAULTS_MODEL_NAME='%s' -e ANYCLAW_API_URL='%s' -e ANYCLAW_INSTANCE_ID=%d -e ANYCLAW_TOKEN='%s' %s 2>&1",
-		mountPath, defaultModel, apiURL, instanceID, token, image)
+	containerName := fmt.Sprintf("anyclaw-inst-%d", instanceID)
+	cmd := fmt.Sprintf("export PATH=/usr/local/bin:/usr/bin:$PATH; docker run -d --name %s --pull always -v %s:/workspace -e PICOCLAW_AGENTS_DEFAULTS_WORKSPACE=/workspace -e ANYCLAW_AGENTS_DEFAULTS_MODEL_NAME='%s' -e ANYCLAW_API_URL='%s' -e ANYCLAW_INSTANCE_ID=%d -e ANYCLAW_TOKEN='%s' %s 2>&1",
+		containerName, mountPath, defaultModel, apiURL, instanceID, token, image)
 	out, err := runSSH(host, cmd)
 	if err != nil {
 		log.Printf("[scheduler] ssh docker run on %s failed: %v", host.Addr, err)
@@ -91,37 +93,76 @@ func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string, api
 
 // Stop stops and removes a container on the given host.
 // If instanceID > 0, also unmounts and removes the workspace volume.
+// When hostID is empty, tries ALL hosts (including disabled) until docker rm succeeds.
+// When containerID is empty but instanceID > 0, tries removing by name anyclaw-inst-{id}.
 func (s *Scheduler) Stop(ctx context.Context, hostID, containerID string, instanceID int64) error {
-	if containerID == "" {
+	rmTarget := containerID
+	if rmTarget == "" && instanceID > 0 {
+		rmTarget = fmt.Sprintf("anyclaw-inst-%d", instanceID)
+		log.Printf("[scheduler] container_id empty, trying remove by name %s", rmTarget)
+	}
+	if rmTarget == "" {
 		return nil
 	}
-	if hostID == "" {
-		// host_id 可能为空（旧实例），尝试在首个已启用 host 上执行 docker rm
-		list, err := s.hosts.ListEnabledHosts()
-		if err != nil || len(list) == 0 {
-			log.Printf("[scheduler] skip stop: host_id empty and no enabled hosts for container %s", containerID)
-			return nil
-		}
-		hostID = list[0].ID
-		log.Printf("[scheduler] host_id empty, trying first enabled host %s for container %s", hostID, containerID)
+	allHosts, err := s.hosts.ListAllHostsWithCredentials()
+	if err != nil || len(allHosts) == 0 {
+		log.Printf("[scheduler] skip stop: no hosts for rm target %s", rmTarget)
+		return nil
 	}
-	host, err := s.hosts.GetHost(hostID)
-	if err != nil || host == nil {
-		return fmt.Errorf("host not found: %s", hostID)
-	}
-	cmd := fmt.Sprintf("export PATH=/usr/local/bin:/usr/bin:$PATH; docker rm -f %s 2>&1", containerID)
-	if _, err := runSSH(host, cmd); err != nil {
-		log.Printf("[scheduler] ssh docker rm on %s failed: %v", host.Addr, err)
-		return err
-	}
-	// Unmount and remove workspace volume when instance is deleted
-	if instanceID > 0 {
-		cleanup := fmt.Sprintf(`export PATH=/usr/local/bin:/usr/bin:$PATH; MOUNT="/var/lib/anyclaw/ws-%d" && FILE="/var/lib/anyclaw/ws-%d.img" && \
-			if mountpoint -q "$MOUNT" 2>/dev/null; then umount "$MOUNT"; fi && \
-			rm -f "$FILE"`, instanceID, instanceID)
-		if _, err := runSSH(host, cleanup); err != nil {
-			log.Printf("[scheduler] workspace cleanup on %s failed (non-fatal): %v", host.Addr, err)
+	var hostsToTry []*db.Host
+	if hostID != "" {
+		if host, err := s.hosts.GetHost(hostID); err == nil && host != nil && (host.SSHKey != "" || host.SSHPassword != "") {
+			hostsToTry = []*db.Host{host}
+			for _, h := range allHosts {
+				if h.ID != hostID {
+					hostsToTry = append(hostsToTry, h)
+				}
+			}
 		}
 	}
-	return nil
+	if len(hostsToTry) == 0 {
+		hostsToTry = allHosts
+		log.Printf("[scheduler] host_id empty or invalid, trying all %d hosts for rm target %s", len(allHosts), rmTarget)
+	}
+	// Safety: when instanceID is known, always verify container belongs to this instance before rm
+	// to avoid accidentally deleting wrong containers (wrong DB data or manual name collision).
+	verifyBeforeRm := instanceID > 0
+	var lastErr error
+	for _, host := range hostsToTry {
+		if verifyBeforeRm {
+			verifyCmd := fmt.Sprintf("export PATH=/usr/local/bin:/usr/bin:$PATH; docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' %s 2>/dev/null | grep -E '^ANYCLAW_INSTANCE_ID=' || true", rmTarget)
+			out, err := runSSH(host, verifyCmd)
+			if err != nil {
+				lastErr = err
+				continue
+			}
+			expected := fmt.Sprintf("ANYCLAW_INSTANCE_ID=%d", instanceID)
+			got := strings.TrimSpace(out)
+			if got != expected {
+				if got != "" {
+					log.Printf("[scheduler] skip rm on %s: container %s env mismatch (got %q, expect %q)", host.Addr, rmTarget, got, expected)
+					lastErr = fmt.Errorf("container %s does not belong to instance %d", rmTarget, instanceID)
+				}
+				continue
+			}
+		}
+		cmd := fmt.Sprintf("export PATH=/usr/local/bin:/usr/bin:$PATH; docker rm -f %s 2>&1", rmTarget)
+		if _, err := runSSH(host, cmd); err != nil {
+			log.Printf("[scheduler] docker rm on %s (%s) failed: %v", host.Name, host.Addr, err)
+			lastErr = err
+			continue
+		}
+		log.Printf("[scheduler] container %s removed on host %s", rmTarget, host.ID)
+		// Unmount and remove workspace volume when instance is deleted
+		if instanceID > 0 {
+			cleanup := fmt.Sprintf(`export PATH=/usr/local/bin:/usr/bin:$PATH; MOUNT="/var/lib/anyclaw/ws-%d" && FILE="/var/lib/anyclaw/ws-%d.img" && \
+				if mountpoint -q "$MOUNT" 2>/dev/null; then umount "$MOUNT"; fi && \
+				rm -f "$FILE"`, instanceID, instanceID)
+			if _, err := runSSH(host, cleanup); err != nil {
+				log.Printf("[scheduler] workspace cleanup on %s failed (non-fatal): %v", host.Addr, err)
+			}
+		}
+		return nil
+	}
+	return lastErr
 }

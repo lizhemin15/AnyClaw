@@ -68,7 +68,7 @@ export default function Home({ user }: { user: User | null }) {
 
   const handleAbandon = async (e: React.MouseEvent, inst: Instance) => {
     e.stopPropagation()
-    if (!confirm(`确定弃养「${inst.name}」？弃养后无法恢复。`)) return
+    if (!confirm(`确定弃养「${inst.name}」？弃养后无法恢复，系统将删除该宠物的所有聊天记录。`)) return
     setDeleting(inst.id)
     setError('')
     try {

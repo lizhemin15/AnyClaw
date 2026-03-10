@@ -15,6 +15,7 @@ import (
 	"github.com/anyclaw/anyclaw-api/internal/hosts"
 	"github.com/anyclaw/anyclaw-api/internal/instances"
 	"github.com/anyclaw/anyclaw-api/internal/llm"
+	"github.com/anyclaw/anyclaw-api/internal/messages"
 	"github.com/anyclaw/anyclaw-api/internal/scheduler"
 	"github.com/anyclaw/anyclaw-api/internal/setup"
 	"github.com/anyclaw/anyclaw-api/internal/web"
@@ -92,6 +93,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 
 	wsHub := ws.NewHub()
 	wsHandler := ws.NewHandler(database, wsHub)
+	msgHandler := messages.New(database)
 	energyHandler := energy.New(database)
 
 	proxy := llm.New(configPath, database, database)
@@ -124,6 +126,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Get("/", instHandler.List)
 		r.Post("/", instHandler.Create)
 		r.Get("/{id}/ws", wsHandler.HandleUserWS)
+		r.Get("/{id}/messages", msgHandler.List)
 		r.Get("/{id}", instHandler.Get)
 		r.Delete("/{id}", instHandler.Delete)
 	})

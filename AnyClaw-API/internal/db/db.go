@@ -116,6 +116,17 @@ func (d *DB) migrate() error {
 	)`); err != nil {
 		log.Printf("[db] create invitations: %v", err)
 	}
+	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS messages (
+		id BIGINT AUTO_INCREMENT PRIMARY KEY,
+		instance_id BIGINT NOT NULL,
+		role VARCHAR(32) NOT NULL,
+		content TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		INDEX idx_messages_instance (instance_id),
+		INDEX idx_messages_instance_id (instance_id, id)
+	)`); err != nil {
+		log.Printf("[db] create messages: %v", err)
+	}
 	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS usage_log (
 		id BIGINT AUTO_INCREMENT PRIMARY KEY,
 		instance_id VARCHAR(64) NOT NULL,

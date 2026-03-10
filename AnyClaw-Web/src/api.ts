@@ -103,6 +103,24 @@ export async function deleteInstance(id: number): Promise<void> {
   await fetchApi(`/instances/${id}`, { method: 'DELETE' });
 }
 
+export interface ChatMessage {
+  id: number;
+  instance_id: number;
+  role: string;
+  content: string;
+  created_at: string;
+}
+
+export async function getMessages(
+  instanceId: number,
+  limit = 20,
+  before?: number
+): Promise<{ messages: ChatMessage[] }> {
+  let url = `/instances/${instanceId}/messages?limit=${limit}`;
+  if (before != null) url += `&before=${before}`;
+  return fetchApi<{ messages: ChatMessage[] }>(url);
+}
+
 export function getWebSocketUrl(instanceId: number): string {
   let base: string;
   if (API_BASE) {

@@ -1,6 +1,9 @@
 package ws
 
 import (
+	"encoding/json"
+	"strings"
+
 	"github.com/anyclaw/anyclaw-api/internal/db"
 )
 
@@ -10,5 +13,28 @@ type Handler struct {
 }
 
 func NewHandler(db *db.DB, hub *Hub) *Handler {
-	return &Handler{db: db, hub: hub}
+	h := &Handler{db: db, hub: hub}
+		hub.SetOnContainerMessage(func(instanceID int64, data []byte) {
+		var msg struct {
+			Type    string `json:"type"`
+			Payload struct {
+				Content   string `json:"content"`
+				MessageID string `json:"message_id"`
+			} `json:"payload"`
+		}
+		if json.Unmarshal(data, &msg) != nil {
+			return
+		}
+		content := strings.TrimSpace(msg.Payload.Content)
+		if content == "" {
+			return
+		}
+		if msg.Type == "message.create" && !strings.HasPrefix(content, "Thinking") {
+			_, _ = h.db.InsertMessage(instanceID, "assistant", content)
+		}
+		if msg.Type == "message.update" {
+			_, _ = h.db.InsertMessage(instanceID, "assistant", content)
+		}
+	})
+	return h
 }

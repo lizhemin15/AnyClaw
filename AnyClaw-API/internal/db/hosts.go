@@ -92,6 +92,38 @@ func (d *DB) ListHosts() ([]*Host, error) {
 	return list, nil
 }
 
+func (d *DB) ListAllHostsWithCredentials() ([]*Host, error) {
+	rows, err := d.Query(
+		`SELECT id, name, addr, ssh_port, ssh_user, ssh_key, ssh_password, docker_image, enabled, status
+		 FROM hosts ORDER BY created_at ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []*Host
+	for rows.Next() {
+		var h Host
+		var sshKey, sshPass sql.NullString
+		var dockerImage sql.NullString
+		var enabled int
+		if err := rows.Scan(&h.ID, &h.Name, &h.Addr, &h.SSHPort, &h.SSHUser, &sshKey, &sshPass, &dockerImage, &enabled, &h.Status); err != nil {
+			return nil, err
+		}
+		h.Enabled = enabled != 0
+		if sshKey.Valid {
+			h.SSHKey = sshKey.String
+		}
+		if sshPass.Valid {
+			h.SSHPassword = sshPass.String
+		}
+		if dockerImage.Valid {
+			h.DockerImage = dockerImage.String
+		}
+		list = append(list, &h)
+	}
+	return list, nil
+}
+
 func (d *DB) ListEnabledHosts() ([]*Host, error) {
 	rows, err := d.Query(
 		`SELECT id, name, addr, ssh_port, ssh_user, ssh_key, ssh_password, docker_image, enabled, status
