@@ -28,13 +28,13 @@ jobs:
         run: go generate ./...
 
       - name: Build
-        run: go build -o /tmp/picoclaw ./cmd/picoclaw
+        run: go build -o /tmp/anyclaw ./cmd/anyclaw
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: anyclaw-server
-          path: /tmp/picoclaw
+          path: /tmp/anyclaw
 
   build-api:
     name: Build AnyClaw-API
