@@ -14,15 +14,16 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
   const isEnergy = loc.pathname.startsWith('/admin/energy')
   const isConfig = loc.pathname.startsWith('/admin/config')
   const isStats = loc.pathname.startsWith('/admin/stats')
+  const isChat = loc.pathname.startsWith('/instances/')
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col pb-16 sm:pb-0">
-      <header className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+    <div className={`min-h-screen bg-slate-50 flex flex-col ${isChat ? 'pb-0' : 'pb-16 sm:pb-0'}`}>
+      <header className={`sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200 px-4 py-3 flex items-center justify-between ${isChat ? 'hidden sm:flex' : ''}`}>
         <Link to="/" className="text-lg font-semibold text-slate-800 active:opacity-70">
           OpenClaw
         </Link>
         {user && (
-          <span className="text-sm text-amber-600 font-medium">⚡ {user.energy ?? 0}</span>
+          <span className="text-sm text-amber-600 font-medium">🪙 {user.energy ?? 0}</span>
         )}
         <nav className="flex items-center gap-2 sm:gap-4">
           {user?.role === 'admin' && (
@@ -34,7 +35,7 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
                 监控
               </Link>
               <Link to="/admin/energy" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isEnergy ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
-                电量
+                金币
               </Link>
               <Link to="/admin/hosts" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isHosts ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
                 服务器
@@ -55,8 +56,8 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
       <main className="flex-1 p-4 sm:p-6">
         {children}
       </main>
-      {/* 移动端底部导航 */}
-      <nav className="fixed bottom-0 left-0 right-0 sm:hidden bg-white/95 backdrop-blur border-t border-slate-200 flex justify-around items-center z-20 pb-safe">
+      {/* 移动端底部导航 - 聊天页隐藏 */}
+      <nav className={`fixed bottom-0 left-0 right-0 sm:hidden bg-white/95 backdrop-blur border-t border-slate-200 flex justify-around items-center z-20 pb-safe ${isChat ? 'hidden' : ''}`}>
         <Link
           to="/"
           className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isHome ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
@@ -84,8 +85,8 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
               to="/admin/energy"
               className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isEnergy ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
             >
-              <span className="text-lg">⚡</span>
-              <span className="text-xs mt-0.5">电量</span>
+              <span className="text-lg">🪙</span>
+              <span className="text-xs mt-0.5">金币</span>
             </Link>
             <Link
               to="/admin/hosts"

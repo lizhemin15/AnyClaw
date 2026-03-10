@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getInstances, createInstance, deleteInstance, getInviteCode, useInviteCode, type Instance, type User } from '../api'
+import { getInstances, createInstance, deleteInstance, feedInstance, getInviteCode, useInviteCode, type Instance, type User } from '../api'
 
 const ADOPT_COST = 100
-const MIN_ENERGY = 5
+const MIN_VITALITY = 5
 
-export default function Home({ user }: { user: User | null }) {
+export default function Home({ user, onRefresh }: { user: User | null; onRefresh?: () => void }) {
   const [instances, setInstances] = useState<Instance[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -15,6 +15,7 @@ export default function Home({ user }: { user: User | null }) {
   const [myCode, setMyCode] = useState('')
   const [showInvite, setShowInvite] = useState(false)
   const [deleting, setDeleting] = useState<number | null>(null)
+  const [feeding, setFeeding] = useState<number | null>(null)
 
   const navigate = useNavigate()
 
@@ -36,7 +37,7 @@ export default function Home({ user }: { user: User | null }) {
     const name = newName.trim() || '小爪'
     if (!user) return
     if (user.energy < ADOPT_COST) {
-      setError(`电量不足，领养需要 ${ADOPT_COST} 电量`)
+      setError(`金币不足，领养需要 ${ADOPT_COST} 金币`)
       return
     }
     setCreating(true)
@@ -91,13 +92,33 @@ export default function Home({ user }: { user: User | null }) {
     }
   }
 
-  const energyBar = (e: number, max = 100) => {
-    const pct = Math.min(100, (e / max) * 100)
-    const low = e < MIN_ENERGY
+  const handleFeed = async (e: React.MouseEvent, inst: Instance) => {
+    e.stopPropagation()
+    const amount = 50
+    if ((user?.energy ?? 0) < amount) {
+      setError(`金币不足，喂养需要 ${amount} 金币`)
+      return
+    }
+    setFeeding(inst.id)
+    setError('')
+    try {
+      const updated = await feedInstance(inst.id, amount)
+      setInstances((prev) => prev.map((i) => (i.id === inst.id ? updated : i)))
+      onRefresh?.()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '喂养失败')
+    } finally {
+      setFeeding(null)
+    }
+  }
+
+  const vitalityBar = (v: number, max = 100) => {
+    const pct = Math.min(100, (v / max) * 100)
+    const low = v < MIN_VITALITY
     return (
       <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
         <div
-          className={`h-full transition-all ${low ? 'bg-red-500' : e < 30 ? 'bg-amber-500' : 'bg-green-500'}`}
+          className={`h-full transition-all ${low ? 'bg-red-500' : v < 30 ? 'bg-amber-500' : 'bg-green-500'}`}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -106,44 +127,44 @@ export default function Home({ user }: { user: User | null }) {
 
   return (
     <div className="max-w-2xl mx-auto">
-      {/* 电量与邀请 */}
-      <div className="mb-4 p-4 bg-white rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-slate-600">我的电量</span>
-          <span className="text-xl font-bold text-slate-800">{user?.energy ?? 0}</span>
+      {/* 金币与邀请 - 移动端极简 */}
+      <div className="mb-4 p-3 sm:p-4 bg-white rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <span className="text-sm text-slate-600 hidden sm:inline">我的金币</span>
+          <span className="text-xl font-bold text-slate-800">🪙 {user?.energy ?? 0}</span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5 sm:gap-2">
           <button
             onClick={handleGetMyCode}
-            className="px-4 py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50"
+            className="px-3 py-1.5 sm:px-4 sm:py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50"
           >
-            邀请好友
+            邀请
           </button>
           <button
             onClick={() => setShowInvite(!showInvite)}
-            className="px-4 py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50"
+            className="px-3 py-1.5 sm:px-4 sm:py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50"
           >
-            使用邀请码
+            兑换
           </button>
         </div>
       </div>
 
       {showInvite && (
-        <div className="mb-4 p-4 bg-amber-50 rounded-xl border border-amber-200 space-y-4">
+        <div className="mb-4 p-3 sm:p-4 bg-amber-50 rounded-xl border border-amber-200 space-y-3 sm:space-y-4">
           {myCode && (
             <div>
-              <p className="text-sm text-slate-700 mb-1">邀请好友注册，双方各得 50 电量</p>
-              <p className="font-mono text-lg font-medium">{myCode}</p>
+              <p className="text-sm text-slate-700 mb-1 hidden sm:block">邀请好友注册，双方各得 50 金币</p>
+              <p className="font-mono text-base sm:text-lg font-medium">{myCode}</p>
             </div>
           )}
           <form onSubmit={handleUseInvite} className="flex gap-2">
             <input
               value={inviteCode}
               onChange={(e) => setInviteCode(e.target.value)}
-              placeholder="输入邀请码兑换电量"
-              className="flex-1 px-3 py-2 border rounded-lg"
+              placeholder="邀请码"
+              className="flex-1 px-3 py-2 border rounded-lg text-base min-w-0"
             />
-            <button type="submit" className="px-4 py-2 bg-slate-800 text-white rounded-lg">
+            <button type="submit" className="px-4 py-2 bg-slate-800 text-white rounded-lg flex-shrink-0">
               兑换
             </button>
           </form>
@@ -152,7 +173,7 @@ export default function Home({ user }: { user: User | null }) {
 
       {/* 领养新宠物 */}
       <div className="mb-6">
-        <h2 className="text-lg font-semibold text-slate-800 mb-3">领养 OpenClaw</h2>
+        <h2 className="text-base sm:text-lg font-semibold text-slate-800 mb-2 sm:mb-3">领养 OpenClaw</h2>
         <form onSubmit={handleAdopt} className="flex flex-col sm:flex-row gap-3">
           <input
             type="text"
@@ -166,11 +187,11 @@ export default function Home({ user }: { user: User | null }) {
             disabled={creating || (user?.energy ?? 0) < ADOPT_COST}
             className="px-6 py-3 bg-slate-800 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {creating ? '领养中，请稍候（约 1–2 分钟）...' : `领养 (${ADOPT_COST} 电量)`}
+            {creating ? '领养中，请稍候（约 1–2 分钟）...' : `领养 (${ADOPT_COST} 金币)`}
           </button>
         </form>
         {(user?.energy ?? 0) < ADOPT_COST && (
-          <p className="mt-2 text-sm text-amber-600">电量不足，可通过邀请好友获取</p>
+          <p className="mt-2 text-sm text-amber-600">金币不足，可通过邀请好友获取</p>
         )}
       </div>
 
@@ -179,7 +200,7 @@ export default function Home({ user }: { user: User | null }) {
       )}
 
       {/* 宠舍 */}
-      <h2 className="text-lg font-semibold text-slate-800 mb-3">我的宠舍</h2>
+      <h2 className="text-base sm:text-lg font-semibold text-slate-800 mb-2 sm:mb-3 hidden sm:block">我的宠舍</h2>
       {loading ? (
         <p className="text-slate-500 py-8">加载中...</p>
       ) : instances.length === 0 ? (
@@ -200,15 +221,25 @@ export default function Home({ user }: { user: User | null }) {
                   <p className="font-medium text-slate-800 truncate">{inst.name}</p>
                   <div className="mt-2">
                     <div className="flex justify-between text-xs text-slate-500 mb-1">
-                      <span>电量</span>
-                      <span className={inst.energy < MIN_ENERGY ? 'text-red-600' : ''}>
+                      <span className="hidden sm:inline">活力</span>
+                      <span className={inst.energy < MIN_VITALITY ? 'text-red-600' : ''}>
                         {inst.energy}
                       </span>
                     </div>
-                    {energyBar(inst.energy)}
+                    {vitalityBar(inst.energy)}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
+                  {inst.energy < 100 && (
+                    <button
+                      onClick={(e) => handleFeed(e, inst)}
+                      disabled={!!feeding || (user?.energy ?? 0) < 50}
+                      className="px-2 py-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg active:bg-amber-100 disabled:opacity-50"
+                      title="喂养 50 活力 (消耗 50 金币)"
+                    >
+                      {feeding === inst.id ? '喂养中...' : '喂养'}
+                    </button>
+                  )}
                   <span
                     className={`px-2.5 py-1 text-xs rounded-full ${
                       inst.status === 'running'
@@ -232,8 +263,8 @@ export default function Home({ user }: { user: User | null }) {
                   </button>
                 </div>
               </div>
-              {inst.energy < MIN_ENERGY && inst.status === 'running' && (
-                <p className="mt-2 text-xs text-amber-600">电量不足，无法对话</p>
+              {inst.energy < MIN_VITALITY && inst.status === 'running' && (
+                <p className="mt-2 text-xs text-amber-600">活力不足，喂养后即可对话</p>
               )}
             </div>
           ))}

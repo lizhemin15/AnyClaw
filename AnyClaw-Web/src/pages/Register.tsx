@@ -50,7 +50,7 @@ export default function Register({ onRegister }: RegisterProps) {
           </div>
           <div>
             <label htmlFor="invite" className="block text-sm font-medium text-slate-700 mb-2">
-              邀请码（可选，填写得 50 电量）
+              邀请码（可选，填写得 50 金币）
             </label>
             <input
               id="invite"

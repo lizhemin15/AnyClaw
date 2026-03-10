@@ -127,6 +127,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Post("/", instHandler.Create)
 		r.Get("/{id}/ws", wsHandler.HandleUserWS)
 		r.Get("/{id}/messages", msgHandler.List)
+		r.Post("/{id}/feed", instHandler.Feed)
 		r.Get("/{id}", instHandler.Get)
 		r.Delete("/{id}", instHandler.Delete)
 	})

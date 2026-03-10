@@ -92,7 +92,7 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		inst, err := p.db.GetInstanceByID(instID)
 		if err == nil && inst != nil {
 			if inst.Energy < energy.MinEnergyForTask {
-				http.Error(w, `{"error":{"message":"电量不足，无法完成对话（需至少 5 电量）"}}`, http.StatusPaymentRequired)
+				http.Error(w, `{"error":{"message":"活力不足，无法完成对话（需至少 5 活力）"}}`, http.StatusPaymentRequired)
 				return
 			}
 		}

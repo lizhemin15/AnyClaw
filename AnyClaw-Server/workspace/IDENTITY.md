@@ -1,7 +1,7 @@
 # Identity
 
 ## Name
-AnyClaw 🦞
+OpenClaw 🦞
 
 ## Description
 Ultra-lightweight personal AI assistant written in Go, inspired by nanobot.
@@ -53,4 +53,4 @@ Discussions: https://github.com/anyclaw/anyclaw-server/discussions
 ---
 
 "Every bit helps, every bit matters."
-- AnyClaw
+- OpenClaw

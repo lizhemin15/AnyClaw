@@ -189,22 +189,19 @@ export default function Chat() {
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-slate-50 sm:bg-white sm:max-w-2xl sm:mx-auto sm:my-4 sm:rounded-2xl sm:shadow-lg sm:border sm:border-slate-200 sm:min-h-[80vh] z-10">
-      {/* 顶部栏 - 移动端友好 */}
-      <div className="flex items-center gap-3 px-3 py-3 sm:px-4 bg-white border-b border-slate-200 flex-shrink-0">
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-slate-50 sm:bg-white sm:max-w-2xl sm:mx-auto sm:my-4 sm:rounded-2xl sm:shadow-lg sm:border sm:border-slate-200 sm:min-h-[80vh] z-10 h-[100dvh] sm:h-auto">
+      {/* 顶部栏 - 移动端连接时极简，仅保留返回 */}
+      <div className="flex items-center gap-3 px-3 py-2.5 sm:py-3 sm:px-4 bg-white border-b border-slate-200 flex-shrink-0">
         <button
           onClick={() => navigate('/')}
-          className="flex items-center gap-1 px-2 py-2.5 -ml-1 text-slate-600 active:bg-slate-100 rounded-lg min-h-[44px] min-w-[44px] touch-manipulation"
+          className="flex items-center gap-1 px-2 py-2 -ml-1 text-slate-600 active:bg-slate-100 rounded-lg min-h-[40px] min-w-[40px] touch-manipulation sm:min-h-[44px] sm:min-w-[44px]"
           aria-label="返回"
         >
           <span className="text-xl">←</span>
         </button>
-        <span
-          className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-            connected ? 'bg-green-500' : 'bg-red-500'
-          }`}
-        />
-        <span className="text-sm text-slate-500 flex-1">
+        {/* 移动端连接成功时隐藏，桌面端常显 */}
+        <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${connected ? 'bg-green-500' : 'bg-red-500'} ${connected ? 'hidden sm:block' : ''}`} />
+        <span className={`text-sm text-slate-500 flex-1 ${connected ? 'hidden sm:block' : ''}`}>
           {connected ? '已连接' : '未连接'}
         </span>
       </div>
@@ -228,7 +225,10 @@ export default function Chat() {
         ) : (
           <>
             {loadingMore && (
-              <div className="flex justify-center py-2 text-slate-400 text-xs">加载更多...</div>
+              <div className="flex justify-center py-2 text-slate-400 text-xs">
+                <span className="sm:hidden">···</span>
+                <span className="hidden sm:inline">加载更多...</span>
+              </div>
             )}
             {messages.length === 0 && !typing && (
               <p className="text-slate-400 text-sm py-12 text-center">发条消息试试</p>
@@ -248,7 +248,7 @@ export default function Chat() {
                           : 'bg-white border border-slate-200 text-slate-800 rounded-bl-md shadow-sm'
                       }`}
                     >
-                      <p className="text-xs opacity-80 mb-0.5">
+                      <p className="text-xs opacity-80 mb-0.5 sm:block hidden">
                         {isUser ? '我' : '助手'}
                       </p>
                       <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
@@ -270,10 +270,10 @@ export default function Chat() {
         )}
       </div>
 
-      {/* 输入区 - 移动端大按钮 */}
+      {/* 输入区 - 移动端大按钮，底部安全区 */}
       <form
         onSubmit={sendMessage}
-        className="flex gap-2 p-3 sm:p-4 bg-white border-t border-slate-200 flex-shrink-0"
+        className="flex gap-2 p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white border-t border-slate-200 flex-shrink-0"
       >
         <input
           type="text"

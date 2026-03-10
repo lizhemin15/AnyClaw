@@ -28,7 +28,7 @@ export default function Energy() {
     const val = amount[u.id]?.trim()
     const amt = parseInt(val ?? '', 10)
     if (!val || isNaN(amt) || amt <= 0) {
-      setError('请输入有效电量')
+      setError('请输入有效金币数量')
       return
     }
     setRecharging(u.id)
@@ -46,8 +46,8 @@ export default function Energy() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-xl font-semibold text-slate-800 mb-4">电量管理</h1>
-      <p className="text-sm text-slate-500 mb-4">为指定用户充值电量，便于测试领养等功能</p>
+      <h1 className="text-xl font-semibold text-slate-800 mb-4">金币管理</h1>
+      <p className="text-sm text-slate-500 mb-4">为指定用户充值金币，用户可用金币领养宠物或喂养宠物恢复活力</p>
 
       {error && (
         <p className="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded-xl">{error}</p>
@@ -70,7 +70,7 @@ export default function Energy() {
                   )}
                   <span className="px-2 py-0.5 text-xs bg-slate-100 text-slate-600 rounded">{u.role}</span>
                 </div>
-                <p className="text-sm text-slate-500 mt-1">ID: {u.id} · 电量: {u.energy} · 实例: {u.instance_count ?? 0}</p>
+                <p className="text-sm text-slate-500 mt-1">ID: {u.id} · 金币: {u.energy} · 实例: {u.instance_count ?? 0}</p>
               </div>
               <div className="flex gap-2 flex-shrink-0 items-center">
                 <input

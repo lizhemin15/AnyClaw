@@ -103,6 +103,13 @@ export async function deleteInstance(id: number): Promise<void> {
   await fetchApi(`/instances/${id}`, { method: 'DELETE' });
 }
 
+export async function feedInstance(id: number, amount: number): Promise<Instance> {
+  return fetchApi<Instance>(`/instances/${id}/feed`, {
+    method: 'POST',
+    body: JSON.stringify({ amount }),
+  });
+}
+
 export interface ChatMessage {
   id: number;
   instance_id: number;

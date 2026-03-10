@@ -1,6 +1,15 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { getMe, getSetupStatus, clearToken, isAuthenticated, type User } from './api'
+
+const refreshUser = async (setUser: (u: User | null) => void) => {
+  try {
+    const u = await getMe()
+    setUser(u)
+  } catch {
+    setUser(null)
+  }
+}
 import Layout from './Layout'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -109,7 +118,7 @@ export default function App() {
         <Route path="/" element={
           <ProtectedRoute>
             <Layout user={user} onLogout={handleLogout}>
-              <Home user={user} />
+              <Home user={user} onRefresh={() => refreshUser(setUser)} />
             </Layout>
           </ProtectedRoute>
         } />

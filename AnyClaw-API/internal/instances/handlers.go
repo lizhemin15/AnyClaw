@@ -82,10 +82,10 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = "instance"
 	}
-	// 先检查电量，但不扣除；容器真正创建成功后才扣
+	// 先检查金币，但不扣除；容器真正创建成功后才扣
 	u, _ := h.db.GetUserByID(claims.UserID)
 	if u == nil || u.Energy < energy.AdoptCost {
-		http.Error(w, `{"error":"电量不足，领养需要 100 电量"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"金币不足，领养需要 100 金币"}`, http.StatusBadRequest)
 		return
 	}
 	token := "inst-" + uuid.New().String()
@@ -110,7 +110,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[instances] deduct energy failed for user %d, container already running", claims.UserID)
 		_ = h.scheduler.Stop(context.Background(), hostID, containerID, inst.ID)
 		_ = h.db.DeleteInstance(inst.ID)
-		http.Error(w, `{"error":"电量不足或系统异常"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error":"金币不足或系统异常"}`, http.StatusInternalServerError)
 		return
 	}
 	if err := h.db.UpdateInstanceContainer(inst.ID, containerID, hostID); err != nil {
@@ -179,4 +179,50 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) Feed(w http.ResponseWriter, r *http.Request) {
+	claims := request.FromContext(r.Context())
+	if claims == nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, `{"error":"invalid instance id"}`, http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Amount int `json:"amount"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Amount <= 0 {
+		http.Error(w, `{"error":"amount 必须为正整数"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Amount > 1000 {
+		http.Error(w, `{"error":"单次喂养最多 1000 活力"}`, http.StatusBadRequest)
+		return
+	}
+	inst, err := h.db.GetInstanceByID(id)
+	if err != nil || inst == nil {
+		http.Error(w, `{"error":"宠物不存在"}`, http.StatusNotFound)
+		return
+	}
+	if inst.UserID != claims.UserID {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	ok, err := h.db.DeductUserEnergy(claims.UserID, req.Amount)
+	if err != nil || !ok {
+		http.Error(w, `{"error":"金币不足"}`, http.StatusBadRequest)
+		return
+	}
+	if err := h.db.AddInstanceEnergy(id, req.Amount); err != nil {
+		_ = h.db.AddUserEnergy(claims.UserID, req.Amount)
+		http.Error(w, `{"error":"喂养失败"}`, http.StatusInternalServerError)
+		return
+	}
+	inst, _ = h.db.GetInstanceByID(id)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(inst)
 }
