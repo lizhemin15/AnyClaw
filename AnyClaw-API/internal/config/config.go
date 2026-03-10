@@ -7,13 +7,14 @@ import (
 )
 
 type Config struct {
-	Port      int    `json:"port" env:"ANYCLAW_API_PORT"`
-	DBDSN     string `json:"db_dsn"`
-	JWTSecret string `json:"jwt_secret"`
-	APIURL      string       `json:"api_url"`       // e.g. http://localhost:8080 for Docker containers
-	DockerImage string       `json:"docker_image"` // openclaw/openclaw
-	KeyPool     KeyPool      `json:"key_pool"`
-	InstanceMap InstanceMap  `json:"instance_map"` // legacy: tokens from config (merged with DB)
+	Port        int    `json:"port" env:"ANYCLAW_API_PORT"`
+	DBDSN       string `json:"db_dsn"`
+	JWTSecret   string `json:"jwt_secret"`
+	APIURL      string      `json:"api_url"`       // e.g. http://localhost:8080 for Docker containers
+	DockerImage string      `json:"docker_image"`  // openclaw/openclaw
+	DefaultModel string    `json:"default_model"`  // 宠物默认使用的模型，如 gpt-4o
+	KeyPool     KeyPool     `json:"key_pool"`
+	InstanceMap InstanceMap `json:"instance_map"`  // legacy: tokens from config (merged with DB)
 }
 
 type KeyPool struct {
@@ -101,8 +102,8 @@ func Save(path string, c *SaveConfig) error {
 	return os.WriteFile(path, data, 0600)
 }
 
-// SaveKeyPool merges KeyPool into config file and writes. Preserves other fields.
-func SaveKeyPool(path string, pool KeyPool) error {
+// SaveKeyPool merges KeyPool and optionally default_model into config file and writes. Preserves other fields.
+func SaveKeyPool(path string, pool KeyPool, defaultModel string) error {
 	if path == "" {
 		path = ConfigPath()
 	}
@@ -124,6 +125,7 @@ func SaveKeyPool(path string, pool KeyPool) error {
 		raw = make(map[string]any)
 	}
 	raw["key_pool"] = pool
+	raw["default_model"] = defaultModel
 	data, err := json.MarshalIndent(raw, "", "  ")
 	if err != nil {
 		return err

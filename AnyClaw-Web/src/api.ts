@@ -216,6 +216,7 @@ export interface KeyPoolEntry {
 }
 
 export interface AdminConfig {
+  default_model: string;
   key_pool: {
     openai: KeyPoolEntry;
     anthropic: KeyPoolEntry;

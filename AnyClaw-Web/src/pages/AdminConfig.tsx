@@ -87,11 +87,30 @@ export default function AdminConfig() {
     )
   }
 
+  const updateDefaultModel = (v: string) => {
+    if (!form) return
+    setForm({ ...form, default_model: v })
+  }
+
   return (
     <div className="max-w-5xl mx-auto">
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-slate-800">渠道管理</h1>
         <p className="text-sm text-slate-500 mt-1">管理 LLM API 渠道，宠物实例将使用此处配置的密钥调用模型</p>
+      </div>
+
+      {/* 默认模型 */}
+      <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm p-5">
+        <h2 className="font-semibold text-slate-800 mb-2">默认模型</h2>
+        <p className="text-sm text-slate-500 mb-3">宠物实例对话时使用的模型，如 gpt-4o、claude-3-5-sonnet、openrouter/auto 等</p>
+        <input
+          type="text"
+          value={form?.default_model ?? ''}
+          onChange={(e) => updateDefaultModel(e.target.value)}
+          placeholder="gpt-4o"
+          className="w-full max-w-md px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        />
+        <p className="text-xs text-slate-400 mt-1">当前使用：{form?.default_model || 'gpt-4o'}</p>
       </div>
 
       {error && (

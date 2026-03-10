@@ -28,7 +28,12 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to load config"}`, http.StatusInternalServerError)
 		return
 	}
+	defaultModel := cfg.DefaultModel
+	if defaultModel == "" {
+		defaultModel = "gpt-4o"
+	}
 	resp := map[string]any{
+		"default_model": defaultModel,
 		"key_pool": map[string]any{
 			"openai": map[string]any{
 				"api_key":  config.MaskAPIKey(cfg.KeyPool.OpenAI.APIKey),
@@ -55,7 +60,8 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		KeyPool config.KeyPool `json:"key_pool"`
+		DefaultModel string         `json:"default_model"`
+		KeyPool      config.KeyPool `json:"key_pool"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
@@ -70,7 +76,7 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 	mergeKeyEntry(&cfg.KeyPool.OpenAI, &req.KeyPool.OpenAI)
 	mergeKeyEntry(&cfg.KeyPool.Anthropic, &req.KeyPool.Anthropic)
 	mergeKeyEntry(&cfg.KeyPool.OpenRouter, &req.KeyPool.OpenRouter)
-	if err := config.SaveKeyPool(h.configPath, cfg.KeyPool); err != nil {
+	if err := config.SaveKeyPool(h.configPath, cfg.KeyPool, req.DefaultModel); err != nil {
 		http.Error(w, `{"error":"failed to save config"}`, http.StatusInternalServerError)
 		return
 	}
