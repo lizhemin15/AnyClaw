@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAdminConfig, putAdminConfig, type AdminConfig, type Channel, type ModelEntry } from '../api'
+import { getAdminConfig, putAdminConfig, type AdminConfig, type Channel } from '../api'
 
 function genId() {
   return 'c-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
