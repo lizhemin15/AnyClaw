@@ -17,7 +17,7 @@ export default function AdminConfig() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [addingChannel, setAddingChannel] = useState(false)
-  const [newChannel, setNewChannel] = useState({ name: '', api_key: '', api_base: '' })
+  const [newChannel, setNewChannel] = useState({ name: '', api_key: '', api_base: '', model: 'gpt-4o' })
   const [editingChannel, setEditingChannel] = useState<string | null>(null)
 
   useEffect(() => {
@@ -61,13 +61,13 @@ export default function AdminConfig() {
       api_key: newChannel.api_key.trim(),
       api_base: newChannel.api_base.trim() || 'https://api.openai.com/v1',
       enabled: true,
-      models: [{ id: genModelId(), name: 'gpt-4o', enabled: true }],
+      models: [{ id: genModelId(), name: (newChannel.model || 'gpt-4o').trim() || 'gpt-4o', enabled: true }],
     }
     const prev = form.channels || []
     setForm({
       channels: [...prev.map((c) => ({ ...c, enabled: false, models: (c.models || []).map((m) => ({ ...m, enabled: false })) })), ch],
     })
-    setNewChannel({ name: '', api_key: '', api_base: '' })
+    setNewChannel({ name: '', api_key: '', api_base: '', model: 'gpt-4o' })
     setAddingChannel(false)
   }
 
@@ -75,6 +75,24 @@ export default function AdminConfig() {
     if (!form) return
     setForm({ channels: (form.channels || []).filter((c) => c.id !== id) })
     setEditingChannel(null)
+  }
+
+  const updateModelName = (channelId: string, name: string) => {
+    if (!form) return
+    const modelName = (name || 'gpt-4o').trim()
+    setForm({
+      channels: (form.channels || []).map((c) =>
+        c.id === channelId
+          ? {
+              ...c,
+              models:
+                (c.models || []).length > 0
+                  ? (c.models || []).map((m, i) => (i === 0 ? { ...m, name: modelName } : m))
+                  : [{ id: genModelId(), name: modelName, enabled: c.enabled }],
+            }
+          : c
+      ),
+    })
   }
 
   const updateChannel = (id: string, upd: Partial<Channel>) => {
@@ -142,7 +160,10 @@ export default function AdminConfig() {
             {!addingChannel ? (
               <button
                 type="button"
-                onClick={() => setAddingChannel(true)}
+                onClick={() => {
+                  setAddingChannel(true)
+                  setNewChannel({ name: '', api_key: '', api_base: '', model: 'gpt-4o' })
+                }}
                 className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
               >
                 + 添加渠道
@@ -169,6 +190,13 @@ export default function AdminConfig() {
                   onChange={(e) => setNewChannel((p) => ({ ...p, api_base: e.target.value }))}
                   placeholder="API Base（可选）"
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-56"
+                />
+                <input
+                  type="text"
+                  value={newChannel.model}
+                  onChange={(e) => setNewChannel((p) => ({ ...p, model: e.target.value }))}
+                  placeholder="模型，如 gpt-4o"
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-32 font-mono"
                 />
                 <button type="button" onClick={addChannel} className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
                   添加
@@ -221,13 +249,20 @@ export default function AdminConfig() {
                           placeholder="API Base"
                           className="px-3 py-1.5 border border-slate-300 rounded text-sm w-48"
                         />
+                        <input
+                          type="text"
+                          value={(ch.models || [])[0]?.name || 'gpt-4o'}
+                          onChange={(e) => updateModelName(ch.id, e.target.value)}
+                          placeholder="模型"
+                          className="px-3 py-1.5 border border-slate-300 rounded text-sm font-mono w-32"
+                        />
                         <button type="button" onClick={() => setEditingChannel(null)} className="text-sm text-slate-600">
                           完成
                         </button>
                       </div>
                     ) : (
                       <span className="text-sm text-slate-500 truncate max-w-[200px]">
-                        {ch.api_key ? '****' + ch.api_key.slice(-4) : '—'} · {ch.api_base || '—'}
+                        {ch.api_key ? '****' + ch.api_key.slice(-4) : '—'} · {ch.api_base || '—'} · {(ch.models || [])[0]?.name || 'gpt-4o'}
                       </span>
                     )}
                     {editingChannel !== ch.id && (

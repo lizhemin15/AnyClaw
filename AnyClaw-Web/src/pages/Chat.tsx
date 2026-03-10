@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { getToken, getWebSocketUrl, getMessages, getInstance, type ChatMessage as ApiMessage } from '../api'
+
+const COLLAPSE_THRESHOLD = 400
 
 interface PicoMessage {
   type: string
@@ -17,6 +21,39 @@ interface ChatMessage {
 const PAGE_SIZE = 20
 
 const TYPING_PHRASES = ['嗯...', '想想...', '正在琢磨...', '快好了～', '有了！']
+
+function MessageContent({
+  content,
+  isUser,
+  expanded,
+  onToggleExpand,
+}: {
+  content: string
+  isUser: boolean
+  expanded: boolean
+  onToggleExpand: () => void
+}) {
+  const isLong = content.length > COLLAPSE_THRESHOLD
+  const showCollapsed = isLong && !expanded
+  const displayContent = showCollapsed ? content.slice(0, COLLAPSE_THRESHOLD) + '...' : content
+
+  const wrapClass = isUser ? 'msg-md-user' : 'msg-md-assistant'
+
+  return (
+    <div className={`msg-markdown ${wrapClass}`}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayContent}</ReactMarkdown>
+      {isLong && (
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          className="msg-expand-btn"
+        >
+          {expanded ? '收起' : '展开'}
+        </button>
+      )}
+    </div>
+  )
+}
 const TYPING_ROTATE_MS = 2500
 
 export default function Chat() {
@@ -32,6 +69,7 @@ export default function Chat() {
   const [connected, setConnected] = useState(false)
   const [error, setError] = useState('')
   const [instanceName, setInstanceName] = useState('')
+  const [expandedIds, setExpandedIds] = useState<Set<string | number>>(new Set())
   const wsRef = useRef<WebSocket | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const loadingMoreRef = useRef(false)
@@ -295,6 +333,15 @@ export default function Chat() {
             <div className="space-y-3">
               {messages.map((m) => {
                 const isUser = m.role === 'user'
+                const expanded = expandedIds.has(m.id)
+                const toggleExpand = () => {
+                  setExpandedIds((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(m.id)) next.delete(m.id)
+                    else next.add(m.id)
+                    return next
+                  })
+                }
                 return (
                   <div
                     key={String(m.id)}
@@ -307,9 +354,12 @@ export default function Chat() {
                           : 'bg-white border border-slate-200 text-slate-800 rounded-bl-md shadow-sm'
                       }`}
                     >
-                      <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
-                        {m.content}
-                      </p>
+                      <MessageContent
+                        content={m.content}
+                        isUser={!!isUser}
+                        expanded={expanded}
+                        onToggleExpand={toggleExpand}
+                      />
                     </div>
                   </div>
                 )
