@@ -16,6 +16,9 @@ interface ChatMessage {
 
 const PAGE_SIZE = 20
 
+const TYPING_PHRASES = ['嗯...', '想想...', '正在琢磨...', '快好了～', '有了！']
+const TYPING_ROTATE_MS = 2500
+
 export default function Chat() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -25,6 +28,7 @@ export default function Chat() {
   const [hasMore, setHasMore] = useState(true)
   const [input, setInput] = useState('')
   const [typing, setTyping] = useState(false)
+  const [typingPhraseIndex, setTypingPhraseIndex] = useState(0)
   const [connected, setConnected] = useState(false)
   const [error, setError] = useState('')
   const [instanceName, setInstanceName] = useState('')
@@ -149,6 +153,7 @@ export default function Chat() {
             break
           case 'typing.start':
             setTyping(true)
+            setTypingPhraseIndex(0)
             break
           case 'typing.stop':
             setTyping(false)
@@ -163,13 +168,13 @@ export default function Chat() {
       setConnected(false)
       if (!error) {
         const msg = e.code === 1006 || e.code === 1011
-          ? '连接失败，宠物可能仍在启动中，请稍后重试'
-          : '连接已断开'
+          ? 'TA 还在准备中，稍后再试试～'
+          : '连接断开了，刷新试试'
         setError(msg)
       }
     }
 
-    ws.onerror = () => setError('连接失败，请检查网络或稍后重试')
+    ws.onerror = () => setError('网络不太顺畅，稍后再试～')
 
     return () => {
       ws.close()
@@ -180,6 +185,15 @@ export default function Chat() {
   useEffect(() => {
     listRef.current?.scrollTo(0, listRef.current?.scrollHeight ?? 0)
   }, [messages, typing])
+
+  // 等待回答时轮换提示语，减少干等感
+  useEffect(() => {
+    if (!typing) return
+    const interval = setInterval(() => {
+      setTypingPhraseIndex((i) => (i + 1) % TYPING_PHRASES.length)
+    }, TYPING_ROTATE_MS)
+    return () => clearInterval(interval)
+  }, [typing])
 
   // 手机键盘弹出时滚动到底部，保持最新消息可见（类似微信）
   const inputRef = useRef<HTMLInputElement>(null)
@@ -247,7 +261,7 @@ export default function Chat() {
         </span>
         <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${connected ? 'bg-green-500' : 'bg-red-500'} ${connected ? 'hidden sm:block' : ''}`} />
         <span className={`text-sm text-slate-500 ${connected ? 'hidden sm:block' : ''}`}>
-          {connected ? '已连接' : '未连接'}
+          {connected ? '在线' : '离线'}
         </span>
       </div>
 
@@ -265,7 +279,7 @@ export default function Chat() {
       >
         {loading ? (
           <div className="flex justify-center py-12">
-            <div className="animate-pulse text-slate-400 text-sm">加载中...</div>
+            <div className="animate-pulse text-slate-400 text-sm">马上就好～</div>
           </div>
         ) : (
           <>
@@ -276,7 +290,7 @@ export default function Chat() {
               </div>
             )}
             {messages.length === 0 && !typing && (
-              <p className="text-slate-400 text-sm py-12 text-center">发条消息试试</p>
+              <p className="text-slate-400 text-sm py-12 text-center">打个招呼吧～</p>
             )}
             <div className="space-y-3">
               {messages.map((m) => {
@@ -293,9 +307,6 @@ export default function Chat() {
                           : 'bg-white border border-slate-200 text-slate-800 rounded-bl-md shadow-sm'
                       }`}
                     >
-                      <p className="text-xs opacity-80 mb-0.5 sm:block hidden">
-                        {isUser ? '我' : '助手'}
-                      </p>
                       <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
                         {m.content}
                       </p>
@@ -306,8 +317,13 @@ export default function Chat() {
             </div>
             {typing && (
               <div className="flex justify-start mt-3">
-                <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-md px-4 py-2.5 shadow-sm">
-                  <p className="text-slate-500 text-sm italic">输入中...</p>
+                <div className="typing-breathe bg-white border border-slate-200 rounded-2xl rounded-bl-md px-4 py-2.5 shadow-sm flex items-center gap-1">
+                  <span className="text-slate-500 text-sm italic">{TYPING_PHRASES[typingPhraseIndex]}</span>
+                  <span className="flex gap-0.5">
+                    {[1, 2, 3].map((i) => (
+                      <span key={i} className="typing-dot w-1 h-1 rounded-full bg-slate-400 inline-block" />
+                    ))}
+                  </span>
                 </div>
               </div>
             )}
@@ -325,7 +341,7 @@ export default function Chat() {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="输入消息..."
+          placeholder="说点什么～"
           disabled={!connected}
           className="flex-1 px-4 py-3.5 sm:py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50 text-base min-h-[48px]"
         />

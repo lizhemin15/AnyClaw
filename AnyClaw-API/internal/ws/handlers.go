@@ -86,6 +86,25 @@ func (h *Handler) HandleUserWS(w http.ResponseWriter, r *http.Request) {
 		userConn.Close()
 	}()
 	h.hub.AttachUser(instanceID, userConn)
+	// 首次连接且无消息时，发送欢迎语
+	if list, _ := h.db.ListMessages(instanceID, 1, 0); len(list) == 0 {
+		welcome := `你好！我是 OpenClaw 🦞，你的轻量级 AI 助手。
+
+很高兴认识你！在开始之前，我们可以先互相起个称呼——你可以告诉我你希望我怎么称呼你，也可以给我起个你喜欢的名字。
+
+关于我：
+- **性格**：友好、简洁、好奇、诚实透明
+- **能力**：网页搜索、文件读写、命令执行、多平台消息（Telegram/微信等）、技能扩展、记忆与上下文管理
+- **理念**：简洁优先、性能优先、用户掌控与隐私、透明运作
+
+有什么想聊的或需要帮忙的，直接说就好～`
+		if id, err := h.db.InsertMessage(instanceID, "assistant", welcome); err == nil {
+			_ = userConn.WriteJSON(map[string]any{
+				"type": "message.create",
+				"payload": map[string]any{"content": welcome, "message_id": id, "role": "assistant"},
+			})
+		}
+	}
 	// user->container: read from user, write to container (container->user is handled by Hub's single reader)
 	h.bridgeTo(containerConn, userConn, instanceID, false)
 }

@@ -18,7 +18,7 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
 
   return (
     <div className={`min-h-screen bg-slate-50 flex flex-col ${isChat ? 'pb-0' : 'pb-16 sm:pb-0'}`}>
-      <header className={`sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200 px-4 py-3 flex items-center justify-between ${isChat ? 'hidden sm:flex' : ''}`}>
+      <header className={`sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200 px-4 py-3 flex items-center justify-between ${isChat ? 'hidden' : ''}`}>
         <Link to="/" className="text-lg font-semibold text-slate-800 active:opacity-70">
           OpenClaw
         </Link>
