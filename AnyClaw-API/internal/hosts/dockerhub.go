@@ -1,63 +1,45 @@
 package hosts
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
+	"regexp"
 	"strings"
-	"time"
+
+	"github.com/anyclaw/anyclaw-api/internal/db"
 )
 
-var httpClient = &http.Client{Timeout: 15 * time.Second}
+var sha256Re = regexp.MustCompile(`sha256:[a-fA-F0-9]{64}`)
 
-// getDockerHubToken 获取 Docker Hub 拉取 token（公开镜像无需认证）
-func getDockerHubToken(repo string) (string, error) {
-	scope := "repository:" + repo + ":pull"
-	url := "https://auth.docker.io/token?service=registry.docker.io&scope=" + scope
-	resp, err := httpClient.Get(url)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	var v struct {
-		Token string `json:"token"`
-	}
-	if err := json.Unmarshal(body, &v); err != nil {
-		return "", err
-	}
-	if v.Token == "" {
-		return "", fmt.Errorf("no token in response")
-	}
-	return v.Token, nil
+// runCommandOnHost 在宿主机上执行命令的接口
+type runCommandOnHost interface {
+	RunCommand(host *db.Host, cmd string) (string, error)
 }
 
-// getDockerHubDigest 获取 Docker Hub 上 :latest 的 manifest digest
-func getDockerHubDigest(image string) (string, error) {
-	// image 格式: namespace/repo:tag
+// getDockerHubDigestViaHost 通过 SSH 在宿主机上请求 Docker Hub，获取 manifest digest
+// 使用宿主机网络，确保宿主机可访问 Docker Hub 时能正常获取
+func getDockerHubDigestViaHost(runner runCommandOnHost, host *db.Host, image string) (string, error) {
 	parts := strings.SplitN(image, ":", 2)
 	repo := parts[0]
 	tag := "latest"
 	if len(parts) > 1 && parts[1] != "" {
 		tag = parts[1]
 	}
-	token, err := getDockerHubToken(repo)
+	// 在宿主机上执行：curl 获取 token 和 manifest，宿主机网络可访问 Docker Hub
+	cmd := fmt.Sprintf(`export PATH=/usr/local/bin:/usr/bin:$PATH
+REPO="%s"
+TAG="%s"
+TOKEN=$(curl -sS "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${REPO}:pull" 2>/dev/null | sed -n 's/.*"token":"\\([^"]*\\)".*/\1/p')
+[ -z "$TOKEN" ] && exit 1
+curl -sS -I -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.docker.distribution.manifest.v2+json" "https://registry-1.docker.io/v2/${REPO}/manifests/${TAG}" 2>/dev/null | sed -n 's/.*[Dd]ocker-[Cc]ontent-[Dd]igest: *//p' | tr -d '\r\n'`,
+		strings.ReplaceAll(repo, `"`, `\"`),
+		strings.ReplaceAll(tag, `"`, `\"`))
+	out, err := runner.RunCommand(host, cmd)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("宿主机请求 Docker Hub 失败: %w", err)
 	}
-	url := "https://registry-1.docker.io/v2/" + repo + "/manifests/" + tag
-	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return "", err
+	out = strings.TrimSpace(out)
+	if m := sha256Re.FindString(out); m != "" {
+		return m, nil
 	}
-	defer resp.Body.Close()
-	digest := resp.Header.Get("Docker-Content-Digest")
-	if digest == "" {
-		return "", fmt.Errorf("no digest in response")
-	}
-	return digest, nil
+	return "", fmt.Errorf("未获取到 digest: %s", out)
 }

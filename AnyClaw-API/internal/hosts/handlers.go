@@ -213,6 +213,7 @@ type InstanceImageStatusResponse struct {
 }
 
 // InstanceImageStatus 检查宿主机上的实例镜像与 Docker Hub 是否一致
+// Docker Hub 请求通过 SSH 在宿主机上执行，确保使用宿主机网络（宿主机可访问 Docker Hub）
 func (h *Handler) InstanceImageStatus(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	host, err := h.db.GetHost(id)
@@ -243,7 +244,7 @@ func (h *Handler) InstanceImageStatus(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	// 本地 digest
+	// 本地 digest（宿主机 SSH）
 	out, err := h.checker.RunCommand(host, `docker inspect "`+image+`" --format '{{index .RepoDigests 0}}' 2>/dev/null || echo ''`)
 	var localDigest string
 	if err == nil && out != "" {
@@ -251,7 +252,8 @@ func (h *Handler) InstanceImageStatus(w http.ResponseWriter, r *http.Request) {
 			localDigest = m
 		}
 	}
-	hubDigest, err := getDockerHubDigest(image)
+	// Docker Hub digest 通过宿主机 SSH 获取（宿主机网络可访问 Docker Hub）
+	hubDigest, err := getDockerHubDigestViaHost(h.checker, host, image)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(InstanceImageStatusResponse{
