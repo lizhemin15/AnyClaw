@@ -42,18 +42,25 @@ function MessageContent({
   const wrapClass = isUser ? 'msg-md-user' : 'msg-md-assistant'
 
   return (
-    <div className={`msg-markdown ${wrapClass}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayContent || '\u00A0'}</ReactMarkdown>
-      {isLong && (
-        <button
-          type="button"
-          onClick={onToggleExpand}
-          className="msg-expand-btn"
-        >
-          {expanded ? '收起' : '展开'}
-        </button>
-      )}
-    </div>
+    <ErrorBoundary fallback={
+      <div className={`msg-markdown ${wrapClass}`}>
+        <div className="whitespace-pre-wrap break-words">{displayContent || '\u00A0'}</div>
+        {isLong && (
+          <button type="button" onClick={onToggleExpand} className="msg-expand-btn">
+            {expanded ? '收起' : '展开'}
+          </button>
+        )}
+      </div>
+    }>
+      <div className={`msg-markdown ${wrapClass}`}>
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayContent || '\u00A0'}</ReactMarkdown>
+        {isLong && (
+          <button type="button" onClick={onToggleExpand} className="msg-expand-btn">
+            {expanded ? '收起' : '展开'}
+          </button>
+        )}
+      </div>
+    </ErrorBoundary>
   )
 }
 const TYPING_ROTATE_MS = 2500
@@ -356,17 +363,23 @@ export default function Chat() {
               </div>
             )}
             {messages.length === 0 && !typing && (
-              <div className="py-8 px-4 text-center space-y-4">
-                <img src="/10003.png" alt="" className="w-20 h-20 mx-auto mb-2 object-contain" aria-hidden />
-                <p className="text-slate-600 text-sm">打个招呼吧～</p>
-                <div className="text-left max-w-sm mx-auto p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500 space-y-2">
-                  <p className="font-medium text-slate-600">OpenClaw 与普通 AI 不同</p>
-                  <p>· 擅长复杂任务，会调用工具、查资料、执行操作</p>
-                  <p>· 拥有超长记忆，会记住你们的对话与约定</p>
-                  <p>· 每只宠物都有唯一的灵魂，会随相处而成长</p>
-                  <p>· 回答前会深入思考，请耐心等待～</p>
+              <ErrorBoundary fallback={
+                <div className="py-8 px-4 text-center">
+                  <p className="text-slate-600 text-sm">打个招呼吧～</p>
                 </div>
-              </div>
+              }>
+                <div className="py-8 px-4 text-center space-y-4">
+                  <img src="/10003.png" alt="" className="w-20 h-20 mx-auto mb-2 object-contain" aria-hidden />
+                  <p className="text-slate-600 text-sm">打个招呼吧～</p>
+                  <div className="text-left max-w-sm mx-auto p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500 space-y-2">
+                    <p className="font-medium text-slate-600">OpenClaw 与普通 AI 不同</p>
+                    <p>· 擅长复杂任务，会调用工具、查资料、执行操作</p>
+                    <p>· 拥有超长记忆，会记住你们的对话与约定</p>
+                    <p>· 每只宠物都有唯一的灵魂，会随相处而成长</p>
+                    <p>· 回答前会深入思考，请耐心等待～</p>
+                  </div>
+                </div>
+              </ErrorBoundary>
             )}
             <div className="space-y-3">
               {messages.map((m) => {
@@ -404,21 +417,29 @@ export default function Chat() {
               })}
             </div>
             {typing && (
-              <div className="flex flex-col gap-2 mt-3">
-                <div className="flex justify-start">
-                  <div className="typing-breathe bg-white border border-slate-200 rounded-2xl rounded-bl-md px-4 py-2.5 shadow-sm flex items-center gap-1">
-                    <span className="text-slate-500 text-sm italic">{TYPING_PHRASES[typingPhraseIndex]}</span>
-                    <span className="flex gap-0.5">
-                      {[1, 2, 3].map((i) => (
-                        <span key={i} className="typing-dot w-1 h-1 rounded-full bg-slate-400 inline-block" />
-                      ))}
-                    </span>
+              <ErrorBoundary fallback={
+                <div className="flex justify-start mt-3">
+                  <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-md px-4 py-2.5 shadow-sm">
+                    <span className="text-slate-500 text-sm italic">思考中...</span>
                   </div>
                 </div>
-                <p className="text-slate-400 text-xs text-center px-2">
-                  可离开页面，回答会继续。请耐心等待～
-                </p>
-              </div>
+              }>
+                <div className="flex flex-col gap-2 mt-3">
+                  <div className="flex justify-start">
+                    <div className="typing-breathe bg-white border border-slate-200 rounded-2xl rounded-bl-md px-4 py-2.5 shadow-sm flex items-center gap-1">
+                      <span className="text-slate-500 text-sm italic">{TYPING_PHRASES[typingPhraseIndex]}</span>
+                      <span className="flex gap-0.5">
+                        {[1, 2, 3].map((i) => (
+                          <span key={i} className="typing-dot w-1 h-1 rounded-full bg-slate-400 inline-block" />
+                        ))}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-slate-400 text-xs text-center px-2">
+                    可离开页面，回答会继续。请耐心等待～
+                  </p>
+                </div>
+              </ErrorBoundary>
             )}
           </>
         )}
