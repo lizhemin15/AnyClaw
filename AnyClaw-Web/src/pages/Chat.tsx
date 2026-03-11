@@ -122,7 +122,7 @@ export default function Chat() {
     setLoadingMore(true)
     const list = await loadMessages(oldestId as number)
     const arr = Array.isArray(list) ? list : []
-    setMessages((prev) => [...arr].reverse().concat(prev))
+    setMessages((prev) => [...[...arr].reverse(), ...prev])
     setHasMore(arr.length >= PAGE_SIZE)
     loadingMoreRef.current = false
     setLoadingMore(false)
