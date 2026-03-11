@@ -7,6 +7,6 @@ const (
 	MinEnergyForTask = 5    // 低于此值无法对话
 	ZeroDaysToDelete = 3    // 连续无活力天数后永久消失
 	InviteReward     = 50   // 邀请奖励（双方各得金币）
-	NewUserEnergy    = 100  // 新用户初始金币
+	NewUserEnergy    = 0    // 新用户初始金币（默认 0，由配置覆盖）
 	TokensPerEnergy  = 1000 // 每 1000 token 消耗 1 活力（按实际消耗计费）
 )

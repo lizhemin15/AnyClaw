@@ -47,7 +47,8 @@ type EnergyConfig struct {
 	MinEnergyForTask     int `json:"min_energy_for_task"`    // 低于此值无法对话，默认 5
 	ZeroDaysToDelete     int `json:"zero_days_to_delete"`    // 连续无活力天数后永久消失，默认 3
 	InviteReward         int `json:"invite_reward"`          // 邀请奖励（双方各得），默认 50
-	NewUserEnergy        int `json:"new_user_energy"`        // 新用户初始金币，默认 100
+	NewUserEnergy        int `json:"new_user_energy"`        // 新用户初始金币，默认 0
+	DailyLoginBonus      int `json:"daily_login_bonus"`      // 每天首次登录赠送金币，默认 10
 	InviteCommissionRate int `json:"invite_commission_rate"` // 受邀用户充值时的邀请人返利比例(0-100)，默认 5
 }
 
@@ -60,7 +61,8 @@ func GetEnergyDefaults() EnergyConfig {
 		MinEnergyForTask:     5,
 		ZeroDaysToDelete:     3,
 		InviteReward:         50,
-		NewUserEnergy:        100,
+		NewUserEnergy:        0,
+		DailyLoginBonus:      10,
 		InviteCommissionRate: 5,
 	}
 }
@@ -92,6 +94,9 @@ func GetEnergyConfig(cfg *Config) EnergyConfig {
 	}
 	if e.NewUserEnergy < 0 {
 		e.NewUserEnergy = def.NewUserEnergy
+	}
+	if e.DailyLoginBonus < 0 {
+		e.DailyLoginBonus = def.DailyLoginBonus
 	}
 	if e.InviteCommissionRate < 0 || e.InviteCommissionRate > 100 {
 		e.InviteCommissionRate = def.InviteCommissionRate

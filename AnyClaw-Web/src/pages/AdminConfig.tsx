@@ -129,9 +129,8 @@ export default function AdminConfig() {
         const payment: PaymentConfig = c.payment
           ? { ...c.payment, plans, yungouos: { wechat: yg?.wechat ? { ...yg.wechat } : defYg.wechat, alipay: yg?.alipay ? { ...yg.alipay } : defYg.alipay } }
           : { plans: defPlans, yungouos: defYg }
-        const energy: EnergyConfig = c.energy
-          ? { ...c.energy }
-          : { tokens_per_energy: 1000, adopt_cost: 100, daily_consume: 10, min_energy_for_task: 5, zero_days_to_delete: 3, invite_reward: 50, new_user_energy: 100, invite_commission_rate: 5 }
+        const defaultEnergy: EnergyConfig = { tokens_per_energy: 1000, adopt_cost: 100, daily_consume: 10, min_energy_for_task: 5, zero_days_to_delete: 3, invite_reward: 50, new_user_energy: 0, daily_login_bonus: 10, invite_commission_rate: 5 }
+        const energy: EnergyConfig = c.energy ? { ...defaultEnergy, ...c.energy } : defaultEnergy
         const container: ContainerConfig = c.container ? { ...c.container } : { workspace_size_gb: 0 }
         const api_url = (c as { api_url?: string }).api_url ?? ''
         setConfig({ channels, smtp, payment, energy, container, api_url })
@@ -479,8 +478,19 @@ export default function AdminConfig() {
                 <input
                   type="number"
                   min={0}
-                  value={form?.energy?.new_user_energy ?? 100}
+                  value={form?.energy?.new_user_energy ?? 0}
                   onChange={(e) => updateEnergy({ new_user_energy: parseInt(e.target.value, 10) || 0 })}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
+                />
+                <p className="text-xs text-slate-500 mt-0.5">金币</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">每日首次登录</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={form?.energy?.daily_login_bonus ?? 10}
+                  onChange={(e) => updateEnergy({ daily_login_bonus: parseInt(e.target.value, 10) || 0 })}
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
                 />
                 <p className="text-xs text-slate-500 mt-0.5">金币</p>

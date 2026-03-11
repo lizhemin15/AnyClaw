@@ -68,6 +68,7 @@ type RegistryConfig struct {
 type ClawHubConfig struct {
 	Enabled         bool
 	BaseURL         string
+	MirrorBaseURLs  []string // 429 时自动切换的镜像源，如 ["https://clawhub.com"]
 	AuthToken       string
 	SearchPath      string // e.g. "/api/v1/search"
 	SkillsPath      string // e.g. "/api/v1/skills"

@@ -137,6 +137,9 @@ func (d *DB) migrate() error {
 	if _, err := d.Exec("ALTER TABLE users ADD COLUMN email_verified TINYINT NOT NULL DEFAULT 1"); err != nil && !isDuplicateColumn(err) {
 		log.Printf("[db] alter users email_verified: %v", err)
 	}
+	if _, err := d.Exec("ALTER TABLE users ADD COLUMN last_login_at DATETIME"); err != nil && !isDuplicateColumn(err) {
+		log.Printf("[db] alter users last_login_at: %v", err)
+	}
 	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS verification_codes (
 		id BIGINT AUTO_INCREMENT PRIMARY KEY,
 		email VARCHAR(255) NOT NULL,

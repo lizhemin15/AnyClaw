@@ -55,35 +55,39 @@ func TestClawHubRegistrySearch(t *testing.T) {
 }
 
 func TestClawHubRegistrySearchRetries429(t *testing.T) {
-	attempts := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attempts++
-		if attempts == 1 {
-			w.Header().Set("Retry-After", "0")
-			w.WriteHeader(http.StatusTooManyRequests)
-			w.Write([]byte("rate limited"))
-			return
-		}
-
+	primaryAttempts := 0
+	mirrorAttempts := 0
+	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		primaryAttempts++
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Write([]byte("rate limited"))
+	}))
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mirrorAttempts++
 		slug := "github"
 		name := "GitHub Integration"
 		summary := "Interact with GitHub repos"
 		version := "1.0.0"
-
 		json.NewEncoder(w).Encode(clawhubSearchResponse{
 			Results: []clawhubSearchResult{
 				{Score: 0.95, Slug: &slug, DisplayName: &name, Summary: &summary, Version: &version},
 			},
 		})
 	}))
-	defer srv.Close()
+	defer primary.Close()
+	defer mirror.Close()
 
-	reg := newTestRegistry(srv.URL, "")
+	reg := NewClawHubRegistry(ClawHubConfig{
+		Enabled:        true,
+		BaseURL:        primary.URL,
+		MirrorBaseURLs: []string{mirror.URL},
+	})
 	results, err := reg.Search(context.Background(), "github", 5)
 
 	require.NoError(t, err)
 	require.Len(t, results, 1)
-	assert.Equal(t, 2, attempts)
+	assert.Equal(t, 1, primaryAttempts, "primary should get 429 once")
+	assert.Equal(t, 1, mirrorAttempts, "mirror should succeed")
 	assert.Equal(t, "github", results[0].Slug)
 }
 
@@ -175,8 +179,9 @@ func TestClawHubRegistryDownloadAndInstallRetries429(t *testing.T) {
 		"SKILL.md": "---\nname: retry-skill\ndescription: A test\n---\nHello skill",
 	})
 
-	downloadAttempts := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	primaryDownloadAttempts := 0
+	mirrorDownloadAttempts := 0
+	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v1/skills/retry-skill":
 			json.NewEncoder(w).Encode(clawhubSkillResponse{
@@ -186,13 +191,24 @@ func TestClawHubRegistryDownloadAndInstallRetries429(t *testing.T) {
 				LatestVersion: &clawhubVersionInfo{Version: "1.0.0"},
 			})
 		case "/api/v1/download":
-			downloadAttempts++
-			if downloadAttempts == 1 {
-				w.Header().Set("Retry-After", "0")
-				w.WriteHeader(http.StatusTooManyRequests)
-				w.Write([]byte("rate limited"))
-				return
-			}
+			primaryDownloadAttempts++
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte("rate limited"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/skills/retry-skill":
+			json.NewEncoder(w).Encode(clawhubSkillResponse{
+				Slug:          "retry-skill",
+				DisplayName:   "Retry Skill",
+				Summary:       "A retry test skill",
+				LatestVersion: &clawhubVersionInfo{Version: "1.0.0"},
+			})
+		case "/api/v1/download":
+			mirrorDownloadAttempts++
 			assert.Equal(t, "retry-skill", r.URL.Query().Get("slug"))
 			w.Header().Set("Content-Type", "application/zip")
 			w.Write(zipBuf)
@@ -200,18 +216,24 @@ func TestClawHubRegistryDownloadAndInstallRetries429(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
-	defer srv.Close()
+	defer primary.Close()
+	defer mirror.Close()
 
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "retry-skill")
 
-	reg := newTestRegistry(srv.URL, "")
+	reg := NewClawHubRegistry(ClawHubConfig{
+		Enabled:        true,
+		BaseURL:        primary.URL,
+		MirrorBaseURLs: []string{mirror.URL},
+	})
 	result, err := reg.DownloadAndInstall(context.Background(), "retry-skill", "", targetDir)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, "1.0.0", result.Version)
-	assert.Equal(t, 2, downloadAttempts)
+	assert.Equal(t, 1, primaryDownloadAttempts)
+	assert.Equal(t, 1, mirrorDownloadAttempts)
 
 	skillContent, err := os.ReadFile(filepath.Join(targetDir, "SKILL.md"))
 	require.NoError(t, err)

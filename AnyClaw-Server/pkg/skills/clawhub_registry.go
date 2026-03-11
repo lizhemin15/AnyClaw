@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/anyclaw/anyclaw-server/pkg/utils"
@@ -21,11 +22,11 @@ const (
 
 // ClawHubRegistry implements SkillRegistry for the ClawHub platform.
 type ClawHubRegistry struct {
-	baseURL         string
-	authToken       string // Optional - for elevated rate limits
-	searchPath      string // Search API
-	skillsPath      string // For retrieving skill metadata
-	downloadPath    string // For fetching ZIP files for download
+	baseURLs        []string // [primary, mirror1, ...]，429 时自动切换
+	authToken       string
+	searchPath      string
+	skillsPath      string
+	downloadPath    string
 	maxZipSize      int
 	maxResponseSize int
 	client          *http.Client
@@ -65,8 +66,16 @@ func NewClawHubRegistry(cfg ClawHubConfig) *ClawHubRegistry {
 		maxResp = cfg.MaxResponseSize
 	}
 
+	baseURLs := []string{baseURL}
+	for _, m := range cfg.MirrorBaseURLs {
+		m = trimTrailingSlash(m)
+		if m != "" && m != baseURL && !contains(baseURLs, m) {
+			baseURLs = append(baseURLs, m)
+		}
+	}
+
 	return &ClawHubRegistry{
-		baseURL:         baseURL,
+		baseURLs:        baseURLs,
 		authToken:       cfg.AuthToken,
 		searchPath:      searchPath,
 		skillsPath:      skillsPath,
@@ -82,6 +91,19 @@ func NewClawHubRegistry(cfg ClawHubConfig) *ClawHubRegistry {
 			},
 		},
 	}
+}
+
+func trimTrailingSlash(s string) string {
+	return strings.TrimSuffix(strings.TrimSpace(s), "/")
+}
+
+func contains(ss []string, s string) bool {
+	for _, x := range ss {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *ClawHubRegistry) Name() string {
@@ -103,19 +125,13 @@ type clawhubSearchResult struct {
 }
 
 func (c *ClawHubRegistry) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {
-	u, err := url.Parse(c.baseURL + c.searchPath)
-	if err != nil {
-		return nil, fmt.Errorf("invalid base URL: %w", err)
-	}
-
-	q := u.Query()
+	q := url.Values{}
 	q.Set("q", query)
 	if limit > 0 {
 		q.Set("limit", fmt.Sprintf("%d", limit))
 	}
-	u.RawQuery = q.Encode()
 
-	body, err := c.doGet(ctx, u.String())
+	body, err := c.doGetWithMirrorFallback(ctx, c.searchPath, q)
 	if err != nil {
 		return nil, fmt.Errorf("search request failed: %w", err)
 	}
@@ -179,9 +195,8 @@ func (c *ClawHubRegistry) GetSkillMeta(ctx context.Context, slug string) (*Skill
 		return nil, fmt.Errorf("invalid slug %q: error: %s", slug, err.Error())
 	}
 
-	u := c.baseURL + c.skillsPath + "/" + url.PathEscape(slug)
-
-	body, err := c.doGet(ctx, u)
+	path := c.skillsPath + "/" + url.PathEscape(slug)
+	body, err := c.doGetWithMirrorFallback(ctx, path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("skill metadata request failed: %w", err)
 	}
@@ -247,19 +262,13 @@ func (c *ClawHubRegistry) DownloadAndInstall(
 	result.Version = installVersion
 
 	// Step 3: Download ZIP to temp file (streams in ~32KB chunks).
-	u, err := url.Parse(c.baseURL + c.downloadPath)
-	if err != nil {
-		return nil, fmt.Errorf("invalid base URL: %w", err)
-	}
-
-	q := u.Query()
+	q := url.Values{}
 	q.Set("slug", slug)
 	if installVersion != "latest" {
 		q.Set("version", installVersion)
 	}
-	u.RawQuery = q.Encode()
 
-	tmpPath, err := c.downloadToTempFileWithRetry(ctx, u.String())
+	tmpPath, err := c.downloadWithMirrorFallback(ctx, c.downloadPath, q)
 	if err != nil {
 		return nil, fmt.Errorf("download failed: %w", err)
 	}
@@ -275,29 +284,52 @@ func (c *ClawHubRegistry) DownloadAndInstall(
 
 // --- HTTP helper ---
 
-func (c *ClawHubRegistry) doGet(ctx context.Context, urlStr string) ([]byte, error) {
-	req, err := c.newGetRequest(ctx, urlStr, "application/json")
-	if err != nil {
-		return nil, err
+func (c *ClawHubRegistry) buildURL(baseURL, path string, query url.Values) string {
+	u := strings.TrimSuffix(baseURL, "/") + path
+	if len(query) > 0 {
+		u += "?" + query.Encode()
 	}
+	return u
+}
 
-	resp, err := utils.DoRequestWithRetry(c.client, req)
-	if err != nil {
-		return nil, err
+// doGetWithMirrorFallback 依次尝试 baseURLs，遇到 429 或 5xx 时切换到下一个镜像
+func (c *ClawHubRegistry) doGetWithMirrorFallback(ctx context.Context, path string, query url.Values) ([]byte, error) {
+	var lastErr error
+	for _, baseURL := range c.baseURLs {
+		urlStr := c.buildURL(baseURL, path, query)
+		req, err := c.newGetRequest(ctx, urlStr, "application/json")
+		if err != nil {
+			return nil, err
+		}
+
+		resp, err := c.client.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		body, err := io.ReadAll(io.LimitReader(resp.Body, int64(c.maxResponseSize)))
+		resp.Body.Close()
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		switch resp.StatusCode {
+		case http.StatusOK:
+			return body, nil
+		case http.StatusTooManyRequests:
+			lastErr = fmt.Errorf("HTTP 429: %s", string(body))
+			continue
+		default:
+			if resp.StatusCode >= 500 {
+				lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+				continue
+			}
+			return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+		}
 	}
-	defer resp.Body.Close()
-
-	// Limit response body read to prevent memory issues.
-	body, err := io.ReadAll(io.LimitReader(resp.Body, int64(c.maxResponseSize)))
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
-	}
-
-	return body, nil
+	return nil, lastErr
 }
 
 func (c *ClawHubRegistry) newGetRequest(ctx context.Context, urlStr, accept string) (*http.Request, error) {
@@ -312,17 +344,53 @@ func (c *ClawHubRegistry) newGetRequest(ctx context.Context, urlStr, accept stri
 	return req, nil
 }
 
-func (c *ClawHubRegistry) downloadToTempFileWithRetry(ctx context.Context, urlStr string) (string, error) {
+// downloadWithMirrorFallback 依次尝试 baseURLs，遇到 429 或 5xx 时切换到下一个镜像
+func (c *ClawHubRegistry) downloadWithMirrorFallback(ctx context.Context, path string, query url.Values) (string, error) {
+	var lastErr error
+	for _, baseURL := range c.baseURLs {
+		urlStr := c.buildURL(baseURL, path, query)
+		tmpPath, err := c.downloadToTempFile(ctx, urlStr)
+		if err == nil {
+			return tmpPath, nil
+		}
+		// 429 或 5xx 时尝试下一个镜像，其他错误直接返回
+		if isRetryableHTTP(err) {
+			lastErr = err
+			continue
+		}
+		return "", err
+	}
+	return "", lastErr
+}
+
+func isRetryableHTTP(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	// 429、5xx 或网络错误时尝试下一个镜像
+	return strings.Contains(s, "429") ||
+		strings.HasPrefix(s, "HTTP 5") ||
+		strings.Contains(s, "connection") ||
+		strings.Contains(s, "timeout") ||
+		strings.Contains(s, "refused")
+}
+
+func (c *ClawHubRegistry) downloadToTempFile(ctx context.Context, urlStr string) (string, error) {
 	req, err := c.newGetRequest(ctx, urlStr, "application/zip")
 	if err != nil {
 		return "", err
 	}
 
-	resp, err := utils.DoRequestWithRetry(c.client, req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		errBody := make([]byte, 512)

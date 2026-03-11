@@ -366,6 +366,7 @@ export interface EnergyConfig {
   zero_days_to_delete: number;
   invite_reward: number;
   new_user_energy: number;
+  daily_login_bonus: number;
   invite_commission_rate: number;
 }
 

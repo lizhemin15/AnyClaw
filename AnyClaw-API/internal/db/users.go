@@ -19,9 +19,6 @@ func (d *DB) CreateUser(email, passwordHash, role string, emailVerified bool, in
 	if role == "" {
 		role = "user"
 	}
-	if initialEnergy <= 0 {
-		initialEnergy = 100
-	}
 	verified := 0
 	if emailVerified {
 		verified = 1
@@ -126,4 +123,23 @@ func (d *DB) SetUserInviter(userID, inviterID int64) error {
 	}
 	_, err := d.Exec("UPDATE users SET inviter_id = ? WHERE id = ? AND inviter_id IS NULL", inviterID, userID)
 	return err
+}
+
+// GrantDailyLoginBonus 若今日首次登录则发放金币并更新 last_login_at，返回是否发放
+func (d *DB) GrantDailyLoginBonus(userID int64, bonus int) (granted bool, err error) {
+	if bonus <= 0 {
+		return false, nil
+	}
+	// 原子：仅当 last_login_at 为 NULL 或日期早于今天时更新并加金币
+	res, err := d.Exec(`
+		UPDATE users SET
+			energy = energy + ?,
+			last_login_at = NOW()
+		WHERE id = ? AND (last_login_at IS NULL OR DATE(last_login_at) < CURDATE())
+	`, bonus, userID)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }

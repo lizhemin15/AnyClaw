@@ -202,8 +202,11 @@ func (a *Auth) HandleSendCode(w http.ResponseWriter, r *http.Request) {
 	if err := mail.SendVerificationCode(email, code, params); err != nil {
 		log.Printf("[auth] send verification code to %s failed: %v", email, err)
 		msg := "发送邮件失败"
-		if strings.Contains(strings.ToLower(err.Error()), "535") || strings.Contains(strings.ToLower(err.Error()), "authentication") {
+		errLower := strings.ToLower(err.Error())
+		if strings.Contains(errLower, "535") || strings.Contains(errLower, "authentication") {
 			msg = "发送邮件失败（SMTP 认证错误，163/QQ 等须用授权码而非登录密码）"
+		} else if strings.Contains(errLower, "550") || strings.Contains(errLower, "invalid user") {
+			msg = "发送邮件失败（550 Invalid User：163/QQ 等要求发件人必须与 SMTP 登录账号一致，请在管理后台将「发件人」设为与「用户名」相同的完整邮箱）"
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -318,6 +321,11 @@ func (a *Auth) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	if !a.CheckPassword(user.PasswordHash, req.Password) {
 		http.Error(w, `{"error":"invalid credentials"}`, http.StatusUnauthorized)
 		return
+	}
+	cfg, _ := config.Load(a.configPath)
+	bonus := config.GetEnergyConfig(cfg).DailyLoginBonus
+	if granted, _ := a.db.GrantDailyLoginBonus(user.ID, bonus); granted {
+		user, _ = a.db.GetUserByID(user.ID)
 	}
 	token, err := a.CreateToken(user)
 	if err != nil {

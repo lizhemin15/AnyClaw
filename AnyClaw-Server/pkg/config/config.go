@@ -709,9 +709,10 @@ type SkillsRegistriesConfig struct {
 }
 
 type ClawHubRegistryConfig struct {
-	Enabled         bool   `json:"enabled"           env:"ANYCLAW_SKILLS_REGISTRIES_CLAWHUB_ENABLED"`
-	BaseURL         string `json:"base_url"          env:"ANYCLAW_SKILLS_REGISTRIES_CLAWHUB_BASE_URL"`
-	AuthToken       string `json:"auth_token"        env:"ANYCLAW_SKILLS_REGISTRIES_CLAWHUB_AUTH_TOKEN"`
+	Enabled         bool     `json:"enabled"           env:"ANYCLAW_SKILLS_REGISTRIES_CLAWHUB_ENABLED"`
+	BaseURL         string   `json:"base_url"          env:"ANYCLAW_SKILLS_REGISTRIES_CLAWHUB_BASE_URL"`
+	MirrorBaseURLs  []string `json:"mirror_base_urls"  env:"ANYCLAW_SKILLS_REGISTRIES_CLAWHUB_MIRROR_BASE_URLS"`
+	AuthToken       string   `json:"auth_token"        env:"ANYCLAW_SKILLS_REGISTRIES_CLAWHUB_AUTH_TOKEN"`
 	SearchPath      string `json:"search_path"       env:"ANYCLAW_SKILLS_REGISTRIES_CLAWHUB_SEARCH_PATH"`
 	SkillsPath      string `json:"skills_path"       env:"ANYCLAW_SKILLS_REGISTRIES_CLAWHUB_SKILLS_PATH"`
 	DownloadPath    string `json:"download_path"     env:"ANYCLAW_SKILLS_REGISTRIES_CLAWHUB_DOWNLOAD_PATH"`
