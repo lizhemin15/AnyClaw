@@ -7,6 +7,9 @@
   html {
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
+    /* iOS：确保根元素有高度，fixed 子元素才能正确计算 */
+    min-height: 100vh;
+    min-height: 100dvh;
   }
   body {
     @apply antialiased;
@@ -86,3 +89,13 @@
 .msg-markdown.msg-md-user .msg-expand-btn:hover { color: white; }
 .msg-markdown.msg-md-assistant .msg-expand-btn { color: rgb(79 70 229); }
 .msg-markdown.msg-md-assistant .msg-expand-btn:hover { color: rgb(67 56 202); }
+
+/* iOS Safari：固定高度 fallback（dvh 在部分 iOS 不支持会导致 0 高度） */
+.chat-mobile-h {
+  height: 100vh;
+  height: 100dvh;
+}
+/* iOS Safari：flex 子元素 overflow 需加 -webkit-overflow-scrolling 才能正常滚动 */
+.chat-scroll {
+  -webkit-overflow-scrolling: touch;
+}

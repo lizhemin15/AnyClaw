@@ -302,7 +302,7 @@ export default function Chat() {
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col overflow-hidden bg-slate-50 sm:bg-white sm:max-w-2xl sm:mx-auto sm:my-4 sm:rounded-2xl sm:shadow-lg sm:border sm:border-slate-200 sm:min-h-[80vh] z-10 h-[100dvh] sm:h-auto">
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-slate-50 sm:bg-white sm:max-w-2xl sm:mx-auto sm:my-4 sm:rounded-2xl sm:shadow-lg sm:border sm:border-slate-200 sm:min-h-[80vh] z-10 chat-mobile-h sm:h-auto">
       {/* 顶部栏 - 显示宠物名，移动端连接时隐藏状态 */}
       <div className="flex items-center gap-3 px-3 py-2.5 sm:py-3 sm:px-4 bg-white border-b border-slate-200 flex-shrink-0">
         <button
@@ -331,7 +331,7 @@ export default function Chat() {
       <div
         ref={listRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4 min-h-0"
+        className="flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4 min-h-0 chat-scroll"
       >
         {loading ? (
           <div className="flex justify-center py-12">
