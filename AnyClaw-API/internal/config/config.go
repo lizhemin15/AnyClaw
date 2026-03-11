@@ -244,6 +244,9 @@ func ConfigPath() string {
 	return "/data/config.json"
 }
 
+// LoadFromDB 可选：当文件无 channels 时从 DB 加载（用于 Sealos/K8s 等 /data 不持久化）
+var LoadFromDB func() ([]byte, error)
+
 func Load(path string) (*Config, error) {
 	cfg := &Config{
 		Port:        8080,
@@ -271,6 +274,31 @@ func Load(path string) (*Config, error) {
 	// 迁移：key_pool 或 model_list -> channels
 	if len(cfg.Channels) == 0 {
 		migrateToChannels(cfg)
+	}
+	// 优先从 DB 加载 admin 配置（channels/smtp/payment/energy），DB 为唯一数据源
+	if LoadFromDB != nil {
+		if b, err := LoadFromDB(); err == nil && len(b) > 0 {
+			var dbCfg struct {
+				Channels []Channel      `json:"channels"`
+				SMTP     *SMTPConfig    `json:"smtp"`
+				Payment  *PaymentConfig `json:"payment"`
+				Energy   *EnergyConfig  `json:"energy"`
+			}
+			if json.Unmarshal(b, &dbCfg) == nil {
+				if len(dbCfg.Channels) > 0 {
+					cfg.Channels = dbCfg.Channels
+				}
+				if dbCfg.SMTP != nil {
+					cfg.SMTP = dbCfg.SMTP
+				}
+				if dbCfg.Payment != nil {
+					cfg.Payment = dbCfg.Payment
+				}
+				if dbCfg.Energy != nil {
+					cfg.Energy = dbCfg.Energy
+				}
+			}
+		}
 	}
 	// Env can override file
 	if s := os.Getenv("ANYCLAW_INSTANCE_TOKENS"); s != "" {

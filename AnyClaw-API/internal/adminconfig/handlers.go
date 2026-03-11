@@ -11,16 +11,18 @@ import (
 	"time"
 
 	"github.com/anyclaw/anyclaw-api/internal/config"
+	"github.com/anyclaw/anyclaw-api/internal/db"
 	"github.com/anyclaw/anyclaw-api/internal/mail"
 	"github.com/anyclaw/anyclaw-api/internal/request"
 )
 
 type Handler struct {
 	configPath string
+	database   *db.DB
 }
 
-func New(configPath string) *Handler {
-	return &Handler{configPath: configPath}
+func New(configPath string, database *db.DB) *Handler {
+	return &Handler{configPath: configPath, database: database}
 }
 
 func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
@@ -190,15 +192,16 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 	if energy == nil {
 		energy = cfg.Energy
 	}
-	if err := config.SaveAdminConfig(h.configPath, channels, smtp, payment, energy); err != nil {
-		log.Printf("[admin] SaveAdminConfig failed: path=%s err=%v", h.configPath, err)
-		msg := err.Error()
-		if len(msg) > 80 {
-			msg = msg[:80] + "..."
-		}
-		// 简单转义避免破坏 JSON
-		msg = strings.ReplaceAll(strings.ReplaceAll(msg, `\`, `\\`), `"`, `\"`)
-		http.Error(w, `{"error":"failed to save config: `+msg+`"}`, http.StatusInternalServerError)
+	// 全部写入数据库，DB 为唯一数据源
+	dbPayload := map[string]any{"channels": channels, "smtp": smtp, "payment": payment, "energy": energy}
+	dbBytes, _ := json.Marshal(dbPayload)
+	if h.database == nil {
+		http.Error(w, `{"error":"database not configured"}`, http.StatusInternalServerError)
+		return
+	}
+	if err := h.database.SaveAdminConfigJSON(dbBytes); err != nil {
+		log.Printf("[admin] SaveAdminConfig to DB failed: %v", err)
+		http.Error(w, `{"error":"failed to save config to database: `+err.Error()+`"}`, http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

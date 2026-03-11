@@ -441,6 +441,10 @@ export async function getAdminStats(days?: number): Promise<AdminStats> {
   return fetchApi<AdminStats>(url);
 }
 
+export async function resetAdminDb(): Promise<void> {
+  await fetchApi<{ status: string }>('/admin/db/reset', { method: 'POST' });
+}
+
 export async function adminRechargeUser(userId: number, amount: number): Promise<void> {
   await fetchApi(`/admin/energy/users/${userId}/recharge`, {
     method: 'POST',

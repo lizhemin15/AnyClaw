@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -81,6 +82,11 @@ func runSetupMode(cfgPath string, cfg *config.Config) {
 }
 
 func runApp(configPath string, cfg *config.Config, database *db.DB) {
+	config.LoadFromDB = func() ([]byte, error) { return database.GetAdminConfigJSON() }
+	if cfg2, err := config.Load(configPath); err == nil {
+		*cfg = *cfg2
+	}
+	adminConfigHandler := adminconfig.New(configPath, database)
 	authSvc := auth.New(database, cfg.JWTSecret, configPath)
 	apiURL := cfg.APIURL
 	if apiURL == "" {
@@ -90,7 +96,6 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	instHandler := instances.New(database, sched, apiURL, configPath)
 	hostChecker := scheduler.HostChecker{}
 	hostHandler := hosts.New(database, hostChecker)
-	adminConfigHandler := adminconfig.New(configPath)
 	adminStatsHandler := adminstats.New(database)
 
 	wsHub := ws.NewHub()
@@ -111,8 +116,10 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		w.Write([]byte("ok"))
 	})
 	r.Get("/api/setup/status", func(w http.ResponseWriter, _ *http.Request) {
+		var n int
+		_ = database.QueryRow("SELECT COUNT(*) FROM users WHERE role='admin'").Scan(&n)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"configured":true}`))
+		json.NewEncoder(w).Encode(map[string]any{"configured": n > 0, "needs_admin_only": n == 0})
 	})
 
 	r.Route("/auth", func(r chi.Router) {
@@ -157,6 +164,17 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Put("/config", adminConfigHandler.PutConfig)
 		r.Post("/config/test", adminConfigHandler.TestChannel)
 		r.Post("/config/test-smtp", adminConfigHandler.TestSMTP)
+		r.Post("/db/reset", func(w http.ResponseWriter, r *http.Request) {
+			if err := database.Reset(); err != nil {
+				log.Printf("[admin] db reset failed: %v", err)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		})
 		r.Get("/stats", adminStatsHandler.GetStats)
 		r.Get("/energy/users", energyHandler.ListUsers)
 		r.Post("/energy/recharge", energyHandler.Recharge)

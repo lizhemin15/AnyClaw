@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAdminStats, type AdminStats } from '../api'
+import { getAdminStats, resetAdminDb, clearToken, type AdminStats } from '../api'
 
 const CHART_COLORS = ['#4318FF', '#00B5D8', '#6C63FF', '#05CD99', '#FFB547', '#FF5E7D', '#41B883', '#7983FF']
 
@@ -8,6 +8,8 @@ export default function AdminStats() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [days, setDays] = useState(7)
+  const [resetting, setResetting] = useState(false)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
 
   const load = () => {
     setLoading(true)
@@ -185,8 +187,66 @@ export default function AdminStats() {
               <p className="text-sm text-slate-400 mt-1">宠物实例产生对话后将在此展示</p>
             </div>
           )}
+
+          {/* 危险操作：一键重置数据库 */}
+          <div className="bg-white rounded-lg border border-red-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-red-100 bg-red-50/50">
+              <h2 className="font-semibold text-red-800">危险操作</h2>
+              <p className="text-sm text-red-600 mt-0.5">重置将清空所有用户、实例、订单等数据，不可恢复</p>
+            </div>
+            <div className="p-5">
+              <button
+                type="button"
+                onClick={() => setShowResetConfirm(true)}
+                disabled={resetting}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 active:bg-red-800 disabled:opacity-50"
+              >
+                {resetting ? '重置中...' : '一键重置数据库'}
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
+
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-slate-800">确认重置数据库？</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              将清空所有用户、宠物实例、订单、消息等数据。重置后需前往设置页重新创建管理员。
+            </p>
+            <div className="mt-6 flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowResetConfirm(false)}
+                className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setResetting(true)
+                  try {
+                    await resetAdminDb()
+                    clearToken()
+                    window.location.href = '/setup'
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : '重置失败')
+                    setShowResetConfirm(false)
+                  } finally {
+                    setResetting(false)
+                  }
+                }}
+                disabled={resetting}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+              >
+                {resetting ? '重置中...' : '确认重置'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

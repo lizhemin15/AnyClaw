@@ -178,7 +178,33 @@ func (d *DB) migrate() error {
 	)`); err != nil {
 		log.Printf("[db] create usage_log: %v", err)
 	}
+	// 管理配置存 DB，解决 Sealos/K8s 等 /data 不持久化导致配置丢失
+	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS system_config (
+		k VARCHAR(64) PRIMARY KEY,
+		v LONGTEXT NOT NULL,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+	)`); err != nil {
+		log.Printf("[db] create system_config: %v", err)
+	}
 	return nil
+}
+
+// Reset 清空所有业务表并重新迁移，用于解决数据冲突。重置后需前往 /setup 创建管理员。
+func (d *DB) Reset() error {
+	tables := []string{
+		"usage_log", "orders", "verification_codes", "messages", "invitations",
+		"instances", "hosts", "users", "system_config",
+	}
+	if _, err := d.Exec("SET FOREIGN_KEY_CHECKS = 0"); err != nil {
+		return fmt.Errorf("disable fk: %w", err)
+	}
+	defer d.Exec("SET FOREIGN_KEY_CHECKS = 1")
+	for _, t := range tables {
+		if _, err := d.Exec("DROP TABLE IF EXISTS " + t); err != nil {
+			return fmt.Errorf("drop %s: %w", t, err)
+		}
+	}
+	return d.migrate()
 }
 
 func isDuplicateKey(err error) bool {

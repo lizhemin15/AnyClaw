@@ -15,10 +15,12 @@ export default function Setup() {
 
   useEffect(() => {
     getSetupStatus()
-      .then(({ configured }) => {
+      .then((res) => {
+        const { configured, needs_admin_only } = res as { configured?: boolean; needs_admin_only?: boolean }
         if (configured) {
           navigate('/login', { replace: true })
         } else {
+          if (needs_admin_only) setStep('admin')
           setLoading(false)
         }
       })
