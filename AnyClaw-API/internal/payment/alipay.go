@@ -48,29 +48,6 @@ func CreateAlipayPagePay(cfg *config.AlipayConfig, notifyURL, returnURL, outTrad
 	return u.String(), nil
 }
 
-// CreateAlipayWapPay 创建手机网站支付，返回支付 URL（手机端可唤起支付宝 APP）
-func CreateAlipayWapPay(cfg *config.AlipayConfig, notifyURL, returnURL, outTradeNo, subject string, totalCny int) (string, error) {
-	client, err := newAlipayClient(cfg)
-	if err != nil {
-		return "", err
-	}
-	amount := fmt.Sprintf("%.2f", float64(totalCny)/100)
-	pay := alipay.TradeWapPay{}
-	pay.Trade = alipay.Trade{
-		Subject:     subject,
-		OutTradeNo:  outTradeNo,
-		TotalAmount: amount,
-		ProductCode: "QUICK_WAP_WAY",
-		NotifyURL:   notifyURL,
-		ReturnURL:   returnURL,
-	}
-	u, err := client.TradeWapPay(pay)
-	if err != nil {
-		return "", err
-	}
-	return u.String(), nil
-}
-
 // CreateAlipayPreCreate 当面付扫码支付（alipay.trade.precreate），返回二维码内容
 func CreateAlipayPreCreate(cfg *config.AlipayConfig, notifyURL, outTradeNo, subject string, totalCny int) (string, error) {
 	client, err := newAlipayClient(cfg)
@@ -90,8 +67,20 @@ func CreateAlipayPreCreate(cfg *config.AlipayConfig, notifyURL, outTradeNo, subj
 	if err != nil {
 		return "", err
 	}
-	if rsp == nil || rsp.QRCode == "" {
-		return "", fmt.Errorf("alipay precreate no qr_code")
+	if rsp == nil {
+		return "", fmt.Errorf("alipay precreate no response")
+	}
+	if rsp.QRCode == "" {
+		// 支付宝返回了响应但无二维码，通常为业务错误，带上 sub_msg 便于排查
+		detail := "请检查应用是否已开通当面付、产品码 FACE_TO_FACE_PAYMENT 是否正确"
+		if rsp.Code != "" && rsp.Code != "10000" {
+			if rsp.SubMsg != "" {
+				detail = rsp.SubMsg
+			} else if rsp.Msg != "" {
+				detail = rsp.Msg
+			}
+		}
+		return "", fmt.Errorf("alipay precreate no qr_code: %s", detail)
 	}
 	return rsp.QRCode, nil
 }
