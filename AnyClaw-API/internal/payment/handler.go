@@ -162,7 +162,15 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"alipay not enabled"}`, http.StatusBadRequest)
 			return
 		}
-		payURL, err := CreateAlipayPagePay(cfg.Payment.Alipay, notifyURL, returnURL, outTradeNo, subject, plan.PriceCny)
+		// 手机端使用 WAP 支付，可唤起支付宝 APP；电脑端使用 Page 支付
+		ua := r.Header.Get("User-Agent")
+		isMobile := strings.Contains(ua, "Mobile") || strings.Contains(ua, "Android") || strings.Contains(ua, "iPhone") || strings.Contains(ua, "iPad")
+		var payURL string
+		if isMobile {
+			payURL, err = CreateAlipayWapPay(cfg.Payment.Alipay, notifyURL, returnURL, outTradeNo, subject, plan.PriceCny)
+		} else {
+			payURL, err = CreateAlipayPagePay(cfg.Payment.Alipay, notifyURL, returnURL, outTradeNo, subject, plan.PriceCny)
+		}
 		if err != nil {
 			log.Printf("[payment] alipay create failed: %v", err)
 			http.Error(w, `{"error":"alipay failed: `+err.Error()+`"}`, http.StatusInternalServerError)

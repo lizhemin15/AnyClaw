@@ -9,19 +9,27 @@ import (
 	"github.com/smartwalle/alipay/v3"
 )
 
-// CreateAlipayPagePay 创建电脑网站支付，返回支付 URL
-func CreateAlipayPagePay(cfg *config.AlipayConfig, notifyURL, returnURL, outTradeNo, subject string, totalCny int) (string, error) {
+func newAlipayClient(cfg *config.AlipayConfig) (*alipay.Client, error) {
 	if cfg == nil || !cfg.Enabled || cfg.AppID == "" || cfg.PrivateKey == "" {
-		return "", fmt.Errorf("alipay not configured")
+		return nil, fmt.Errorf("alipay not configured")
 	}
 	client, err := alipay.New(cfg.AppID, cfg.PrivateKey, !cfg.IsSandbox)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if cfg.AlipayPubKey != "" {
 		if err = client.LoadAliPayPublicKey(cfg.AlipayPubKey); err != nil {
-			return "", err
+			return nil, err
 		}
+	}
+	return client, nil
+}
+
+// CreateAlipayPagePay 创建电脑网站支付，返回支付 URL
+func CreateAlipayPagePay(cfg *config.AlipayConfig, notifyURL, returnURL, outTradeNo, subject string, totalCny int) (string, error) {
+	client, err := newAlipayClient(cfg)
+	if err != nil {
+		return "", err
 	}
 	amount := fmt.Sprintf("%.2f", float64(totalCny)/100)
 	pay := alipay.TradePagePay{}
@@ -34,6 +42,28 @@ func CreateAlipayPagePay(cfg *config.AlipayConfig, notifyURL, returnURL, outTrad
 		ReturnURL:   returnURL,
 	}
 	u, err := client.TradePagePay(pay)
+	if err != nil {
+		return "", err
+	}
+	return u.String(), nil
+}
+
+// CreateAlipayWapPay 创建手机网站支付，返回支付 URL（手机端可唤起支付宝 APP）
+func CreateAlipayWapPay(cfg *config.AlipayConfig, notifyURL, returnURL, outTradeNo, subject string, totalCny int) (string, error) {
+	client, err := newAlipayClient(cfg)
+	if err != nil {
+		return "", err
+	}
+	amount := fmt.Sprintf("%.2f", float64(totalCny)/100)
+	pay := alipay.TradeWapPay{
+		NotifyURL:   notifyURL,
+		ReturnURL:   returnURL,
+		Subject:     subject,
+		OutTradeNo:  outTradeNo,
+		TotalAmount: amount,
+		ProductCode: "QUICK_WAP_WAY",
+	}
+	u, err := client.TradeWapPay(pay)
 	if err != nil {
 		return "", err
 	}
