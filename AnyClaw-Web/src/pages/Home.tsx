@@ -234,7 +234,12 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <img src="/10001.png" alt="" className="w-10 h-10 flex-shrink-0 object-contain" aria-hidden />
+                  <div className="relative flex-shrink-0">
+                    <img src="/10001.png" alt="" className="w-10 h-10 object-contain" aria-hidden />
+                    {inst.unread && (
+                      <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-white" title="新消息" aria-label="新消息" />
+                    )}
+                  </div>
                   <p className="font-medium text-slate-800 truncate">{inst.name}</p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">

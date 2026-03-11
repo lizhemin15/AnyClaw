@@ -320,17 +320,23 @@ func (h *Handler) TestSMTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
 		return
 	}
-	if req.Host == "" {
+	// 前端保存后再次进入时，密码被脱敏为 ****，需从已保存配置取真实密码
+	needFromConfig := req.Host == "" || req.Pass == "" || strings.HasPrefix(req.Pass, "****")
+	if needFromConfig {
 		cfg, err := config.Load(h.configPath)
 		if err != nil || cfg.SMTP == nil || cfg.SMTP.Host == "" {
 			http.Error(w, `{"error":"SMTP not configured"}`, http.StatusBadRequest)
 			return
 		}
-		req.Host = cfg.SMTP.Host
-		req.Port = cfg.SMTP.Port
-		req.User = cfg.SMTP.User
-		req.Pass = cfg.SMTP.Pass
-		req.From = cfg.SMTP.From
+		if req.Host == "" {
+			req.Host = cfg.SMTP.Host
+			req.Port = cfg.SMTP.Port
+			req.User = cfg.SMTP.User
+			req.Pass = cfg.SMTP.Pass
+			req.From = cfg.SMTP.From
+		} else if req.Pass == "" || strings.HasPrefix(req.Pass, "****") {
+			req.Pass = cfg.SMTP.Pass
+		}
 	}
 	if req.Port <= 0 {
 		req.Port = 587
@@ -342,8 +348,11 @@ func (h *Handler) TestSMTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
 		msg := err.Error()
-		if strings.Contains(strings.ToLower(msg), "eof") {
+		lower := strings.ToLower(msg)
+		if strings.Contains(lower, "eof") {
 			msg += "（163/QQ 等邮箱须使用授权码而非登录密码；发件人建议填邮箱账号）"
+		} else if strings.Contains(lower, "535") || strings.Contains(lower, "authentication failed") {
+			msg += "（请检查：1) 163/QQ/126 等须用授权码而非登录密码；2) 用户名填完整邮箱；3) 发件人需与登录账号一致；4) 邮箱设置中已开启 SMTP 服务）"
 		}
 		json.NewEncoder(w).Encode(map[string]any{"ok": false, "message": msg})
 		return

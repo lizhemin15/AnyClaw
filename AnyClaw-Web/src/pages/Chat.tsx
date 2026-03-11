@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { getToken, getWebSocketUrl, getMessages, getInstance, type ChatMessage as ApiMessage } from '../api'
+import { getToken, getWebSocketUrl, getMessages, getInstance, markInstanceRead, type ChatMessage as ApiMessage } from '../api'
 
 const COLLAPSE_THRESHOLD = 400
 
@@ -73,8 +73,17 @@ export default function Chat() {
   const wsRef = useRef<WebSocket | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const loadingMoreRef = useRef(false)
+  const markReadTimeoutRef = useRef<number | null>(null)
 
   const instanceId = parseInt(id ?? '', 10)
+
+  const scheduleMarkRead = useCallback(() => {
+    if (markReadTimeoutRef.current) clearTimeout(markReadTimeoutRef.current)
+    markReadTimeoutRef.current = window.setTimeout(() => {
+      markInstanceRead(instanceId).catch(() => {})
+      markReadTimeoutRef.current = null
+    }, 500)
+  }, [instanceId])
 
   const loadMessages = useCallback(
     async (before?: number) => {
@@ -129,6 +138,7 @@ export default function Chat() {
     getInstance(instanceId)
       .then((inst) => setInstanceName(inst.name || '宠物'))
       .catch(() => setInstanceName(''))
+    markInstanceRead(instanceId).catch(() => {})
   }, [instanceId, navigate, loadInitial])
 
   // 页面重新可见时拉取最新消息（多标签/后台时可能漏收 WebSocket）
@@ -171,6 +181,7 @@ export default function Chat() {
                 if (prev.some((m) => m.id === mid || (m.content === content && m.role === 'assistant'))) return prev
                 return [...prev, { id: mid, content, role: (msg.payload!.role as string) || 'assistant' }]
               })
+              scheduleMarkRead()
             }
             break
           case 'message.update':
@@ -187,6 +198,7 @@ export default function Chat() {
                 }
                 return [...prev, { id: targetId || 'u-' + Date.now(), content, role: 'assistant' }]
               })
+              scheduleMarkRead()
             }
             break
           case 'typing.start':
@@ -217,8 +229,9 @@ export default function Chat() {
     return () => {
       ws.close()
       wsRef.current = null
+      if (markReadTimeoutRef.current) clearTimeout(markReadTimeoutRef.current)
     }
-  }, [instanceId])
+  }, [instanceId, scheduleMarkRead])
 
   useEffect(() => {
     listRef.current?.scrollTo(0, listRef.current?.scrollHeight ?? 0)

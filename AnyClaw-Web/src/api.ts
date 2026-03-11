@@ -33,6 +33,7 @@ export interface Instance {
   daily_consume: number;
   zero_energy_since?: string;
   created_at: string;
+  unread?: boolean;
 }
 
 export interface LoginResponse {
@@ -124,6 +125,10 @@ export async function createInstance(name: string): Promise<Instance> {
 
 export async function getInstance(id: number): Promise<Instance> {
   return fetchApi<Instance>(`/instances/${id}`);
+}
+
+export async function markInstanceRead(id: number): Promise<void> {
+  await fetchApi(`/instances/${id}/read`, { method: 'PUT' });
 }
 
 export async function deleteInstance(id: number): Promise<void> {

@@ -181,19 +181,17 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	if resp.StatusCode == http.StatusOK {
 		promptTokens, completionTokens := parseUsageFromResponse(respBody)
+		cost := 0
 		if p.db != nil && userID != "" {
 			cfg, _ := config.Load(p.configPath)
 			tokensPerEnergy := config.GetEnergyConfig(cfg).TokensPerEnergy
-			cost := energyFromTokens(promptTokens, completionTokens, tokensPerEnergy)
+			cost = energyFromTokens(promptTokens, completionTokens, tokensPerEnergy)
 			uid, _ := strconv.ParseInt(userID, 10, 64)
-			if ok, _ := p.db.DeductUserEnergy(uid, cost); ok {
-				p.logUsage(instanceID, userID, model, apiBase, promptTokens, completionTokens, cost)
-			} else {
-				p.logUsage(instanceID, userID, model, apiBase, promptTokens, completionTokens, 0)
+			if ok, _ := p.db.DeductUserEnergy(uid, cost); !ok {
+				log.Printf("[llm] deduct user %d coins %d failed (insufficient balance?)", uid, cost)
 			}
-		} else {
-			p.logUsage(instanceID, userID, model, apiBase, promptTokens, completionTokens, 0)
 		}
+		p.logUsage(instanceID, userID, model, apiBase, promptTokens, completionTokens, cost)
 	}
 }
 

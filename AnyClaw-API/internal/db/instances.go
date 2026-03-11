@@ -18,6 +18,7 @@ type Instance struct {
 	HostID           string  `json:"host_id,omitempty"`
 	Token            string  `json:"-"` // never expose to client
 	CreatedAt        string  `json:"created_at"`
+	Unread           bool    `json:"unread,omitempty"` // 是否有未读的 AI 回复
 }
 
 func (d *DB) CreateInstance(userID int64, name, token string, initialEnergy int, dailyConsume int) (*Instance, error) {
@@ -123,8 +124,11 @@ func (d *DB) ListAllInstancesAdmin() ([]*AdminInstance, error) {
 
 func (d *DB) ListInstancesByUserID(userID int64) ([]*Instance, error) {
 	rows, err := d.Query(
-		`SELECT id, user_id, name, status, COALESCE(energy,100), COALESCE(daily_consume,10), zero_energy_since,
-		 COALESCE(container_id,''), COALESCE(host_id,''), token, created_at FROM instances WHERE user_id = ? ORDER BY created_at DESC`,
+		`SELECT i.id, i.user_id, i.name, i.status, COALESCE(i.energy,100), COALESCE(i.daily_consume,10), i.zero_energy_since,
+		 COALESCE(i.container_id,''), COALESCE(i.host_id,''), i.token, i.created_at,
+		 (SELECT COUNT(*) > 0 FROM messages m WHERE m.instance_id = i.id AND m.role='assistant'
+		  AND (i.last_read_at IS NULL OR m.created_at > i.last_read_at)) as unread
+		 FROM instances i WHERE i.user_id = ? ORDER BY i.created_at DESC`,
 		userID,
 	)
 	if err != nil {
@@ -135,7 +139,7 @@ func (d *DB) ListInstancesByUserID(userID int64) ([]*Instance, error) {
 	for rows.Next() {
 		var i Instance
 		var zeroSince sql.NullString
-		if err := rows.Scan(&i.ID, &i.UserID, &i.Name, &i.Status, &i.Energy, &i.DailyConsume, &zeroSince, &i.ContainerID, &i.HostID, &i.Token, &i.CreatedAt); err != nil {
+		if err := rows.Scan(&i.ID, &i.UserID, &i.Name, &i.Status, &i.Energy, &i.DailyConsume, &zeroSince, &i.ContainerID, &i.HostID, &i.Token, &i.CreatedAt, &i.Unread); err != nil {
 			return nil, err
 		}
 		if zeroSince.Valid {
@@ -144,6 +148,11 @@ func (d *DB) ListInstancesByUserID(userID int64) ([]*Instance, error) {
 		list = append(list, &i)
 	}
 	return list, nil
+}
+
+func (d *DB) UpdateInstanceLastRead(instanceID, userID int64) error {
+	_, err := d.Exec("UPDATE instances SET last_read_at = NOW() WHERE id = ? AND user_id = ?", instanceID, userID)
+	return err
 }
 
 func (d *DB) UpdateInstanceStatus(id int64, status string) error {

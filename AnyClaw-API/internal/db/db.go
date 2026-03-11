@@ -111,6 +111,9 @@ func (d *DB) migrate() error {
 	if _, err := d.Exec("ALTER TABLE instances ADD COLUMN zero_energy_since DATETIME"); err != nil && !isDuplicateColumn(err) {
 		log.Printf("[db] alter instances: %v", err)
 	}
+	if _, err := d.Exec("ALTER TABLE instances ADD COLUMN last_read_at DATETIME"); err != nil && !isDuplicateColumn(err) {
+		log.Printf("[db] alter instances last_read_at: %v", err)
+	}
 	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS invitations (
 		code VARCHAR(32) PRIMARY KEY,
 		inviter_id BIGINT NOT NULL,
