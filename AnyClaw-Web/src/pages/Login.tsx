@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { login, setToken, type User } from '../api'
 
 interface LoginProps {
@@ -8,7 +8,10 @@ interface LoginProps {
 
 export default function Login({ onLogin }: LoginProps) {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const expired = searchParams.get('expired') === '1'
+  const rawReturn = searchParams.get('return_to') || '/'
+  const returnTo = rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : '/'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -22,6 +25,7 @@ export default function Login({ onLogin }: LoginProps) {
       const res = await login(email, password);
       setToken(res.access_token);
       onLogin(res.user);
+      navigate(returnTo, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {

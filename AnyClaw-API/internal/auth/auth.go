@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -79,18 +80,31 @@ func (a *Auth) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := extractBearer(r)
 		if token == "" {
-			http.Error(w, `{"error":"missing authorization"}`, http.StatusUnauthorized)
+			writeUnauth(w, r, "missing authorization")
 			return
 		}
 		claims, err := a.ParseToken(token)
 		if err != nil {
-			http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+			writeUnauth(w, r, "invalid token")
 			return
 		}
 		rc := &request.Claims{UserID: claims.UserID, Role: claims.Role, Email: claims.Email}
 		ctx := request.WithClaims(r.Context(), rc)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// writeUnauth 对浏览器导航请求重定向到登录页，避免展示 raw JSON
+func writeUnauth(w http.ResponseWriter, r *http.Request, errMsg string) {
+	if r.Method == http.MethodGet && strings.Contains(r.Header.Get("Accept"), "text/html") {
+		path := r.URL.Path
+		if r.URL.RawQuery != "" {
+			path += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, "/login?return_to="+url.QueryEscape(path), http.StatusFound)
+		return
+	}
+	http.Error(w, `{"error":"`+errMsg+`"}`, http.StatusUnauthorized)
 }
 
 func extractBearer(r *http.Request) string {

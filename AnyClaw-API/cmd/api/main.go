@@ -121,6 +121,9 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{"configured": n > 0, "needs_admin_only": n == 0})
 	})
+	setupHandler := setup.New(configPath)
+	r.Post("/api/setup/db", setupHandler.ConfigureDB)
+	r.Post("/api/setup/admin", setupHandler.CreateAdmin)
 
 	r.Route("/auth", func(r chi.Router) {
 		r.Get("/config", authSvc.HandleAuthConfig)
