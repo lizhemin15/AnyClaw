@@ -162,22 +162,15 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"alipay not enabled"}`, http.StatusBadRequest)
 			return
 		}
-		// 手机端使用 WAP 支付，可唤起支付宝 APP；电脑端使用 Page 支付
-		ua := r.Header.Get("User-Agent")
-		isMobile := strings.Contains(ua, "Mobile") || strings.Contains(ua, "Android") || strings.Contains(ua, "iPhone") || strings.Contains(ua, "iPad")
-		var payURL string
-		if isMobile {
-			payURL, err = CreateAlipayWapPay(cfg.Payment.Alipay, notifyURL, returnURL, outTradeNo, subject, plan.PriceCny)
-		} else {
-			payURL, err = CreateAlipayPagePay(cfg.Payment.Alipay, notifyURL, returnURL, outTradeNo, subject, plan.PriceCny)
-		}
+		// 当面付扫码支付（alipay.trade.precreate），生成二维码供用户扫码
+		codeURL, err := CreateAlipayPreCreate(cfg.Payment.Alipay, notifyURL, outTradeNo, subject, plan.PriceCny)
 		if err != nil {
 			log.Printf("[payment] alipay create failed: %v", err)
 			http.Error(w, `{"error":"alipay failed: `+err.Error()+`"}`, http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"out_trade_no": outTradeNo, "pay_url": payURL})
+		json.NewEncoder(w).Encode(map[string]any{"out_trade_no": outTradeNo, "code_url": codeURL})
 	case "wechat":
 		if cfg.Payment.Wechat == nil || !cfg.Payment.Wechat.Enabled {
 			http.Error(w, `{"error":"wechat not enabled"}`, http.StatusBadRequest)

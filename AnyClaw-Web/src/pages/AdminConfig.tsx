@@ -806,6 +806,9 @@ export default function AdminConfig() {
                   <span className="text-sm">沙箱环境</span>
                 </div>
               </div>
+              <p className="mt-2 text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2">
+                当前使用当面付扫码支付，需在支付宝开放平台签约「当面付」产品。用户点击支付宝后会弹出二维码，使用支付宝 APP 扫码完成支付。
+              </p>
               {(form?.payment?.alipay?.is_sandbox ?? false) && (
                 <p className="mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
                   沙箱仍需配置：登录 <a href="https://open.alipay.com" target="_blank" rel="noreferrer" className="underline">open.alipay.com</a> → 开发者中心 → 沙箱环境，获取沙箱 AppID、生成 RSA2 密钥对（应用私钥 + 支付宝公钥），填入上方。沙箱不扣真实资金，但接口与正式环境一致。

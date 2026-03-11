@@ -70,6 +70,31 @@ func CreateAlipayWapPay(cfg *config.AlipayConfig, notifyURL, returnURL, outTrade
 	return u.String(), nil
 }
 
+// CreateAlipayPreCreate 当面付扫码支付（alipay.trade.precreate），返回二维码内容
+func CreateAlipayPreCreate(cfg *config.AlipayConfig, notifyURL, outTradeNo, subject string, totalCny int) (string, error) {
+	client, err := newAlipayClient(cfg)
+	if err != nil {
+		return "", err
+	}
+	amount := fmt.Sprintf("%.2f", float64(totalCny)/100)
+	pay := alipay.TradePreCreate{}
+	pay.Trade = alipay.Trade{
+		Subject:     subject,
+		OutTradeNo:  outTradeNo,
+		TotalAmount: amount,
+		ProductCode: "FACE_TO_FACE_PAYMENT",
+		NotifyURL:   notifyURL,
+	}
+	rsp, err := client.TradePreCreate(context.Background(), pay)
+	if err != nil {
+		return "", err
+	}
+	if rsp == nil || rsp.QRCode == "" {
+		return "", fmt.Errorf("alipay precreate no qr_code")
+	}
+	return rsp.QRCode, nil
+}
+
 // VerifyAlipayNotify 验证并解析支付宝异步通知
 func VerifyAlipayNotify(cfg *config.AlipayConfig, r *http.Request) (outTradeNo, tradeNo string, totalAmount int, err error) {
 	if cfg == nil || cfg.PrivateKey == "" {

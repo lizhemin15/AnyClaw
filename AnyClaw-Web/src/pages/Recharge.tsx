@@ -9,6 +9,7 @@ export default function Recharge() {
   const [error, setError] = useState('')
   const [paying, setPaying] = useState<string | null>(null)
   const [wechatQr, setWechatQr] = useState<string | null>(null)
+  const [alipayQr, setAlipayQr] = useState<string | null>(null)
   const [searchParams] = useSearchParams()
   const paid = searchParams.get('paid') === '1'
 
@@ -25,10 +26,13 @@ export default function Recharge() {
   const handlePay = async (plan: PaymentPlan, channel: 'alipay' | 'wechat') => {
     setPaying(plan.id + '-' + channel)
     setError('')
+    setAlipayQr(null)
+    setWechatQr(null)
     try {
       const res = await createPaymentOrder(plan.id, channel)
-      if (channel === 'alipay' && res.pay_url) {
-        window.location.href = res.pay_url
+      if (channel === 'alipay' && res.code_url) {
+        setAlipayQr(res.code_url)
+        setError('')
       } else if (channel === 'wechat' && res.code_url) {
         setWechatQr(res.code_url)
         setError('')
@@ -68,12 +72,23 @@ export default function Recharge() {
         <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-100 text-red-700 text-sm">{error}</div>
       )}
 
-      {wechatQr && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setWechatQr(null)}>
+      {(wechatQr || alipayQr) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => { setWechatQr(null); setAlipayQr(null) }}>
           <div className="bg-white rounded-xl p-6 max-w-md mx-4 text-center" onClick={(e) => e.stopPropagation()}>
-            <p className="text-slate-500 mb-4">请使用微信扫码支付</p>
-            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(wechatQr)}`} alt="支付二维码" className="mx-auto mb-4" />
-            <button onClick={() => setWechatQr(null)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
+            <p className="text-slate-500 mb-4">{alipayQr ? '请使用支付宝扫码支付' : '请使用微信扫码支付'}</p>
+            {alipayQr && (alipayQr.startsWith('http://') || alipayQr.startsWith('https://')) && (
+              <a
+                href={alipayQr}
+                className="block w-full mb-4 px-4 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 active:bg-blue-800"
+              >
+                打开支付宝完成支付
+              </a>
+            )}
+            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(alipayQr || wechatQr || '')}`} alt="支付二维码" className="mx-auto mb-4" />
+            {alipayQr && (alipayQr.startsWith('http://') || alipayQr.startsWith('https://')) && (
+              <p className="text-xs text-slate-400 mb-4">手机端可点击上方按钮直接跳转；电脑端请用支付宝扫码</p>
+            )}
+            <button onClick={() => { setWechatQr(null); setAlipayQr(null) }} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
               关闭
             </button>
           </div>
@@ -132,7 +147,7 @@ export default function Recharge() {
                       disabled={!!paying}
                       className="px-4 py-2.5 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 font-medium"
                     >
-                      {paying === p.id + '-alipay' ? '跳转中...' : '支付宝'}
+                      {paying === p.id + '-alipay' ? '生成中...' : '支付宝'}
                     </button>
                     <button
                       onClick={() => handlePay(p, 'wechat')}
