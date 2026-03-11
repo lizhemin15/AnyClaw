@@ -15,7 +15,7 @@ import (
 	"github.com/anyclaw/anyclaw-server/pkg/channels"
 	_ "github.com/anyclaw/anyclaw-server/pkg/channels/dingtalk"
 	_ "github.com/anyclaw/anyclaw-server/pkg/channels/discord"
-	_ "github.com/anyclaw/anyclaw-server/pkg/channels/feishu"
+	"github.com/anyclaw/anyclaw-server/pkg/channels/feishu"
 	_ "github.com/anyclaw/anyclaw-server/pkg/channels/irc"
 	_ "github.com/anyclaw/anyclaw-server/pkg/channels/line"
 	_ "github.com/anyclaw/anyclaw-server/pkg/channels/maixcam"
@@ -187,6 +187,17 @@ func gatewayCmd(debug bool) error {
 	if err := channelManager.StartAll(ctx); err != nil {
 		fmt.Printf("Error starting channels: %v\n", err)
 		return err
+	}
+
+	// Send Feishu binding success notification if pending (after restart from update_feishu_config)
+	if ch, chatID, ok := feishu.ReadAndClearBindingPending(); ok {
+		notifyCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = msgBus.PublishOutbound(notifyCtx, bus.OutboundMessage{
+			Channel: ch,
+			ChatID:  chatID,
+			Content: feishu.BindingSuccessMessage(),
+		})
+		cancel()
 	}
 
 	fmt.Printf("✔Health endpoints available at http://%s:%d/health and /ready\n", cfg.Gateway.Host, cfg.Gateway.Port)

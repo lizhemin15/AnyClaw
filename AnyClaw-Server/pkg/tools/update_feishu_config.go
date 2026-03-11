@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/anyclaw/anyclaw-server/pkg/channels/feishu"
 	"github.com/anyclaw/anyclaw-server/pkg/config"
 )
 
@@ -63,6 +64,10 @@ func (t *UpdateFeishuConfigTool) Execute(ctx context.Context, args map[string]an
 
 	if err := config.SaveConfig(configPath, cfg); err != nil {
 		return ErrorResult("failed to save config: " + err.Error())
+	}
+
+	if ch, chatID := ToolChannel(ctx), ToolChatID(ctx); ch != "" && chatID != "" {
+		_ = feishu.WriteBindingPending(ch, chatID)
 	}
 
 	scheduleRestart()

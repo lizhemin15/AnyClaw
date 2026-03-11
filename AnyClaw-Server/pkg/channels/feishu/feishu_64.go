@@ -430,6 +430,13 @@ func (c *FeishuChannel) handleMessageReceive(ctx context.Context, event *larkim.
 		"preview":    utils.Truncate(content, 80),
 	})
 
+	// Send welcome on first message after Feishu binding
+	if ConsumeFeishuWelcome() {
+		if card, err := buildMarkdownCard(FeishuWelcomeMessage()); err == nil {
+			_ = c.sendCard(ctx, chatID, card)
+		}
+	}
+
 	c.HandleMessage(ctx, peer, messageID, senderID, chatID, content, mediaRefs, metadata, senderInfo)
 	return nil
 }
