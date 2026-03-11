@@ -142,7 +142,11 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	proxyReq.Header.Set("Content-Type", "application/json")
 	proxyReq.Header.Set("Authorization", "Bearer "+apiKey)
 	if u, err := url.Parse(reqURL); err == nil && u.Host != "" {
-		proxyReq.Host = u.Host
+		host := u.Hostname()
+		if p := u.Port(); p != "" && p != "443" && p != "80" {
+			host = u.Host
+		}
+		proxyReq.Host = host
 	}
 
 	resp, err := p.client.Do(proxyReq)

@@ -60,6 +60,22 @@ export default function Hosts() {
     loadInstances()
   }, [])
 
+  const checkUpdateStatus = useCallback(async (id: string) => {
+    try {
+      const res = await getHostUpdateStatus(id)
+      setUpdateStatus((prev) => ({
+        ...prev,
+        [id]: {
+          update_available: res.update_available,
+          script_exists: res.script_exists,
+          message: res.message,
+        },
+      }))
+    } catch {
+      setUpdateStatus((prev) => ({ ...prev, [id]: { update_available: false, script_exists: false } }))
+    }
+  }, [])
+
   useEffect(() => {
     hosts.filter((h) => h.enabled).forEach((h) => {
       if (updateStatus[h.id] === undefined) {
@@ -114,22 +130,6 @@ export default function Hosts() {
       setChecking(null)
     }
   }
-
-  const checkUpdateStatus = useCallback(async (id: string) => {
-    try {
-      const res = await getHostUpdateStatus(id)
-      setUpdateStatus((prev) => ({
-        ...prev,
-        [id]: {
-          update_available: res.update_available,
-          script_exists: res.script_exists,
-          message: res.message,
-        },
-      }))
-    } catch {
-      setUpdateStatus((prev) => ({ ...prev, [id]: { update_available: false, script_exists: false } }))
-    }
-  }, [])
 
   const handleUpdateMain = async (h: Host) => {
     if (!confirm(`确定在「${h.name}」上执行更新主服务？将运行 /opt/anyclaw/update.sh`)) return
