@@ -253,6 +253,16 @@ export async function checkHostStatus(id: string): Promise<{ status: string }> {
   return fetchApi<{ status: string }>(`/admin/hosts/${id}/check`, { method: 'POST' });
 }
 
+export async function getHostUpdateStatus(id: string): Promise<{
+  update_available: boolean;
+  script_exists: boolean;
+  current_digest?: string;
+  latest_digest?: string;
+  message?: string;
+}> {
+  return fetchApi(`/admin/hosts/${id}/update-status`);
+}
+
 export async function updateHostMainService(id: string): Promise<{ ok: boolean; message: string; output?: string }> {
   return fetchApi<{ ok: boolean; message: string; output?: string }>(`/admin/hosts/${id}/update`, { method: 'POST' });
 }

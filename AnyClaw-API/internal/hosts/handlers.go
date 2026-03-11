@@ -3,12 +3,15 @@ package hosts
 import (
 	"encoding/json"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/anyclaw/anyclaw-api/internal/db"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
+
+var sha256DigestRe = regexp.MustCompile(`sha256:[a-fA-F0-9]{64}`)
 
 type Handler struct {
 	db       *db.DB
@@ -183,6 +186,68 @@ func (h *Handler) CheckStatus(w http.ResponseWriter, r *http.Request) {
 	_ = h.db.UpdateHostStatus(id, status)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": status})
+}
+
+// UpdateStatusResponse 更新状态检查结果
+type UpdateStatusResponse struct {
+	UpdateAvailable bool   `json:"update_available"`
+	ScriptExists    bool   `json:"script_exists"`
+	CurrentDigest   string `json:"current_digest,omitempty"`
+	LatestDigest    string `json:"latest_digest,omitempty"`
+	Message         string `json:"message,omitempty"`
+}
+
+// UpdateStatus 检查宿主机主服务是否有更新（Docker Hub 最新版 vs 本地镜像）
+func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	host, err := h.db.GetHost(id)
+	if err != nil || host == nil {
+		http.Error(w, `{"error":"host not found"}`, http.StatusNotFound)
+		return
+	}
+	if h.checker == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(UpdateStatusResponse{Message: "SSH 未配置"})
+		return
+	}
+	// 检查 update.sh 是否存在
+	_, err = h.checker.RunCommand(host, "test -f /opt/anyclaw/update.sh")
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(UpdateStatusResponse{
+			ScriptExists: false,
+			Message:      "还未配置更新主服务的 sh 文件，请在宿主机创建 /opt/anyclaw/update.sh",
+		})
+		return
+	}
+	// 获取本地镜像 digest（与 update.sh 中 IMAGE 一致）
+	image := defaultMainImage
+	out, err := h.checker.RunCommand(host, `docker inspect "`+image+`" --format '{{index .RepoDigests 0}}' 2>/dev/null || echo ''`)
+	var localDigest string
+	if err == nil && out != "" {
+		if m := sha256DigestRe.FindString(out); m != "" {
+			localDigest = m
+		}
+	}
+	// 获取 Docker Hub 最新 digest
+	hubDigest, err := getDockerHubDigest(image)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(UpdateStatusResponse{
+			ScriptExists: true,
+			CurrentDigest: localDigest,
+			Message:      "无法获取 Docker Hub 最新版本: " + err.Error(),
+		})
+		return
+	}
+	updateAvailable := localDigest == "" || localDigest != hubDigest
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(UpdateStatusResponse{
+		UpdateAvailable: updateAvailable,
+		ScriptExists:    true,
+		CurrentDigest:  localDigest,
+		LatestDigest:   hubDigest,
+	})
 }
 
 // UpdateMainService 在宿主机上执行 /opt/anyclaw/update.sh 更新主服务

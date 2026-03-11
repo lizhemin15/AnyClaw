@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import {
   getHosts,
@@ -6,6 +6,7 @@ import {
   updateHost,
   deleteHost,
   checkHostStatus,
+  getHostUpdateStatus,
   updateHostMainService,
   getAdminInstances,
   adminDeleteInstance,
@@ -33,6 +34,7 @@ export default function Hosts() {
   const [submitting, setSubmitting] = useState(false)
   const [checking, setChecking] = useState<string | null>(null)
   const [updating, setUpdating] = useState<string | null>(null)
+  const [updateStatus, setUpdateStatus] = useState<Record<string, { update_available: boolean; script_exists: boolean; message?: string }>>({})
   const [instances, setInstances] = useState<AdminInstance[]>([])
   const [instancesLoading, setInstancesLoading] = useState(true)
   const [deletingInst, setDeletingInst] = useState<number | null>(null)
@@ -57,6 +59,14 @@ export default function Hosts() {
     loadHosts()
     loadInstances()
   }, [])
+
+  useEffect(() => {
+    hosts.filter((h) => h.enabled).forEach((h) => {
+      if (updateStatus[h.id] === undefined) {
+        checkUpdateStatus(h.id)
+      }
+    })
+  }, [hosts, updateStatus, checkUpdateStatus])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -97,12 +107,29 @@ export default function Hosts() {
     try {
       const { status } = await checkHostStatus(id)
       setHosts((prev) => prev.map((h) => (h.id === id ? { ...h, status } : h)))
+      checkUpdateStatus(id)
     } catch {
       setHosts((prev) => prev.map((h) => (h.id === id ? { ...h, status: 'error' } : h)))
     } finally {
       setChecking(null)
     }
   }
+
+  const checkUpdateStatus = useCallback(async (id: string) => {
+    try {
+      const res = await getHostUpdateStatus(id)
+      setUpdateStatus((prev) => ({
+        ...prev,
+        [id]: {
+          update_available: res.update_available,
+          script_exists: res.script_exists,
+          message: res.message,
+        },
+      }))
+    } catch {
+      setUpdateStatus((prev) => ({ ...prev, [id]: { update_available: false, script_exists: false } }))
+    }
+  }, [])
 
   const handleUpdateMain = async (h: Host) => {
     if (!confirm(`确定在「${h.name}」上执行更新主服务？将运行 /opt/anyclaw/update.sh`)) return
@@ -113,6 +140,7 @@ export default function Hosts() {
       if (res.ok) {
         setError('')
         alert(res.output ? `更新已执行：\n${res.output}` : res.message)
+        checkUpdateStatus(h.id)
       } else {
         setError(res.output ? `${res.message}\n${res.output}` : res.message)
       }
@@ -216,10 +244,24 @@ export default function Hosts() {
                 </button>
                 <button
                   onClick={() => handleUpdateMain(h)}
-                  disabled={!!updating}
-                  className="flex-1 sm:flex-none px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg active:bg-indigo-700 disabled:opacity-50 min-h-[44px]"
+                  disabled={
+                    !!updating ||
+                    (updateStatus[h.id] && !updateStatus[h.id].script_exists) ||
+                    (updateStatus[h.id] && !updateStatus[h.id].update_available)
+                  }
+                  title={
+                    updateStatus[h.id]?.message ||
+                    (updateStatus[h.id] && !updateStatus[h.id].update_available ? '当前已是最新版本' : undefined)
+                  }
+                  className="flex-1 sm:flex-none px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg active:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
                 >
-                  {updating === h.id ? '执行中...' : '更新主服务'}
+                  {updating === h.id
+                    ? '执行中...'
+                    : updateStatus[h.id] === undefined
+                      ? '检查中...'
+                      : updateStatus[h.id].update_available
+                        ? '更新主服务'
+                        : '已是最新'}
                 </button>
                 <button
                   onClick={() => openEdit(h)}
