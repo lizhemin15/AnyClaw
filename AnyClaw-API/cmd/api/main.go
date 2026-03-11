@@ -146,6 +146,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	r.Get("/api/payment/plans", paymentHandler.GetPlans)
 	r.Route("/api/payment", func(r chi.Router) {
 		r.Use(authSvc.Middleware)
+		r.Get("/orders", paymentHandler.ListOrders)
 		r.Post("/order", paymentHandler.CreateOrder)
 	})
 	r.Post("/api/payment/notify/alipay", paymentHandler.NotifyAlipay)

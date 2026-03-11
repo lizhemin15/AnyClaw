@@ -1,6 +1,7 @@
 #!/bin/bash
 # AnyClaw 更新脚本：拉取最新镜像、删除旧容器、启动新容器、清理旧镜像
 # 用法：chmod +x update-anyclaw.sh && ./update-anyclaw.sh
+# 通过界面触发时使用 nohup 后台执行，避免 stop/rm 当前容器时杀死 API 进程导致脚本中断。日志输出到 /opt/anyclaw/update.log
 
 set -e
 

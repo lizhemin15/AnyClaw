@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { getPaymentPlans, createPaymentOrder, getMe, type PaymentPlan, type User } from '../api'
 
 export default function Recharge() {
@@ -50,8 +50,13 @@ export default function Recharge() {
 
   return (
     <div className="max-w-md mx-auto">
-      <h1 className="text-xl font-semibold text-slate-800 mb-2">金币充值</h1>
-      <p className="text-sm text-slate-500 mb-4">当前余额：🪙 {user?.energy ?? 0}</p>
+      <div className="mb-6 p-4 sm:p-5 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800 mb-1">💰 金币充值</h1>
+          <p className="text-base text-slate-600">当前余额：<span className="font-bold text-amber-600">🪙 {user?.energy ?? 0}</span></p>
+        </div>
+        <Link to="/orders" className="text-sm text-slate-600 hover:text-slate-800">历史订单</Link>
+      </div>
 
       {paid && (
         <div className="mb-4 p-4 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm">

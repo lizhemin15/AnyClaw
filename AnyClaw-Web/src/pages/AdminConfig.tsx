@@ -777,7 +777,7 @@ export default function AdminConfig() {
                     type="text"
                     value={form?.payment?.alipay?.app_id ?? ''}
                     onChange={(e) => updateAlipay({ app_id: e.target.value })}
-                    placeholder="应用 AppID"
+                    placeholder={form?.payment?.alipay?.is_sandbox ? '沙箱 AppID' : '应用 AppID'}
                     className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
                   />
                 </div>
@@ -797,7 +797,7 @@ export default function AdminConfig() {
                     type="password"
                     value={form?.payment?.alipay?.alipay_public_key ?? ''}
                     onChange={(e) => updateAlipay({ alipay_public_key: e.target.value })}
-                    placeholder="支付宝公钥"
+                    placeholder={form?.payment?.alipay?.is_sandbox ? '沙箱支付宝公钥' : '支付宝公钥'}
                     className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full font-mono"
                   />
                 </div>
@@ -806,6 +806,11 @@ export default function AdminConfig() {
                   <span className="text-sm">沙箱环境</span>
                 </div>
               </div>
+              {(form?.payment?.alipay?.is_sandbox ?? false) && (
+                <p className="mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                  沙箱仍需配置：登录 <a href="https://open.alipay.com" target="_blank" rel="noreferrer" className="underline">open.alipay.com</a> → 开发者中心 → 沙箱环境，获取沙箱 AppID、生成 RSA2 密钥对（应用私钥 + 支付宝公钥），填入上方。沙箱不扣真实资金，但接口与正式环境一致。
+                </p>
+              )}
             </div>
             {/* 微信支付 */}
             <div>

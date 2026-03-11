@@ -68,6 +68,34 @@ func (h *Handler) GetPlans(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(out)
 }
 
+// ListOrders 获取订单列表：普通用户仅自己的，管理员可看全部（含用户邮箱）
+func (h *Handler) ListOrders(w http.ResponseWriter, r *http.Request) {
+	claims := request.FromContext(r.Context())
+	if claims == nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	if claims.Role == "admin" {
+		list, err := h.db.ListOrdersAll(100)
+		if err != nil {
+			log.Printf("[payment] list orders all failed: %v", err)
+			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(list)
+		return
+	}
+	list, err := h.db.ListOrdersForUser(claims.UserID, 50)
+	if err != nil {
+		log.Printf("[payment] list orders failed: %v", err)
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(list)
+}
+
 // CreateOrderRequest 创建订单请求
 type CreateOrderRequest struct {
 	PlanID  string `json:"plan_id"`

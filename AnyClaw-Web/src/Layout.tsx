@@ -10,6 +10,8 @@ interface LayoutProps {
 export default function Layout({ user, onLogout, children }: LayoutProps) {
   const loc = useLocation()
   const isHome = loc.pathname === '/'
+  const isRecharge = loc.pathname === '/recharge'
+  const isOrders = loc.pathname === '/orders'
   const isHosts = loc.pathname.startsWith('/admin/hosts')
   const isEnergy = loc.pathname.startsWith('/admin/energy')
   const isConfig = loc.pathname.startsWith('/admin/config')
@@ -23,9 +25,20 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
           OpenClaw
         </Link>
         {user && (
-          <Link to="/recharge" className="text-sm text-amber-600 font-medium hover:text-amber-700 active:opacity-70">
-            🪙 {user.energy ?? 0}
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/orders"
+              className="px-2.5 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-sm"
+            >
+              订单
+            </Link>
+            <Link
+              to="/recharge"
+              className="px-3 py-1.5 rounded-lg bg-amber-100 text-amber-800 font-medium hover:bg-amber-200 active:bg-amber-300 text-sm"
+            >
+              🪙 {user.energy ?? 0} · 充值
+            </Link>
+          </div>
         )}
         <nav className="flex items-center gap-2 sm:gap-4">
           {user?.role === 'admin' && (
@@ -67,6 +80,24 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
           <span className="text-lg">🏠</span>
           <span className="text-xs mt-0.5">首页</span>
         </Link>
+        {user && (
+          <>
+            <Link
+              to="/orders"
+              className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isOrders ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
+            >
+              <span className="text-lg">📋</span>
+              <span className="text-xs mt-0.5">订单</span>
+            </Link>
+            <Link
+              to="/recharge"
+              className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isRecharge ? 'text-amber-600 font-medium' : 'text-slate-500'}`}
+            >
+              <span className="text-lg">💰</span>
+              <span className="text-xs mt-0.5">充值</span>
+            </Link>
+          </>
+        )}
         {user?.role === 'admin' && (
           <>
             <Link

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { getInstances, createInstance, deleteInstance, feedInstance, getInviteCode, useInviteCode, type Instance, type User } from '../api'
 
 const ADOPT_COST = 100
@@ -134,6 +134,12 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
           <span className="text-xl font-bold text-slate-800">🪙 {user?.energy ?? 0}</span>
         </div>
         <div className="flex gap-1.5 sm:gap-2">
+          <Link
+            to="/recharge"
+            className="px-3 py-1.5 sm:px-4 sm:py-2 text-sm font-medium bg-amber-500 text-amber-950 rounded-lg hover:bg-amber-400 active:bg-amber-600"
+          >
+            充值
+          </Link>
           <button
             onClick={handleGetMyCode}
             className="px-3 py-1.5 sm:px-4 sm:py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50"

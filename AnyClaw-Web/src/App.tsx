@@ -18,6 +18,7 @@ import Chat from './pages/Chat'
 import Hosts from './pages/Hosts'
 import Energy from './pages/Energy'
 import Recharge from './pages/Recharge'
+import Orders from './pages/Orders'
 import AdminConfig from './pages/AdminConfig'
 import AdminStats from './pages/AdminStats'
 import Setup from './pages/Setup'
@@ -168,6 +169,13 @@ export default function App() {
           <ProtectedRoute>
             <Layout user={user} onLogout={handleLogout}>
               <Recharge />
+            </Layout>
+          </ProtectedRoute>
+        } />
+        <Route path="/orders" element={
+          <ProtectedRoute>
+            <Layout user={user} onLogout={handleLogout}>
+              <Orders user={user} />
             </Layout>
           </ProtectedRoute>
         } />

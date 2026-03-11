@@ -460,6 +460,25 @@ export async function createPaymentOrder(planId: string, channel: 'alipay' | 'we
   });
 }
 
+export interface Order {
+  id: number;
+  user_id: number;
+  plan_id: string;
+  energy: number;
+  price_cny: number;
+  channel: string;
+  status: string;
+  out_trade_no: string;
+  external_id?: string;
+  paid_at?: string;
+  created_at: string;
+  user_email?: string;
+}
+
+export async function getOrders(): Promise<Order[]> {
+  return fetchApi<Order[]>('/api/payment/orders');
+}
+
 export async function getSetupStatus(): Promise<{ configured: boolean }> {
   const res = await fetch(`${API_BASE}/api/setup/status`);
   const data = await res.json();

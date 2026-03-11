@@ -269,11 +269,12 @@ func (h *Handler) UpdateMainService(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"ok": false, "message": "还未配置更新主服务的 sh 文件，请在宿主机创建 /opt/anyclaw/update.sh"})
 		return
 	}
-	out, err := h.checker.RunCommand(host, "bash /opt/anyclaw/update.sh")
+	// 使用 nohup 后台执行：update.sh 会 stop/rm 当前容器，若同步执行会导致 API 进程被 kill、SSH 断开，后续 docker run 无法执行
+	out, err := h.checker.RunCommand(host, "nohup bash /opt/anyclaw/update.sh > /opt/anyclaw/update.log 2>&1 &")
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
 		json.NewEncoder(w).Encode(map[string]any{"ok": false, "message": err.Error(), "output": out})
 		return
 	}
-	json.NewEncoder(w).Encode(map[string]any{"ok": true, "message": "更新已执行", "output": out})
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "message": "更新已在后台执行，完成后新容器将自动启动。日志: /opt/anyclaw/update.log", "output": out})
 }
