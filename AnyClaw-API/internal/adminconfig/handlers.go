@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -228,7 +229,7 @@ func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	url := apiBase + "/chat/completions"
+	reqURL := apiBase + "/chat/completions"
 	body := map[string]any{
 		"model": model,
 		"messages": []map[string]string{
@@ -237,18 +238,21 @@ func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
 		"max_tokens": 5,
 	}
 	bodyBytes, _ := json.Marshal(body)
-	proxyReq, err := http.NewRequestWithContext(r.Context(), "POST", url, bytes.NewReader(bodyBytes))
+	proxyReq, err := http.NewRequestWithContext(r.Context(), "POST", reqURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
 	proxyReq.Header.Set("Content-Type", "application/json")
 	proxyReq.Header.Set("Authorization", "Bearer "+apiKey)
+	if u, err := url.Parse(reqURL); err == nil && u.Host != "" {
+		proxyReq.Host = u.Host
+	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(proxyReq)
 	if err != nil {
-		log.Printf("[admin] config test failed: url=%s model=%s err=%v", url, model, err)
+		log.Printf("[admin] config test failed: url=%s model=%s err=%v", reqURL, model, err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]any{
@@ -261,7 +265,7 @@ func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
 	respBody, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("[admin] config test non-200: url=%s model=%s status=%d body=%s", url, model, resp.StatusCode, string(respBody))
+		log.Printf("[admin] config test non-200: url=%s model=%s status=%d body=%s", reqURL, model, resp.StatusCode, string(respBody))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]any{

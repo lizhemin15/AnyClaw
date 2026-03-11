@@ -7,6 +7,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -132,18 +133,21 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bodyBytes, _ := json.Marshal(req)
-	url := strings.TrimSuffix(apiBase, "/") + "/chat/completions"
-	proxyReq, err := http.NewRequestWithContext(r.Context(), "POST", url, bytes.NewReader(bodyBytes))
+	reqURL := strings.TrimSuffix(apiBase, "/") + "/chat/completions"
+	proxyReq, err := http.NewRequestWithContext(r.Context(), "POST", reqURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		http.Error(w, `{"error":{"message":"internal error"}}`, http.StatusInternalServerError)
 		return
 	}
 	proxyReq.Header.Set("Content-Type", "application/json")
 	proxyReq.Header.Set("Authorization", "Bearer "+apiKey)
+	if u, err := url.Parse(reqURL); err == nil && u.Host != "" {
+		proxyReq.Host = u.Host
+	}
 
 	resp, err := p.client.Do(proxyReq)
 	if err != nil {
-		log.Printf("[llm] proxy error: url=%s model=%s err=%v", url, model, err)
+		log.Printf("[llm] proxy error: url=%s model=%s err=%v", reqURL, model, err)
 		http.Error(w, `{"error":{"message":"upstream error"}}`, http.StatusBadGateway)
 		return
 	}
@@ -160,7 +164,7 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("[llm] upstream non-200: url=%s model=%s status=%d body=%s", url, model, resp.StatusCode, string(respBody))
+		log.Printf("[llm] upstream non-200: url=%s model=%s status=%d body=%s", reqURL, model, resp.StatusCode, string(respBody))
 	}
 	w.Write(respBody)
 
