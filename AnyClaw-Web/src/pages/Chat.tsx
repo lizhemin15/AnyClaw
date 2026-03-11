@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { getToken, getWebSocketUrl, getMessages, getInstance, markInstanceRead, type ChatMessage as ApiMessage } from '../api'
+import { ErrorBoundary } from '../components/ErrorBoundary'
 
 const COLLAPSE_THRESHOLD = 400
 
@@ -33,7 +34,7 @@ function MessageContent({
   expanded: boolean
   onToggleExpand: () => void
 }) {
-  const s = content ?? ''
+  const s = typeof content === 'string' ? content : String(content ?? '')
   const isLong = s.length > COLLAPSE_THRESHOLD
   const showCollapsed = isLong && !expanded
   const displayContent = showCollapsed ? s.slice(0, COLLAPSE_THRESHOLD) + '...' : s
@@ -42,7 +43,7 @@ function MessageContent({
 
   return (
     <div className={`msg-markdown ${wrapClass}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayContent}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayContent || '\u00A0'}</ReactMarkdown>
       {isLong && (
         <button
           type="button"
@@ -327,12 +328,21 @@ export default function Chat() {
         </div>
       )}
 
-      {/* 消息列表 - 可滚动，支持上拉加载 */}
+      {/* 消息列表 - 可滚动，支持上拉加载；ErrorBoundary 防止 Safari 渲染异常导致白屏 */}
       <div
         ref={listRef}
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4 min-h-0 chat-scroll"
       >
+        <ErrorBoundary fallback={
+          <div className="py-8 px-4 text-center text-slate-600 text-sm">
+            加载出错，请
+            <button type="button" onClick={() => window.location.reload()} className="text-indigo-600 underline ml-1">
+              刷新
+            </button>
+            重试
+          </div>
+        }>
         {loading ? (
           <div className="flex justify-center py-12">
             <div className="animate-pulse text-slate-400 text-sm">马上就好～</div>
@@ -412,6 +422,7 @@ export default function Chat() {
             )}
           </>
         )}
+        </ErrorBoundary>
       </div>
 
       {/* 输入区 - 移动端大按钮，底部安全区 */}
