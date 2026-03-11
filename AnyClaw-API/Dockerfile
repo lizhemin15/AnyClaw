@@ -17,7 +17,8 @@ COPY --from=web /app/dist ./internal/web/dist
 RUN go mod tidy && CGO_ENABLED=0 go build -o /anyclaw-api ./cmd/api
 
 FROM alpine:3.19
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates tzdata
+ENV TZ=Asia/Shanghai
 COPY --from=builder /anyclaw-api /usr/local/bin/
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/anyclaw-api"]

@@ -17,11 +17,18 @@ func (d *DB) InsertUsage(instanceID, userID, model, provider string, promptToken
 type UsageLogEntry struct {
 	ID               int64  `json:"id"`
 	InstanceID       string `json:"instance_id"`
+	InstanceName     string `json:"instance_name,omitempty"` // 宠物名称，用于用户友好展示
 	Model            string `json:"model"`
 	PromptTokens     int    `json:"prompt_tokens"`
 	CompletionTokens int    `json:"completion_tokens"`
 	CoinsCost        int    `json:"coins_cost"`
 	CreatedAt        string `json:"created_at"`
+}
+
+// UsageLogEntryAdmin 管理员消耗记录，含用户、模型等
+type UsageLogEntryAdmin struct {
+	UsageLogEntry
+	UserEmail string `json:"user_email,omitempty"`
 }
 
 func (d *DB) ListUserUsage(userID int64, limit, offset int) ([]*UsageLogEntry, error) {
@@ -33,9 +40,10 @@ func (d *DB) ListUserUsage(userID int64, limit, offset int) ([]*UsageLogEntry, e
 	}
 	uid := fmt.Sprintf("%d", userID)
 	rows, err := d.Query(
-		`SELECT id, instance_id, model, prompt_tokens, completion_tokens, COALESCE(coins_cost,0), created_at 
-		 FROM usage_log WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-		uid, limit, offset,
+		`SELECT u.id, u.instance_id, COALESCE(i.name, ''), u.model, u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at
+		 FROM usage_log u LEFT JOIN instances i ON u.instance_id = CAST(i.id AS CHAR) AND i.user_id = ?
+		 WHERE u.user_id = ? ORDER BY u.created_at DESC LIMIT ? OFFSET ?`,
+		userID, uid, limit, offset,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list user usage: %w", err)
@@ -44,7 +52,37 @@ func (d *DB) ListUserUsage(userID int64, limit, offset int) ([]*UsageLogEntry, e
 	var list []*UsageLogEntry
 	for rows.Next() {
 		var e UsageLogEntry
-		if err := rows.Scan(&e.ID, &e.InstanceID, &e.Model, &e.PromptTokens, &e.CompletionTokens, &e.CoinsCost, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.InstanceID, &e.InstanceName, &e.Model, &e.PromptTokens, &e.CompletionTokens, &e.CoinsCost, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, &e)
+	}
+	return list, nil
+}
+
+func (d *DB) ListAdminUsage(limit, offset int) ([]*UsageLogEntryAdmin, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	rows, err := d.Query(
+		`SELECT u.id, u.instance_id, COALESCE(i.name, ''), u.model, u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at, COALESCE(us.email, u.user_id)
+		 FROM usage_log u
+		 LEFT JOIN instances i ON u.instance_id = CAST(i.id AS CHAR)
+		 LEFT JOIN users us ON u.user_id = CAST(us.id AS CHAR)
+		 ORDER BY u.created_at DESC LIMIT ? OFFSET ?`,
+		limit, offset,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list admin usage: %w", err)
+	}
+	defer rows.Close()
+	var list []*UsageLogEntryAdmin
+	for rows.Next() {
+		var e UsageLogEntryAdmin
+		if err := rows.Scan(&e.ID, &e.InstanceID, &e.InstanceName, &e.Model, &e.PromptTokens, &e.CompletionTokens, &e.CoinsCost, &e.CreatedAt, &e.UserEmail); err != nil {
 			return nil, err
 		}
 		list = append(list, &e)

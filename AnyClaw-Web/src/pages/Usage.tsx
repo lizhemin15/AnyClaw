@@ -38,12 +38,12 @@ export default function Usage() {
                 className="flex items-center justify-between gap-4 p-3 bg-white border border-slate-200 rounded-lg"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-slate-800 truncate">{e.model}</p>
-                  <p className="text-xs text-slate-500">
-                    {e.prompt_tokens + e.completion_tokens} tokens · {e.created_at}
+                  <p className="text-sm font-medium text-slate-800 truncate">
+                    {e.instance_name || `宠物 #${e.instance_id}`}
                   </p>
+                  <p className="text-xs text-slate-500">{e.created_at}</p>
                 </div>
-                <span className="text-sm font-medium text-amber-600 flex-shrink-0">-{e.coins_cost}</span>
+                <span className="text-sm font-medium text-amber-600 flex-shrink-0">-{e.coins_cost} 金币</span>
               </div>
             ))}
           </div>

@@ -20,6 +20,7 @@ func NewHandler(db *db.DB, hub *Hub) *Handler {
 			Payload struct {
 				Content   string `json:"content"`
 				MessageID string `json:"message_id"`
+				Role     string `json:"role"`
 			} `json:"payload"`
 		}
 		if json.Unmarshal(data, &msg) != nil {
@@ -29,11 +30,15 @@ func NewHandler(db *db.DB, hub *Hub) *Handler {
 		if content == "" {
 			return
 		}
+		role := msg.Payload.Role
+		if role == "" {
+			role = "assistant"
+		}
 		if msg.Type == "message.create" && !strings.HasPrefix(content, "Thinking") {
-			_, _ = h.db.InsertMessage(instanceID, "assistant", content)
+			_, _ = h.db.InsertMessage(instanceID, role, content)
 		}
 		if msg.Type == "message.update" {
-			_, _ = h.db.InsertMessage(instanceID, "assistant", content)
+			_, _ = h.db.InsertMessage(instanceID, role, content)
 		}
 	})
 	return h

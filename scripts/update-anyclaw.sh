@@ -29,6 +29,7 @@ RUN_OPTS=(
   --name "$CONTAINER_NAME"
   -p 8080:8080
   -v anyclaw-data:/data
+  -e TZ=Asia/Shanghai
   --restart unless-stopped
 )
 

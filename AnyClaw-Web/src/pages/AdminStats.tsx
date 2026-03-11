@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { getAdminStats, resetAdminDb, clearToken, type AdminStats } from '../api'
+import { getAdminStats, getAdminUsage, resetAdminDb, clearToken, type AdminStats, type UsageLogEntryAdmin } from '../api'
 
 const CHART_COLORS = ['#4318FF', '#00B5D8', '#6C63FF', '#05CD99', '#FFB547', '#FF5E7D', '#41B883', '#7983FF']
 
 export default function AdminStats() {
   const [stats, setStats] = useState<AdminStats | null>(null)
+  const [usageList, setUsageList] = useState<UsageLogEntryAdmin[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [days, setDays] = useState(7)
@@ -13,8 +14,11 @@ export default function AdminStats() {
 
   const load = () => {
     setLoading(true)
-    getAdminStats(days)
-      .then(setStats)
+    Promise.all([getAdminStats(days), getAdminUsage(100, 0)])
+      .then(([s, u]) => {
+        setStats(s)
+        setUsageList(u.items ?? [])
+      })
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
       .finally(() => setLoading(false))
   }
@@ -142,6 +146,40 @@ export default function AdminStats() {
                         <td className="py-3 px-5 text-right text-sm text-slate-600">{m.calls.toLocaleString()}</td>
                         <td className="py-3 px-5 text-right text-sm text-slate-600">{m.prompt_tokens.toLocaleString()}</td>
                         <td className="py-3 px-5 text-right text-sm text-slate-600">{m.completion_tokens.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* 消耗明细（管理员：用户、宠物、模型、时间、金额） */}
+          {usageList.length > 0 && (
+            <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-200">
+                <h2 className="font-semibold text-slate-800">消耗明细</h2>
+                <p className="text-sm text-slate-500 mt-0.5">用户、宠物、模型、时间、金额</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-left py-3 px-5 text-sm font-medium text-slate-600">用户</th>
+                      <th className="text-left py-3 px-5 text-sm font-medium text-slate-600">宠物</th>
+                      <th className="text-left py-3 px-5 text-sm font-medium text-slate-600">模型</th>
+                      <th className="text-left py-3 px-5 text-sm font-medium text-slate-600">时间</th>
+                      <th className="text-right py-3 px-5 text-sm font-medium text-slate-600">消耗</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {usageList.map((u) => (
+                      <tr key={u.id} className="hover:bg-slate-50/50">
+                        <td className="py-3 px-5 text-sm text-slate-800">{u.user_email || '—'}</td>
+                        <td className="py-3 px-5 text-sm text-slate-800">{u.instance_name || `#${u.instance_id}`}</td>
+                        <td className="py-3 px-5 text-sm font-mono text-slate-600 truncate max-w-[200px]">{u.model}</td>
+                        <td className="py-3 px-5 text-sm text-slate-600">{u.created_at}</td>
+                        <td className="py-3 px-5 text-right text-sm font-medium text-amber-600">-{u.coins_cost}</td>
                       </tr>
                     ))}
                   </tbody>

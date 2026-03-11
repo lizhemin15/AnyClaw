@@ -114,6 +114,9 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.GetHead)
+	if mw, err := web.SPAHTMLMiddleware(); err == nil {
+		r.Use(mw)
+	}
 
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -184,6 +187,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 			json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 		})
 		r.Get("/stats", adminStatsHandler.GetStats)
+		r.Get("/usage", usageHandler.ListAdminUsage)
 		r.Get("/energy/users", energyHandler.ListUsers)
 		r.Post("/energy/recharge", energyHandler.Recharge)
 		r.Post("/energy/daily", energyHandler.RunDaily)

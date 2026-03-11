@@ -283,6 +283,20 @@ func (m *Manager) initChannels() error {
 		m.initChannel("irc", "IRC")
 	}
 
+	// Wire inbound mirror: when any non-web channel receives a message, push to anyclaw-manager via bridge.
+	if bridge, ok := m.channels["anyclaw_bridge"]; ok {
+		if pusher, ok := bridge.(interface{ PushInboundToAPI(content string) error }); ok {
+			cb := func(ch, content string) {
+				_ = pusher.PushInboundToAPI(content)
+			}
+			for _, ch := range m.channels {
+				if setter, ok := ch.(interface{ SetInboundMirror(func(string, string)) }); ok {
+					setter.SetInboundMirror(cb)
+				}
+			}
+		}
+	}
+
 	logger.InfoCF("channels", "Channel initialization completed", map[string]any{
 		"enabled_channels": len(m.channels),
 	})
@@ -611,6 +625,27 @@ func (m *Manager) dispatchOutbound(ctx context.Context) {
 		func(ctx context.Context, w *channelWorker, msg bus.OutboundMessage) bool {
 			select {
 			case w.queue <- msg:
+				// Mirror outbound to anyclaw-manager so the web UI shows all messages in real-time.
+				if msg.Channel != "anyclaw_bridge" {
+					m.mu.RLock()
+					bridgeCh, bridgeOk := m.channels["anyclaw_bridge"]
+					wBridge := m.workers["anyclaw_bridge"]
+					m.mu.RUnlock()
+					if bridgeOk && wBridge != nil {
+						if mc, ok := bridgeCh.(interface{ MirrorChatID() string }); ok {
+							mirrorMsg := msg
+							mirrorMsg.Channel = "anyclaw_bridge"
+							mirrorMsg.ChatID = mc.MirrorChatID()
+							select {
+							case wBridge.queue <- mirrorMsg:
+							case <-ctx.Done():
+								return false
+							default:
+								// Bridge queue full, skip mirror (avoid blocking)
+							}
+						}
+					}
+				}
 				return true
 			case <-ctx.Done():
 				return false

@@ -90,6 +90,7 @@ type BaseChannel struct {
 	placeholderRecorder PlaceholderRecorder
 	owner               Channel // the concrete channel that embeds this BaseChannel
 	reasoningChannelID  string
+	inboundMirror       func(channel string, content string) // called when non-web inbound received, for anyclaw-manager sync
 }
 
 func NewBaseChannel(
@@ -298,6 +299,11 @@ func (c *BaseChannel) HandleMessage(
 			"chat_id": chatID,
 			"error":   err.Error(),
 		})
+		return
+	}
+	// Mirror inbound from non-web channels to anyclaw-manager so the web UI shows all messages in real-time.
+	if c.inboundMirror != nil && c.name != "anyclaw_bridge" && metadata["platform"] != "anyclaw_web" {
+		c.inboundMirror(c.name, content)
 	}
 }
 
@@ -314,6 +320,11 @@ func (c *BaseChannel) GetMediaStore() media.MediaStore { return c.mediaStore }
 // SetPlaceholderRecorder injects a PlaceholderRecorder into the channel.
 func (c *BaseChannel) SetPlaceholderRecorder(r PlaceholderRecorder) {
 	c.placeholderRecorder = r
+}
+
+// SetInboundMirror sets a callback to mirror inbound messages to anyclaw-manager (e.g. when feishu/telegram receives a message).
+func (c *BaseChannel) SetInboundMirror(f func(channel string, content string)) {
+	c.inboundMirror = f
 }
 
 // GetPlaceholderRecorder returns the injected PlaceholderRecorder (may be nil).

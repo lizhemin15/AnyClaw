@@ -138,11 +138,16 @@ export async function deleteInstance(id: number): Promise<void> {
 export interface UsageLogEntry {
   id: number;
   instance_id: string;
+  instance_name?: string;
   model: string;
   prompt_tokens: number;
   completion_tokens: number;
   coins_cost: number;
   created_at: string;
+}
+
+export interface UsageLogEntryAdmin extends UsageLogEntry {
+  user_email?: string;
 }
 
 export async function getMyUsage(limit = 50, offset = 0): Promise<{ items: UsageLogEntry[] }> {
@@ -457,6 +462,10 @@ export interface AdminStats {
 export async function getAdminStats(days?: number): Promise<AdminStats> {
   const url = days ? `/admin/stats?days=${days}` : '/admin/stats';
   return fetchApi<AdminStats>(url);
+}
+
+export async function getAdminUsage(limit = 100, offset = 0): Promise<{ items: UsageLogEntryAdmin[] }> {
+  return fetchApi<{ items: UsageLogEntryAdmin[] }>(`/admin/usage?limit=${limit}&offset=${offset}`);
 }
 
 export async function resetAdminDb(): Promise<void> {

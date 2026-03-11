@@ -298,6 +298,24 @@ func (c *BridgeChannel) handleMessageSend(bc *bridgeConn, msg pico.PicoMessage) 
 	c.HandleMessage(c.ctx, peer, msg.ID, senderID, chatID, content, nil, metadata, sender)
 }
 
+// MirrorChatID returns the chat ID for mirroring outbound messages from other channels to the web.
+func (c *BridgeChannel) MirrorChatID() string {
+	return c.chatID
+}
+
+// PushInboundToAPI sends a user message from another channel to the API so the web UI shows it in real-time.
+func (c *BridgeChannel) PushInboundToAPI(content string) error {
+	if !c.IsRunning() || c.conn == nil || c.conn.closed.Load() {
+		return nil
+	}
+	outMsg := pico.NewMessage(pico.TypeMessageCreate, map[string]any{
+		"content": content,
+		"role":    "user",
+	})
+	outMsg.SessionID = c.sessionID
+	return c.conn.writeJSON(outMsg)
+}
+
 // Send implements Channel.
 func (c *BridgeChannel) Send(ctx context.Context, msg bus.OutboundMessage) error {
 	if !c.IsRunning() {
