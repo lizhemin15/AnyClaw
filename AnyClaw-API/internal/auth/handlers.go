@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/big"
 	"net/http"
 	"strings"
@@ -140,7 +141,12 @@ func (a *Auth) HandleSendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := mail.SendVerificationCode(email, code, a.smtpParams()); err != nil {
-		http.Error(w, `{"error":"发送邮件失败"}`, http.StatusInternalServerError)
+		log.Printf("[auth] send verification code to %s failed: %v", email, err)
+		msg := "发送邮件失败"
+		if strings.Contains(strings.ToLower(err.Error()), "535") || strings.Contains(strings.ToLower(err.Error()), "authentication") {
+			msg = "发送邮件失败（SMTP 认证错误，请检查管理后台的邮件配置是否正确保存）"
+		}
+		http.Error(w, `{"error":"`+msg+`"}`, http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -175,11 +181,13 @@ func (a *Auth) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 		ok, err := a.db.VerifyAndConsumeCode(req.Email, req.Code)
 		if err != nil {
+			log.Printf("[auth] verify code for %s failed: %v", req.Email, err)
 			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 			return
 		}
 		if !ok {
-			http.Error(w, `{"error":"验证码无效或已过期"}`, http.StatusBadRequest)
+			log.Printf("[auth] verify code failed for %s: code invalid or expired", req.Email)
+			http.Error(w, `{"error":"验证码无效或已过期，请重新获取"}`, http.StatusBadRequest)
 			return
 		}
 	}
@@ -197,7 +205,14 @@ func (a *Auth) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	initialEnergy := config.GetEnergyConfig(cfg).NewUserEnergy
 	user, err := a.db.CreateUser(req.Email, hash, "user", smtpOk, initialEnergy)
 	if err != nil {
-		http.Error(w, `{"error":"failed to create user"}`, http.StatusInternalServerError)
+		log.Printf("[auth] create user %s failed: %v", req.Email, err)
+		msg := "注册失败，请稍后重试"
+		if strings.Contains(err.Error(), "Duplicate") || strings.Contains(err.Error(), "1062") {
+			msg = "该邮箱已注册，请直接登录"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": msg})
 		return
 	}
 	if req.InviteCode != "" {
