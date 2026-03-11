@@ -23,7 +23,8 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
   return (
     <div className={`min-h-screen bg-slate-50 flex flex-col ${isChat ? 'pb-0' : 'pb-16 sm:pb-0'}`}>
       <header className={`sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200 px-4 py-3 flex items-center justify-between ${isChat ? 'hidden' : ''}`}>
-        <SafeLink to="/" className="text-lg font-semibold text-slate-800 active:opacity-70">
+        <SafeLink to="/" className="flex items-center gap-2 text-lg font-semibold text-slate-800 active:opacity-70">
+          <img src="/10002.svg" alt="" className="w-8 h-8" aria-hidden />
           OpenClaw
         </SafeLink>
         {user && (
@@ -85,7 +86,7 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
           to="/"
           className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isHome ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
         >
-          <span className="text-lg">🏠</span>
+          <img src="/10001.png" alt="" className="w-6 h-6 object-contain" aria-hidden />
           <span className="text-xs mt-0.5">首页</span>
         </SafeLink>
         {user && (

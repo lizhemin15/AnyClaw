@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getAdminConfig, putAdminConfig, testChannelConfig, testSMTPConfig, type AdminConfig, type Channel, type SMTPConfig, type PaymentConfig, type PaymentPlan, type AlipayConfig, type WechatConfig, type YungouosChannel, type EnergyConfig, type ContainerConfig } from '../api'
+import { getAdminConfig, putAdminConfig, testChannelConfig, testSMTPConfig, type AdminConfig, type Channel, type SMTPConfig, type PaymentConfig, type PaymentPlan, type YungouosChannel, type EnergyConfig, type ContainerConfig } from '../api'
 import { useUnsavedConfig } from '../contexts/UnsavedConfigContext'
 
 function genId() {
@@ -125,8 +125,8 @@ export default function AdminConfig() {
         const defYg = { wechat: { enabled: false, mch_id: '', key: '' }, alipay: { enabled: false, mch_id: '', key: '' } }
         const yg = c.payment?.yungouos
         const payment: PaymentConfig = c.payment
-          ? { ...c.payment, plans, alipay: c.payment.alipay ? { ...c.payment.alipay } : undefined, wechat: c.payment.wechat ? { ...c.payment.wechat } : undefined, yungouos: { wechat: yg?.wechat ? { ...yg.wechat } : defYg.wechat, alipay: yg?.alipay ? { ...yg.alipay } : defYg.alipay } }
-          : { plans: defPlans, alipay: { enabled: false, app_id: '', private_key: '', alipay_public_key: '', is_sandbox: false }, wechat: { enabled: false, app_id: '', mch_id: '', api_v3_key: '', serial_no: '', private_key: '' }, yungouos: defYg }
+          ? { ...c.payment, plans, yungouos: { wechat: yg?.wechat ? { ...yg.wechat } : defYg.wechat, alipay: yg?.alipay ? { ...yg.alipay } : defYg.alipay } }
+          : { plans: defPlans, yungouos: defYg }
         const energy: EnergyConfig = c.energy
           ? { ...c.energy }
           : { tokens_per_energy: 1000, adopt_cost: 100, daily_consume: 10, min_energy_for_task: 5, zero_days_to_delete: 3, invite_reward: 50, new_user_energy: 100, invite_commission_rate: 5 }
@@ -271,18 +271,6 @@ export default function AdminConfig() {
       ...form,
       payment: { ...prev, ...upd, plans: upd.plans ?? prev.plans },
     })
-  }
-
-  const updateAlipay = (upd: Partial<AlipayConfig>) => {
-    if (!form) return
-    const prev = form.payment?.alipay || { enabled: false, app_id: '', private_key: '', alipay_public_key: '', is_sandbox: false }
-    updatePayment({ alipay: { ...prev, ...upd } })
-  }
-
-  const updateWechat = (upd: Partial<WechatConfig>) => {
-    if (!form) return
-    const prev = form.payment?.wechat || { enabled: false, app_id: '', mch_id: '', api_v3_key: '', serial_no: '', private_key: '' }
-    updatePayment({ wechat: { ...prev, ...upd } })
   }
 
   const updateYungouosWechat = (upd: Partial<YungouosChannel>) => {
@@ -849,149 +837,9 @@ export default function AdminConfig() {
                 })()}
               </div>
             </div>
-            {/* 支付宝 */}
+            {/* YunGouOS 云购OS（微信/支付宝扫码，个人可开通） */}
             <div>
-              <h3 className="text-sm font-medium text-slate-700 mb-2">支付宝</h3>
-              <div className="flex items-center gap-2 mb-2">
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={form?.payment?.alipay?.enabled ?? false}
-                  onClick={() => updateAlipay({ enabled: !(form?.payment?.alipay?.enabled ?? false) })}
-                  className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${
-                    form?.payment?.alipay?.enabled ? 'bg-indigo-600' : 'bg-slate-200'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
-                      form?.payment?.alipay?.enabled ? 'translate-x-4' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
-                <span className="text-sm">{form?.payment?.alipay?.enabled ? '已启用' : '未启用'}</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">AppID</label>
-                  <input
-                    type="text"
-                    value={form?.payment?.alipay?.app_id ?? ''}
-                    onChange={(e) => updateAlipay({ app_id: e.target.value })}
-                    placeholder={form?.payment?.alipay?.is_sandbox ? '沙箱 AppID' : '应用 AppID'}
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">应用私钥 (PEM)</label>
-                  <input
-                    type="password"
-                    value={form?.payment?.alipay?.private_key ?? ''}
-                    onChange={(e) => updateAlipay({ private_key: e.target.value })}
-                    placeholder="应用私钥"
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">支付宝公钥</label>
-                  <input
-                    type="password"
-                    value={form?.payment?.alipay?.alipay_public_key ?? ''}
-                    onChange={(e) => updateAlipay({ alipay_public_key: e.target.value })}
-                    placeholder={form?.payment?.alipay?.is_sandbox ? '沙箱支付宝公钥' : '支付宝公钥'}
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full font-mono"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" checked={form?.payment?.alipay?.is_sandbox ?? false} onChange={(e) => updateAlipay({ is_sandbox: e.target.checked })} />
-                  <span className="text-sm">沙箱环境</span>
-                </div>
-              </div>
-              <p className="mt-2 text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2">
-                当前使用当面付扫码支付，需在支付宝开放平台签约「当面付」产品。用户点击支付宝后会弹出二维码，使用支付宝 APP 扫码完成支付。
-              </p>
-              {(form?.payment?.alipay?.is_sandbox ?? false) && (
-                <p className="mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
-                  沙箱仍需配置：登录 <a href="https://open.alipay.com" target="_blank" rel="noreferrer" className="underline">open.alipay.com</a> → 开发者中心 → 沙箱环境，获取沙箱 AppID、生成 RSA2 密钥对（应用私钥 + 支付宝公钥），填入上方。沙箱不扣真实资金，但接口与正式环境一致。
-                </p>
-              )}
-            </div>
-            {/* 微信支付 */}
-            <div>
-              <h3 className="text-sm font-medium text-slate-700 mb-2">微信支付</h3>
-              <div className="flex items-center gap-2 mb-2">
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={form?.payment?.wechat?.enabled ?? false}
-                  onClick={() => updateWechat({ enabled: !(form?.payment?.wechat?.enabled ?? false) })}
-                  className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${
-                    form?.payment?.wechat?.enabled ? 'bg-indigo-600' : 'bg-slate-200'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
-                      form?.payment?.wechat?.enabled ? 'translate-x-4' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
-                <span className="text-sm">{form?.payment?.wechat?.enabled ? '已启用' : '未启用'}</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">AppID</label>
-                  <input
-                    type="text"
-                    value={form?.payment?.wechat?.app_id ?? ''}
-                    onChange={(e) => updateWechat({ app_id: e.target.value })}
-                    placeholder="应用 AppID"
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">商户号 (MchID)</label>
-                  <input
-                    type="text"
-                    value={form?.payment?.wechat?.mch_id ?? ''}
-                    onChange={(e) => updateWechat({ mch_id: e.target.value })}
-                    placeholder="商户号"
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">APIv3 密钥</label>
-                  <input
-                    type="password"
-                    value={form?.payment?.wechat?.api_v3_key ?? ''}
-                    onChange={(e) => updateWechat({ api_v3_key: e.target.value })}
-                    placeholder="APIv3 密钥"
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">证书序列号</label>
-                  <input
-                    type="text"
-                    value={form?.payment?.wechat?.serial_no ?? ''}
-                    onChange={(e) => updateWechat({ serial_no: e.target.value })}
-                    placeholder="证书序列号"
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-xs text-slate-500 mb-1">商户私钥 (PEM)</label>
-                  <input
-                    type="password"
-                    value={form?.payment?.wechat?.private_key ?? ''}
-                    onChange={(e) => updateWechat({ private_key: e.target.value })}
-                    placeholder="apiclient_key.pem 内容"
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full font-mono"
-                  />
-                </div>
-              </div>
-            </div>
-            {/* YunGouOS 云购OS（个人可开通） */}
-            <div>
-              <h3 className="text-sm font-medium text-slate-700 mb-2">YunGouOS 云购OS</h3>
+              <h3 className="text-sm font-medium text-slate-700 mb-2">支付渠道（YunGouOS）</h3>
               <p className="text-xs text-slate-500 mb-3">个人可开通，支持微信/支付宝扫码。登录 <a href="https://www.yungouos.com" target="_blank" rel="noreferrer" className="underline">yungouos.com</a> 注册并获取商户号、支付密钥。</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>

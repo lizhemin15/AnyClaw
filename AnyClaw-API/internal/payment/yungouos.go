@@ -1,3 +1,7 @@
+// YunGouOS 云购OS 支付对接，对齐官方 API 与 YunGouOS-PAY-SDK
+// 文档 https://open.pay.yungouos.com  接口 https://api.pay.yungouos.com
+// 微信 /api/pay/wxpay/nativePay  支付宝 /api/pay/alipay/nativePay
+// 回调支持 snake_case 与 camelCase，金额单位元，成功返回 SUCCESS
 package payment
 
 import (
@@ -18,6 +22,7 @@ import (
 const yungouosAPIBase = "https://api.pay.yungouos.com"
 
 // yungouosSign 生成 YunGouOS 签名：参数按 key 升序，k1=v1&k2=v2&...&key=KEY，MD5 大写
+// 空值和 sign 不参与签名，与官方 PaySignUtil.createSign 一致
 func yungouosSign(params map[string]string, key string) string {
 	var keys []string
 	for k := range params {
@@ -75,20 +80,21 @@ func CreateYungouosWechatNativePay(cfg *config.YungouosChannel, notifyURL, outTr
 	if strings.HasPrefix(bodyStr, "{") {
 		var m map[string]any
 		if json.Unmarshal([]byte(bodyStr), &m) == nil {
-			if v, ok := m["code_url"].(string); ok && v != "" {
-				codeURL = v
-			} else if v, ok := m["data"].(string); ok && v != "" {
-				codeURL = v
-			} else if code, _ := m["code"].(float64); code != 0 {
+			if code, _ := m["code"].(float64); code != 0 {
 				msg, _ := m["msg"].(string)
 				return "", fmt.Errorf("yungouos wechat: %s", msg)
+			}
+			if v, ok := m["data"].(string); ok && v != "" {
+				codeURL = v
+			} else if v, ok := m["code_url"].(string); ok && v != "" {
+				codeURL = v
 			}
 		}
 	} else {
 		codeURL = bodyStr
 	}
 	if codeURL == "" {
-		return "", fmt.Errorf("yungouos wechat nativePay no code_url: %s", bodyStr)
+		return "", fmt.Errorf("yungouos wechat nativePay no data: %s", bodyStr)
 	}
 	return codeURL, nil
 }
@@ -127,25 +133,27 @@ func CreateYungouosAlipayNativePay(cfg *config.YungouosChannel, notifyURL, outTr
 	if strings.HasPrefix(bodyStr, "{") {
 		var m map[string]any
 		if json.Unmarshal([]byte(bodyStr), &m) == nil {
-			if v, ok := m["code_url"].(string); ok && v != "" {
-				codeURL = v
-			} else if v, ok := m["data"].(string); ok && v != "" {
-				codeURL = v
-			} else if code, _ := m["code"].(float64); code != 0 {
+			if code, _ := m["code"].(float64); code != 0 {
 				msg, _ := m["msg"].(string)
 				return "", fmt.Errorf("yungouos alipay: %s", msg)
+			}
+			if v, ok := m["data"].(string); ok && v != "" {
+				codeURL = v
+			} else if v, ok := m["code_url"].(string); ok && v != "" {
+				codeURL = v
 			}
 		}
 	} else {
 		codeURL = bodyStr
 	}
 	if codeURL == "" {
-		return "", fmt.Errorf("yungouos alipay nativePay no code_url: %s", bodyStr)
+		return "", fmt.Errorf("yungouos alipay nativePay no data: %s", bodyStr)
 	}
 	return codeURL, nil
 }
 
 // VerifyYungouosNotify 验证 YunGouOS 异步通知签名，返回 out_trade_no, pay_no, total_fee(分)
+// 官方文档：https://open.pay.yungouos.com 回调参数支持 snake_case 与 camelCase
 func VerifyYungouosNotify(mchID, key string, r *http.Request) (outTradeNo, payNo string, totalFee int, err error) {
 	if err = r.ParseForm(); err != nil {
 		return "", "", 0, err
@@ -166,11 +174,20 @@ func VerifyYungouosNotify(mchID, key string, r *http.Request) (outTradeNo, payNo
 		return "", "", 0, fmt.Errorf("yungouos notify sign mismatch")
 	}
 	outTradeNo = params["out_trade_no"]
+	if outTradeNo == "" {
+		outTradeNo = params["outTradeNo"]
+	}
 	payNo = params["pay_no"]
+	if payNo == "" {
+		payNo = params["payNo"]
+	}
 	if payNo == "" {
 		payNo = params["transaction_id"]
 	}
 	totalStr := params["total_fee"]
+	if totalStr == "" {
+		totalStr = params["money"]
+	}
 	if totalStr != "" {
 		if f, e := strconv.ParseFloat(totalStr, 64); e == nil {
 			totalFee = int(f * 100)

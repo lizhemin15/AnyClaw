@@ -329,6 +329,7 @@ export default function Chat() {
             )}
             {messages.length === 0 && !typing && (
               <div className="py-8 px-4 text-center space-y-4">
+                <img src="/10003.png" alt="" className="w-20 h-20 mx-auto mb-2 object-contain" aria-hidden />
                 <p className="text-slate-600 text-sm">打个招呼吧～</p>
                 <div className="text-left max-w-sm mx-auto p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500 space-y-2">
                   <p className="font-medium text-slate-600">OpenClaw 与普通 AI 不同</p>

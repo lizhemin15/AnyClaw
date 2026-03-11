@@ -99,10 +99,8 @@ func GetEnergyConfig(cfg *Config) EnergyConfig {
 	return e
 }
 
-// PaymentConfig 支付配置：支付宝、微信、YunGouOS、充值档位
+// PaymentConfig 支付配置：YunGouOS（微信/支付宝）、充值档位
 type PaymentConfig struct {
-	Alipay   *AlipayConfig   `json:"alipay,omitempty"`
-	Wechat   *WechatConfig   `json:"wechat,omitempty"`
 	Yungouos *YungouosConfig `json:"yungouos,omitempty"`
 	Plans    []PaymentPlan   `json:"plans,omitempty"`
 }
@@ -118,25 +116,6 @@ type YungouosChannel struct {
 	Enabled bool   `json:"enabled"`
 	MchID   string `json:"mch_id"`  // 商户号，登录 yungouos.com 商户管理获取
 	Key     string `json:"key"`    // 支付密钥
-}
-
-// AlipayConfig 支付宝配置
-type AlipayConfig struct {
-	Enabled     bool   `json:"enabled"`
-	AppID       string `json:"app_id"`
-	PrivateKey  string `json:"private_key"`
-	AlipayPubKey string `json:"alipay_public_key"` // 支付宝公钥
-	IsSandbox   bool   `json:"is_sandbox"`
-}
-
-// WechatConfig 微信支付配置
-type WechatConfig struct {
-	Enabled     bool   `json:"enabled"`
-	AppID       string `json:"app_id"`
-	MchID       string `json:"mch_id"`
-	APIv3Key    string `json:"api_v3_key"`
-	SerialNo    string `json:"serial_no"`   // 证书序列号
-	PrivateKey  string `json:"private_key"` // 商户私钥 PEM
 }
 
 // PaymentPlan 充值档位

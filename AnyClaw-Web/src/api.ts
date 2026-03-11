@@ -337,23 +337,6 @@ export interface PaymentPlan {
   sort: number;
 }
 
-export interface AlipayConfig {
-  enabled: boolean;
-  app_id: string;
-  private_key: string;
-  alipay_public_key: string;
-  is_sandbox: boolean;
-}
-
-export interface WechatConfig {
-  enabled: boolean;
-  app_id: string;
-  mch_id: string;
-  api_v3_key: string;
-  serial_no: string;
-  private_key: string;
-}
-
 export interface YungouosChannel {
   enabled: boolean;
   mch_id: string;
@@ -366,8 +349,6 @@ export interface YungouosConfig {
 }
 
 export interface PaymentConfig {
-  alipay?: AlipayConfig;
-  wechat?: WechatConfig;
   yungouos?: YungouosConfig;
   plans: PaymentPlan[];
 }

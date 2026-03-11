@@ -181,8 +181,13 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
 
       {/* 领养新宠物 */}
       <div className="mb-6">
-        <h2 className="text-base sm:text-lg font-semibold text-slate-800 mb-2 sm:mb-3">领养 OpenClaw</h2>
-        <p className="text-sm text-slate-500 mb-3">每只宠物都有唯一的灵魂，擅长复杂任务、拥有超长记忆，回答会稍慢一些～</p>
+        <div className="flex items-center gap-3 mb-2 sm:mb-3">
+          <img src="/10002.svg" alt="" className="w-12 h-12 sm:w-14 sm:h-14 flex-shrink-0" aria-hidden />
+          <div>
+            <h2 className="text-base sm:text-lg font-semibold text-slate-800">领养 OpenClaw</h2>
+            <p className="text-sm text-slate-500">每只宠物都有唯一的灵魂，擅长复杂任务、拥有超长记忆，回答会稍慢一些～</p>
+          </div>
+        </div>
         <form onSubmit={handleAdopt} className="flex flex-col sm:flex-row gap-3">
           <input
             type="text"
@@ -214,6 +219,7 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
         <p className="text-slate-500 py-8">加载中...</p>
       ) : instances.length === 0 ? (
         <div className="text-center py-12 bg-slate-50 rounded-xl">
+          <img src="/10003.png" alt="" className="w-24 h-24 mx-auto mb-3 object-contain" aria-hidden />
           <p className="text-slate-500 mb-2">暂无宠物</p>
           <p className="text-sm text-slate-400">领养一只 OpenClaw 开始对话吧</p>
         </div>
@@ -226,7 +232,8 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
               className="bg-white border border-slate-200 rounded-xl p-4 active:bg-slate-50 cursor-pointer transition-colors relative"
             >
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <img src="/10001.png" alt="" className="w-10 h-10 flex-shrink-0 object-contain" aria-hidden />
                   <p className="font-medium text-slate-800 truncate">{inst.name}</p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
