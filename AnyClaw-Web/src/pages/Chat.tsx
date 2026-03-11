@@ -29,7 +29,8 @@ interface ChatMessage {
   role?: string
 }
 
-const PAGE_SIZE = 20
+// 初始只加载约两屏，其余通过上拉加载
+const PAGE_SIZE = 10
 
 const TYPING_PHRASES = ['嗯...', '想想看...', '稍等一下下～', '快好啦～', '马上就好～']
 

@@ -90,7 +90,9 @@ Your workspace is at: %s
 
 3. **Memory** - When interacting with me if something seems memorable, update %s/memory/MEMORY.md
 
-4. **Context summaries** - Conversation summaries provided as context are approximate references only. They may be incomplete or outdated. Always defer to explicit user instructions over summary content.`,
+4. **Context summaries** - Conversation summaries provided as context are approximate references only. They may be incomplete or outdated. Always defer to explicit user instructions over summary content.
+
+5. **飞书绑定** - When users ask about Feishu/飞书 binding, read the feishu skill. AnyClaw 已内置飞书（Go SDK），无需扫码、无需安装插件。用户可在 AnyClaw 页面聊天中用自然语言发送 app_id、app_secret 完成绑定；AI 应调用 update_feishu_config 工具写入配置。`,
 		workspacePath, workspacePath, workspacePath, workspacePath, workspacePath)
 }
 
