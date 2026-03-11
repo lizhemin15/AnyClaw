@@ -1,7 +1,6 @@
 package hosts
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
