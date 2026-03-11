@@ -55,13 +55,14 @@ func CreateAlipayWapPay(cfg *config.AlipayConfig, notifyURL, returnURL, outTrade
 		return "", err
 	}
 	amount := fmt.Sprintf("%.2f", float64(totalCny)/100)
-	pay := alipay.TradeWapPay{
-		NotifyURL:   notifyURL,
-		ReturnURL:   returnURL,
+	pay := alipay.TradeWapPay{}
+	pay.Trade = alipay.Trade{
 		Subject:     subject,
 		OutTradeNo:  outTradeNo,
 		TotalAmount: amount,
 		ProductCode: "QUICK_WAP_WAY",
+		NotifyURL:   notifyURL,
+		ReturnURL:   returnURL,
 	}
 	u, err := client.TradeWapPay(pay)
 	if err != nil {

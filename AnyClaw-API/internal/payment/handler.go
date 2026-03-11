@@ -152,7 +152,6 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		baseURL = "http://localhost:8080"
 	}
 	notifyURL := baseURL + "/api/payment/notify/" + req.Channel
-	returnURL := baseURL + "/recharge?paid=1"
 
 	subject := "AnyClaw 金币充值 - " + plan.Name
 
