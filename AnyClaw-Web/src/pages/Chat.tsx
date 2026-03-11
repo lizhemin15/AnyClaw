@@ -3,6 +3,16 @@ import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { getToken, getWebSocketUrl, getMessages, getInstance, markInstanceRead, type ChatMessage as ApiMessage } from '../api'
+
+// remark-gfm 使用 lookbehind 正则，Safari 16.4 以下不支持，会报 invalid group specifier name
+const supportsGfm = typeof window !== 'undefined' && (() => {
+  try {
+    new RegExp('(?<=a)b').test('ab')
+    return true
+  } catch {
+    return false
+  }
+})()
 import { ErrorBoundary } from '../components/ErrorBoundary'
 
 const COLLAPSE_THRESHOLD = 400
@@ -53,7 +63,7 @@ function MessageContent({
       </div>
     }>
       <div className={`msg-markdown ${wrapClass}`}>
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayContent || '\u00A0'}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={supportsGfm ? [remarkGfm] : []}>{displayContent || '\u00A0'}</ReactMarkdown>
         {isLong && (
           <button type="button" onClick={onToggleExpand} className="msg-expand-btn">
             {expanded ? '收起' : '展开'}
