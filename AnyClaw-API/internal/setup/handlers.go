@@ -22,7 +22,8 @@ func New(configPath string) *Handler {
 }
 
 type StatusResponse struct {
-	Configured bool `json:"configured"`
+	Configured      bool `json:"configured"`
+	NeedsAdminOnly  bool `json:"needs_admin_only,omitempty"`
 }
 
 type DBRequest struct {
@@ -40,9 +41,25 @@ type AdminRequest struct {
 
 func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 	cfg, _ := config.Load(h.configPath)
-	ok := cfg.DBDSN != "" && cfg.JWTSecret != ""
+	if cfg.DBDSN == "" || cfg.JWTSecret == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(StatusResponse{Configured: false})
+		return
+	}
+	database, err := db.Open(cfg.DBDSN)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(StatusResponse{Configured: false})
+		return
+	}
+	defer database.Close()
+	var n int
+	_ = database.QueryRow("SELECT COUNT(*) FROM users WHERE role='admin'").Scan(&n)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(StatusResponse{Configured: ok})
+	json.NewEncoder(w).Encode(StatusResponse{
+		Configured:     n > 0,
+		NeedsAdminOnly: n == 0,
+	})
 }
 
 func (h *Handler) ConfigureDB(w http.ResponseWriter, r *http.Request) {

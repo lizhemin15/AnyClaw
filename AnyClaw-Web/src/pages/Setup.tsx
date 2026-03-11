@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getSetupStatus, setupDatabase, setupAdmin } from '../api'
 
-type Step = 'db' | 'admin' | 'done'
+type Step = 'db' | 'admin' | 'done' | 'restart'
 
 export default function Setup() {
   const [step, setStep] = useState<Step>('db')
@@ -33,7 +33,13 @@ export default function Setup() {
     setError('')
     try {
       await setupDatabase(dbForm)
-      setStep('admin')
+      const res = await getSetupStatus()
+      const { configured } = res as { configured?: boolean; needs_admin_only?: boolean }
+      if (configured) {
+        setStep('restart')
+      } else {
+        setStep('admin')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed')
     } finally {
@@ -164,6 +170,16 @@ export default function Setup() {
               {submitting ? '创建中...' : '完成'}
             </button>
           </form>
+        )}
+
+        {step === 'restart' && (
+          <div className="space-y-4">
+            <p className="text-green-600 font-medium">数据库配置已保存</p>
+            <p className="text-sm text-slate-500 leading-relaxed">
+              检测到数据库已有管理员账号，无需重复创建。请重启服务后登录。<br />
+              Docker: docker restart &lt;容器名&gt;
+            </p>
+          </div>
         )}
 
         {step === 'done' && (
