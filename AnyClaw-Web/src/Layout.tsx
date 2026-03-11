@@ -25,26 +25,13 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
       <header className={`sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200 px-4 py-3 flex items-center justify-between ${isChat ? 'hidden' : ''}`}>
         <SafeLink to="/" className="flex items-center gap-2 text-lg font-semibold text-slate-800 active:opacity-70">
           <img src="/10002.svg" alt="" className="w-8 h-8" aria-hidden />
-          OpenClaw
+          <span className="hidden sm:inline">OpenClaw</span>
         </SafeLink>
         {user && (
-          <div className="flex items-center gap-2">
-            <SafeLink
-              to="/usage"
-              className="px-2.5 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-sm"
-            >
-              消耗
-            </SafeLink>
-            <SafeLink
-              to="/orders"
-              className="px-2.5 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-sm"
-            >
-              订单
-            </SafeLink>
-            <SafeLink
-              to="/recharge"
-              className="px-3 py-1.5 rounded-lg bg-amber-100 text-amber-800 font-medium hover:bg-amber-200 active:bg-amber-300 text-sm"
-            >
+          <div className="hidden sm:flex items-center gap-2">
+            <SafeLink to="/usage" className="px-2.5 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-sm">消耗</SafeLink>
+            <SafeLink to="/orders" className="px-2.5 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-sm">订单</SafeLink>
+            <SafeLink to="/recharge" className="px-3 py-1.5 rounded-lg bg-amber-100 text-amber-800 font-medium hover:bg-amber-200 active:bg-amber-300 text-sm">
               🪙 {user.energy ?? 0} · 充值
             </SafeLink>
           </div>
@@ -52,22 +39,17 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
         <nav className="flex items-center gap-2 sm:gap-4">
           {user?.role === 'admin' && (
             <>
-              <SafeLink to="/admin/config" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isConfig ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
-                配置
-              </SafeLink>
-              <SafeLink to="/admin/stats" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isStats ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
-                监控
-              </SafeLink>
-              <SafeLink to="/admin/energy" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isEnergy ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
-                金币
-              </SafeLink>
-              <SafeLink to="/admin/hosts" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isHosts ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
-                服务器
-              </SafeLink>
+              <SafeLink to="/admin/config" className={`hidden sm:inline px-3 py-2 text-sm rounded-lg -m-1 ${isConfig ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>配置</SafeLink>
+              <SafeLink to="/admin/stats" className={`hidden sm:inline px-3 py-2 text-sm rounded-lg -m-1 ${isStats ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>监控</SafeLink>
+              <SafeLink to="/admin/energy" className={`hidden sm:inline px-3 py-2 text-sm rounded-lg -m-1 ${isEnergy ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>金币</SafeLink>
+              <SafeLink to="/admin/hosts" className={`hidden sm:inline px-3 py-2 text-sm rounded-lg -m-1 ${isHosts ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>服务器</SafeLink>
             </>
           )}
+          {user && <span className="hidden md:inline text-sm text-slate-500 truncate max-w-[120px]">{user.email}</span>}
           {user && (
-            <span className="hidden sm:inline text-sm text-slate-500 truncate max-w-[120px]">{user.email}</span>
+            <SafeLink to="/recharge" className="sm:hidden px-2 py-1.5 rounded-lg bg-amber-100 text-amber-800 text-sm font-medium">
+              🪙 {user.energy ?? 0}
+            </SafeLink>
           )}
           <button
             onClick={onLogout}
@@ -80,69 +62,45 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
       <main className="flex-1 p-4 sm:p-6">
         {children}
       </main>
-      {/* 移动端底部导航 - 聊天页隐藏 */}
+      {/* 移动端底部导航 - 仅手机端，聊天页隐藏，极简 */}
       <nav className={`fixed bottom-0 left-0 right-0 sm:hidden bg-white/95 backdrop-blur border-t border-slate-200 flex justify-around items-center z-20 pb-safe ${isChat ? 'hidden' : ''}`}>
-        <SafeLink
-          to="/"
-          className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isHome ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
-        >
-          <img src="/10001.png" alt="" className="w-6 h-6 object-contain" aria-hidden />
-          <span className="text-xs mt-0.5">首页</span>
+        <SafeLink to="/" className={`flex-1 flex flex-col items-center py-2 px-1 active:bg-slate-50 ${isHome ? 'text-slate-800 font-medium' : 'text-slate-500'}`}>
+          <img src="/10001.png" alt="" className="w-5 h-5 object-contain" aria-hidden />
+          <span className="text-[10px] mt-0.5">首页</span>
         </SafeLink>
         {user && (
           <>
-            <SafeLink
-              to="/usage"
-              className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isUsage ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
-            >
-              <span className="text-lg">📊</span>
-              <span className="text-xs mt-0.5">消耗</span>
+            <SafeLink to="/usage" className={`flex-1 flex flex-col items-center py-2 px-1 active:bg-slate-50 ${isUsage ? 'text-slate-800 font-medium' : 'text-slate-500'}`}>
+              <span className="text-base">📊</span>
+              <span className="text-[10px] mt-0.5">消耗</span>
             </SafeLink>
-            <SafeLink
-              to="/orders"
-              className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isOrders ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
-            >
-              <span className="text-lg">📋</span>
-              <span className="text-xs mt-0.5">订单</span>
+            <SafeLink to="/orders" className={`flex-1 flex flex-col items-center py-2 px-1 active:bg-slate-50 ${isOrders ? 'text-slate-800 font-medium' : 'text-slate-500'}`}>
+              <span className="text-base">📋</span>
+              <span className="text-[10px] mt-0.5">订单</span>
             </SafeLink>
-            <SafeLink
-              to="/recharge"
-              className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isRecharge ? 'text-amber-600 font-medium' : 'text-slate-500'}`}
-            >
-              <span className="text-lg">💰</span>
-              <span className="text-xs mt-0.5">充值</span>
+            <SafeLink to="/recharge" className={`flex-1 flex flex-col items-center py-2 px-1 active:bg-slate-50 ${isRecharge ? 'text-amber-600 font-medium' : 'text-slate-500'}`}>
+              <span className="text-base">🪙</span>
+              <span className="text-[10px] mt-0.5">充值</span>
             </SafeLink>
           </>
         )}
         {user?.role === 'admin' && (
           <>
-            <SafeLink
-              to="/admin/config"
-              className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isConfig ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
-            >
-              <span className="text-lg">🤖</span>
-              <span className="text-xs mt-0.5">AI</span>
+            <SafeLink to="/admin/config" className={`flex-1 flex flex-col items-center py-2 px-1 active:bg-slate-50 ${isConfig ? 'text-slate-800 font-medium' : 'text-slate-500'}`}>
+              <span className="text-base">🤖</span>
+              <span className="text-[10px] mt-0.5">AI</span>
             </SafeLink>
-            <SafeLink
-              to="/admin/stats"
-              className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isStats ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
-            >
-              <span className="text-lg">📊</span>
-              <span className="text-xs mt-0.5">监控</span>
+            <SafeLink to="/admin/stats" className={`flex-1 flex flex-col items-center py-2 px-1 active:bg-slate-50 ${isStats ? 'text-slate-800 font-medium' : 'text-slate-500'}`}>
+              <span className="text-base">📈</span>
+              <span className="text-[10px] mt-0.5">监控</span>
             </SafeLink>
-            <SafeLink
-              to="/admin/energy"
-              className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isEnergy ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
-            >
-              <span className="text-lg">🪙</span>
-              <span className="text-xs mt-0.5">金币</span>
+            <SafeLink to="/admin/energy" className={`flex-1 flex flex-col items-center py-2 px-1 active:bg-slate-50 ${isEnergy ? 'text-slate-800 font-medium' : 'text-slate-500'}`}>
+              <span className="text-base">🪙</span>
+              <span className="text-[10px] mt-0.5">金币</span>
             </SafeLink>
-            <SafeLink
-              to="/admin/hosts"
-              className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isHosts ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
-            >
-              <span className="text-lg">🖥️</span>
-              <span className="text-xs mt-0.5">服务器</span>
+            <SafeLink to="/admin/hosts" className={`flex-1 flex flex-col items-center py-2 px-1 active:bg-slate-50 ${isHosts ? 'text-slate-800 font-medium' : 'text-slate-500'}`}>
+              <span className="text-base">🖥</span>
+              <span className="text-[10px] mt-0.5">服务器</span>
             </SafeLink>
           </>
         )}

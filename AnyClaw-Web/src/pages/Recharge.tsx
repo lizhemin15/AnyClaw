@@ -16,7 +16,7 @@ export default function Recharge() {
   useEffect(() => {
     Promise.all([getPaymentPlans(), getMe()])
       .then(([p, u]) => {
-        setPlans(p)
+        setPlans(Array.isArray(p) ? p : [])
         setUser(u)
       })
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))

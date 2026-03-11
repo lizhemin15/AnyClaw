@@ -21,7 +21,7 @@ export default function Orders({ user }: { user: User | null }) {
 
   useEffect(() => {
     getOrders()
-      .then(setOrders)
+      .then((o) => setOrders(Array.isArray(o) ? o : []))
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
       .finally(() => setLoading(false))
   }, [])

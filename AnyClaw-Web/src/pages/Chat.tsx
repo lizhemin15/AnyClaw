@@ -33,9 +33,10 @@ function MessageContent({
   expanded: boolean
   onToggleExpand: () => void
 }) {
-  const isLong = content.length > COLLAPSE_THRESHOLD
+  const s = content ?? ''
+  const isLong = s.length > COLLAPSE_THRESHOLD
   const showCollapsed = isLong && !expanded
-  const displayContent = showCollapsed ? content.slice(0, COLLAPSE_THRESHOLD) + '...' : content
+  const displayContent = showCollapsed ? s.slice(0, COLLAPSE_THRESHOLD) + '...' : s
 
   const wrapClass = isUser ? 'msg-md-user' : 'msg-md-assistant'
 
@@ -90,9 +91,10 @@ export default function Chat() {
       if (isNaN(instanceId)) return []
       try {
         const { messages: list } = await getMessages(instanceId, PAGE_SIZE, before)
-        return list.map((m: ApiMessage) => ({
+        const arr = Array.isArray(list) ? list : []
+        return arr.map((m: ApiMessage) => ({
           id: m.id,
-          content: m.content,
+          content: m.content ?? '',
           role: m.role,
         }))
       } catch {
@@ -105,8 +107,9 @@ export default function Chat() {
   const loadInitial = useCallback(async () => {
     setLoading(true)
     const list = await loadMessages()
-    setMessages(list.reverse())
-    setHasMore(list.length >= PAGE_SIZE)
+    const arr = Array.isArray(list) ? list : []
+    setMessages([...arr].reverse())
+    setHasMore(arr.length >= PAGE_SIZE)
     setLoading(false)
   }, [loadMessages])
 
@@ -118,8 +121,9 @@ export default function Chat() {
     loadingMoreRef.current = true
     setLoadingMore(true)
     const list = await loadMessages(oldestId as number)
-    setMessages((prev) => [...list.reverse(), ...prev])
-    setHasMore(list.length >= PAGE_SIZE)
+    const arr = Array.isArray(list) ? list : []
+    setMessages((prev) => [...arr].reverse().concat(prev))
+    setHasMore(arr.length >= PAGE_SIZE)
     loadingMoreRef.current = false
     setLoadingMore(false)
   }, [loadMessages, hasMore, messages])
@@ -146,7 +150,8 @@ export default function Chat() {
     const onVisible = () => {
       if (document.visibilityState === 'visible' && !isNaN(instanceId)) {
         loadMessages().then((list) => {
-          if (list.length > 0) setMessages(list.reverse())
+          const arr = Array.isArray(list) ? list : []
+          if (arr.length > 0) setMessages([...arr].reverse())
         })
       }
     }
