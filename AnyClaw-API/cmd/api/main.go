@@ -170,6 +170,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Put("/{id}", hostHandler.Update)
 		r.Delete("/{id}", hostHandler.Delete)
 		r.Post("/{id}/check", hostHandler.CheckStatus)
+		r.Post("/{id}/update", hostHandler.UpdateMainService)
 	})
 	r.Route("/admin/instances", func(r chi.Router) {
 		r.Use(authSvc.AdminMiddleware)

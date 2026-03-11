@@ -63,6 +63,12 @@ async function fetchApi<T>(
   }
 
   if (!res.ok) {
+    if (res.status === 401) {
+      clearToken();
+      const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `/login?expired=1&return_to=${returnTo}`;
+      throw new Error('登录已过期，请重新登录');
+    }
     const err = data as { error?: string };
     throw new Error(err?.error || text || res.statusText);
   }
@@ -245,6 +251,10 @@ export async function deleteHost(id: string): Promise<void> {
 
 export async function checkHostStatus(id: string): Promise<{ status: string }> {
   return fetchApi<{ status: string }>(`/admin/hosts/${id}/check`, { method: 'POST' });
+}
+
+export async function updateHostMainService(id: string): Promise<{ ok: boolean; message: string; output?: string }> {
+  return fetchApi<{ ok: boolean; message: string; output?: string }>(`/admin/hosts/${id}/update`, { method: 'POST' });
 }
 
 export interface AdminInstance {

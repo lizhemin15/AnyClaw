@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { login, setToken, type User } from '../api'
 
 interface LoginProps {
@@ -7,6 +7,8 @@ interface LoginProps {
 }
 
 export default function Login({ onLogin }: LoginProps) {
+  const [searchParams] = useSearchParams()
+  const expired = searchParams.get('expired') === '1'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -31,6 +33,9 @@ export default function Login({ onLogin }: LoginProps) {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4 py-8">
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
         <h1 className="text-xl font-semibold text-slate-800 mb-6">登录</h1>
+        {expired && (
+          <p className="mb-4 text-sm text-amber-700 bg-amber-50 p-3 rounded-lg">登录已过期，请重新登录</p>
+        )}
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-2">

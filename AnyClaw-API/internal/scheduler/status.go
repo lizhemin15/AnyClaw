@@ -14,3 +14,8 @@ func (HostChecker) CheckHost(host *db.Host) (string, error) {
 	}
 	return "online", nil
 }
+
+// RunCommand 在宿主机上执行 SSH 命令，返回输出
+func (HostChecker) RunCommand(host *db.Host, cmd string) (string, error) {
+	return runSSH(host, cmd)
+}

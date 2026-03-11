@@ -17,6 +17,7 @@ type Handler struct {
 
 type StatusChecker interface {
 	CheckHost(host *db.Host) (string, error)
+	RunCommand(host *db.Host, cmd string) (string, error)
 }
 
 func New(db *db.DB, checker StatusChecker) *Handler {
@@ -182,4 +183,32 @@ func (h *Handler) CheckStatus(w http.ResponseWriter, r *http.Request) {
 	_ = h.db.UpdateHostStatus(id, status)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": status})
+}
+
+// UpdateMainService 在宿主机上执行 /opt/anyclaw/update.sh 更新主服务
+func (h *Handler) UpdateMainService(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	host, err := h.db.GetHost(id)
+	if err != nil || host == nil {
+		http.Error(w, `{"error":"host not found"}`, http.StatusNotFound)
+		return
+	}
+	if h.checker == nil {
+		http.Error(w, `{"error":"ssh not configured"}`, http.StatusInternalServerError)
+		return
+	}
+	// 先检查文件是否存在
+	_, err = h.checker.RunCommand(host, "test -f /opt/anyclaw/update.sh")
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "message": "还未配置更新主服务的 sh 文件，请在宿主机创建 /opt/anyclaw/update.sh"})
+		return
+	}
+	out, err := h.checker.RunCommand(host, "bash /opt/anyclaw/update.sh")
+	w.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "message": err.Error(), "output": out})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "message": "更新已执行", "output": out})
 }

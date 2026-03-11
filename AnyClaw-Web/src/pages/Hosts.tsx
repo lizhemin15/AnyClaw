@@ -6,6 +6,7 @@ import {
   updateHost,
   deleteHost,
   checkHostStatus,
+  updateHostMainService,
   getAdminInstances,
   adminDeleteInstance,
   type Host,
@@ -31,6 +32,7 @@ export default function Hosts() {
   })
   const [submitting, setSubmitting] = useState(false)
   const [checking, setChecking] = useState<string | null>(null)
+  const [updating, setUpdating] = useState<string | null>(null)
   const [instances, setInstances] = useState<AdminInstance[]>([])
   const [instancesLoading, setInstancesLoading] = useState(true)
   const [deletingInst, setDeletingInst] = useState<number | null>(null)
@@ -99,6 +101,25 @@ export default function Hosts() {
       setHosts((prev) => prev.map((h) => (h.id === id ? { ...h, status: 'error' } : h)))
     } finally {
       setChecking(null)
+    }
+  }
+
+  const handleUpdateMain = async (h: Host) => {
+    if (!confirm(`确定在「${h.name}」上执行更新主服务？将运行 /opt/anyclaw/update.sh`)) return
+    setUpdating(h.id)
+    setError('')
+    try {
+      const res = await updateHostMainService(h.id)
+      if (res.ok) {
+        setError('')
+        alert(res.output ? `更新已执行：\n${res.output}` : res.message)
+      } else {
+        setError(res.output ? `${res.message}\n${res.output}` : res.message)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '更新失败')
+    } finally {
+      setUpdating(null)
     }
   }
 
@@ -185,13 +206,20 @@ export default function Hosts() {
                   {h.docker_image && ` · ${h.docker_image}`}
                 </p>
               </div>
-              <div className="flex gap-2 flex-shrink-0">
+              <div className="flex gap-2 flex-shrink-0 flex-wrap">
                 <button
                   onClick={() => handleCheck(h.id)}
                   disabled={!!checking}
                   className="flex-1 sm:flex-none px-4 py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50 disabled:opacity-50 min-h-[44px]"
                 >
                   {checking === h.id ? '检测中...' : '检测'}
+                </button>
+                <button
+                  onClick={() => handleUpdateMain(h)}
+                  disabled={!!updating}
+                  className="flex-1 sm:flex-none px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg active:bg-indigo-700 disabled:opacity-50 min-h-[44px]"
+                >
+                  {updating === h.id ? '执行中...' : '更新主服务'}
                 </button>
                 <button
                   onClick={() => openEdit(h)}
