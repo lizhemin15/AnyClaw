@@ -82,11 +82,25 @@ func GetEnergyConfig(cfg *Config) EnergyConfig {
 	return e
 }
 
-// PaymentConfig 支付配置：支付宝、微信、充值档位
+// PaymentConfig 支付配置：支付宝、微信、YunGouOS、充值档位
 type PaymentConfig struct {
-	Alipay *AlipayConfig  `json:"alipay,omitempty"`
-	Wechat *WechatConfig  `json:"wechat,omitempty"`
-	Plans  []PaymentPlan  `json:"plans,omitempty"`
+	Alipay   *AlipayConfig   `json:"alipay,omitempty"`
+	Wechat   *WechatConfig   `json:"wechat,omitempty"`
+	Yungouos *YungouosConfig `json:"yungouos,omitempty"`
+	Plans    []PaymentPlan   `json:"plans,omitempty"`
+}
+
+// YungouosConfig YunGouOS 云购OS 配置（个人可开通，支持微信/支付宝扫码）
+type YungouosConfig struct {
+	Wechat *YungouosChannel `json:"wechat,omitempty"`
+	Alipay *YungouosChannel `json:"alipay,omitempty"`
+}
+
+// YungouosChannel YunGouOS 单渠道配置
+type YungouosChannel struct {
+	Enabled bool   `json:"enabled"`
+	MchID   string `json:"mch_id"`  // 商户号，登录 yungouos.com 商户管理获取
+	Key     string `json:"key"`    // 支付密钥
 }
 
 // AlipayConfig 支付宝配置
@@ -307,7 +321,9 @@ func SaveAdminConfig(path string, channels []Channel, smtp *SMTPConfig, payment 
 		}
 	}
 	if dir != path {
-		os.MkdirAll(dir, 0755)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("mkdir %s: %w", dir, err)
+		}
 	}
 	var raw map[string]any
 	if data, err := os.ReadFile(path); err == nil {
@@ -328,9 +344,12 @@ func SaveAdminConfig(path string, channels []Channel, smtp *SMTPConfig, payment 
 	}
 	data, err := json.MarshalIndent(raw, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal config: %w", err)
 	}
-	return os.WriteFile(path, data, 0600)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
 }
 
 func migrateToChannels(cfg *Config) {

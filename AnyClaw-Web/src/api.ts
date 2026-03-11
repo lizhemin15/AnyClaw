@@ -347,9 +347,21 @@ export interface WechatConfig {
   private_key: string;
 }
 
+export interface YungouosChannel {
+  enabled: boolean;
+  mch_id: string;
+  key: string;
+}
+
+export interface YungouosConfig {
+  wechat?: YungouosChannel;
+  alipay?: YungouosChannel;
+}
+
 export interface PaymentConfig {
   alipay?: AlipayConfig;
   wechat?: WechatConfig;
+  yungouos?: YungouosConfig;
   plans: PaymentPlan[];
 }
 

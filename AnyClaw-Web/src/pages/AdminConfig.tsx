@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAdminConfig, putAdminConfig, testChannelConfig, testSMTPConfig, type AdminConfig, type Channel, type SMTPConfig, type PaymentConfig, type PaymentPlan, type AlipayConfig, type WechatConfig, type EnergyConfig } from '../api'
+import { getAdminConfig, putAdminConfig, testChannelConfig, testSMTPConfig, type AdminConfig, type Channel, type SMTPConfig, type PaymentConfig, type PaymentPlan, type AlipayConfig, type WechatConfig, type YungouosChannel, type EnergyConfig } from '../api'
 
 function genId() {
   return 'c-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
@@ -77,9 +77,11 @@ export default function AdminConfig() {
         ]
         const rawPlans = c.payment?.plans || []
         const plans = [0, 1, 2].map((i) => rawPlans[i] || defPlans[i])
+        const defYg = { wechat: { enabled: false, mch_id: '', key: '' }, alipay: { enabled: false, mch_id: '', key: '' } }
+        const yg = c.payment?.yungouos
         const payment: PaymentConfig = c.payment
-          ? { ...c.payment, plans, alipay: c.payment.alipay ? { ...c.payment.alipay } : undefined, wechat: c.payment.wechat ? { ...c.payment.wechat } : undefined }
-          : { plans: defPlans, alipay: { enabled: false, app_id: '', private_key: '', alipay_public_key: '', is_sandbox: false }, wechat: { enabled: false, app_id: '', mch_id: '', api_v3_key: '', serial_no: '', private_key: '' } }
+          ? { ...c.payment, plans, alipay: c.payment.alipay ? { ...c.payment.alipay } : undefined, wechat: c.payment.wechat ? { ...c.payment.wechat } : undefined, yungouos: { wechat: yg?.wechat ? { ...yg.wechat } : defYg.wechat, alipay: yg?.alipay ? { ...yg.alipay } : defYg.alipay } }
+          : { plans: defPlans, alipay: { enabled: false, app_id: '', private_key: '', alipay_public_key: '', is_sandbox: false }, wechat: { enabled: false, app_id: '', mch_id: '', api_v3_key: '', serial_no: '', private_key: '' }, yungouos: defYg }
         const energy: EnergyConfig = c.energy
           ? { ...c.energy }
           : { tokens_per_energy: 1000, adopt_cost: 100, daily_consume: 10, min_energy_for_task: 5, zero_days_to_delete: 3, invite_reward: 50, new_user_energy: 100, invite_commission_rate: 5 }
@@ -245,6 +247,20 @@ export default function AdminConfig() {
     if (!form) return
     const prev = form.payment?.wechat || { enabled: false, app_id: '', mch_id: '', api_v3_key: '', serial_no: '', private_key: '' }
     updatePayment({ wechat: { ...prev, ...upd } })
+  }
+
+  const updateYungouosWechat = (upd: Partial<YungouosChannel>) => {
+    if (!form) return
+    const yg = form.payment?.yungouos || { wechat: { enabled: false, mch_id: '', key: '' }, alipay: { enabled: false, mch_id: '', key: '' } }
+    const prev = yg.wechat || { enabled: false, mch_id: '', key: '' }
+    updatePayment({ yungouos: { ...yg, wechat: { ...prev, ...upd } } })
+  }
+
+  const updateYungouosAlipay = (upd: Partial<YungouosChannel>) => {
+    if (!form) return
+    const yg = form.payment?.yungouos || { wechat: { enabled: false, mch_id: '', key: '' }, alipay: { enabled: false, mch_id: '', key: '' } }
+    const prev = yg.alipay || { enabled: false, mch_id: '', key: '' }
+    updatePayment({ yungouos: { ...yg, alipay: { ...prev, ...upd } } })
   }
 
   const FIXED_PLAN_IDS = ['plan-1', 'plan-2', 'plan-3'] as const
@@ -886,6 +902,51 @@ export default function AdminConfig() {
                     placeholder="apiclient_key.pem 内容"
                     className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full font-mono"
                   />
+                </div>
+              </div>
+            </div>
+            {/* YunGouOS 云购OS（个人可开通） */}
+            <div>
+              <h3 className="text-sm font-medium text-slate-700 mb-2">YunGouOS 云购OS</h3>
+              <p className="text-xs text-slate-500 mb-3">个人可开通，支持微信/支付宝扫码。登录 <a href="https://www.yungouos.com" target="_blank" rel="noreferrer" className="underline">yungouos.com</a> 注册并获取商户号、支付密钥。</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="text-xs font-medium text-slate-600 mb-2">微信</h4>
+                  <div className="flex items-center gap-2 mb-2">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={form?.payment?.yungouos?.wechat?.enabled ?? false}
+                      onClick={() => updateYungouosWechat({ enabled: !(form?.payment?.yungouos?.wechat?.enabled ?? false) })}
+                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${form?.payment?.yungouos?.wechat?.enabled ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${form?.payment?.yungouos?.wechat?.enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                    </button>
+                    <span className="text-sm">{form?.payment?.yungouos?.wechat?.enabled ? '已启用' : '未启用'}</span>
+                  </div>
+                  <div className="space-y-2">
+                    <input type="text" value={form?.payment?.yungouos?.wechat?.mch_id ?? ''} onChange={(e) => updateYungouosWechat({ mch_id: e.target.value })} placeholder="商户号" className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full" />
+                    <input type="password" value={form?.payment?.yungouos?.wechat?.key ?? ''} onChange={(e) => updateYungouosWechat({ key: e.target.value })} placeholder="支付密钥" className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full font-mono" />
+                  </div>
+                </div>
+                <div>
+                  <h4 className="text-xs font-medium text-slate-600 mb-2">支付宝</h4>
+                  <div className="flex items-center gap-2 mb-2">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={form?.payment?.yungouos?.alipay?.enabled ?? false}
+                      onClick={() => updateYungouosAlipay({ enabled: !(form?.payment?.yungouos?.alipay?.enabled ?? false) })}
+                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${form?.payment?.yungouos?.alipay?.enabled ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${form?.payment?.yungouos?.alipay?.enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                    </button>
+                    <span className="text-sm">{form?.payment?.yungouos?.alipay?.enabled ? '已启用' : '未启用'}</span>
+                  </div>
+                  <div className="space-y-2">
+                    <input type="text" value={form?.payment?.yungouos?.alipay?.mch_id ?? ''} onChange={(e) => updateYungouosAlipay({ mch_id: e.target.value })} placeholder="商户号" className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full" />
+                    <input type="password" value={form?.payment?.yungouos?.alipay?.key ?? ''} onChange={(e) => updateYungouosAlipay({ key: e.target.value })} placeholder="支付密钥" className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full font-mono" />
+                  </div>
                 </div>
               </div>
             </div>

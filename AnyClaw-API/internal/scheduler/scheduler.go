@@ -4,11 +4,41 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 
 	"github.com/anyclaw/anyclaw-api/internal/config"
 	"github.com/anyclaw/anyclaw-api/internal/db"
 )
+
+// extractContainerID 从 docker run -d 输出中提取 64 位容器 ID（避免 pull 进度等导致 Data too long）
+func extractContainerID(out string) string {
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return ""
+	}
+	lines := strings.Split(out, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		s := strings.TrimSpace(lines[i])
+		if s == "" {
+			continue
+		}
+		// 取第一个 64 位 hex 串（Docker 容器 ID）
+		if m := regexp.MustCompile(`[a-f0-9]{64}`).FindString(s); m != "" {
+			return m
+		}
+		// 若整行是短 ID（12 位）或 64 位，直接取
+		if len(s) <= 64 && regexp.MustCompile(`^[a-f0-9]+$`).MatchString(s) {
+			return s
+		}
+	}
+	// 兜底：取最后一行前 64 字符
+	last := strings.TrimSpace(lines[len(lines)-1])
+	if len(last) > 64 {
+		return last[:64]
+	}
+	return last
+}
 
 type HostStore interface {
 	ListEnabledHosts() ([]*db.Host, error)
@@ -77,7 +107,8 @@ func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string, api
 		log.Printf("[scheduler] ssh docker run on %s failed: %v", host.Addr, err)
 		return "", "", err
 	}
-	containerID = strings.TrimSpace(out)
+	// docker run -d 可能输出 pull 进度，容器 ID 在最后一行；只取 64 位 hex 避免 Data too long
+	containerID = extractContainerID(out)
 	return containerID, host.ID, nil
 }
 

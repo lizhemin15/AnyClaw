@@ -42,8 +42,10 @@ func (h *Handler) GetPlans(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode([]any{})
 		return
 	}
+	yg := cfg.Payment.Yungouos
 	hasChannel := (cfg.Payment.Alipay != nil && cfg.Payment.Alipay.Enabled) ||
-		(cfg.Payment.Wechat != nil && cfg.Payment.Wechat.Enabled)
+		(cfg.Payment.Wechat != nil && cfg.Payment.Wechat.Enabled) ||
+		(yg != nil && ((yg.Alipay != nil && yg.Alipay.Enabled) || (yg.Wechat != nil && yg.Wechat.Enabled)))
 	if !hasChannel {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]any{})
@@ -154,41 +156,63 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	notifyURL := baseURL + "/api/payment/notify/" + req.Channel
 
 	subject := "AnyClaw 金币充值 - " + plan.Name
+	yg := cfg.Payment.Yungouos
 
 	switch req.Channel {
 	case "alipay":
-		if cfg.Payment.Alipay == nil || !cfg.Payment.Alipay.Enabled {
+		if yg != nil && yg.Alipay != nil && yg.Alipay.Enabled {
+			// YunGouOS 支付宝扫码
+			codeURL, err := CreateYungouosAlipayNativePay(yg.Alipay, notifyURL, outTradeNo, subject, plan.PriceCny)
+			if err != nil {
+				log.Printf("[payment] yungouos alipay create failed: %v", err)
+				http.Error(w, `{"error":"alipay failed: `+err.Error()+`"}`, http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{"out_trade_no": outTradeNo, "code_url": codeURL})
+		} else if cfg.Payment.Alipay != nil && cfg.Payment.Alipay.Enabled {
+			// 官方支付宝当面付
+			codeURL, err := CreateAlipayPreCreate(cfg.Payment.Alipay, notifyURL, outTradeNo, subject, plan.PriceCny)
+			if err != nil {
+				log.Printf("[payment] alipay create failed: %v", err)
+				http.Error(w, `{"error":"alipay failed: `+err.Error()+`"}`, http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{"out_trade_no": outTradeNo, "code_url": codeURL})
+		} else {
 			http.Error(w, `{"error":"alipay not enabled"}`, http.StatusBadRequest)
-			return
 		}
-		// 当面付扫码支付（alipay.trade.precreate），生成二维码供用户扫码
-		codeURL, err := CreateAlipayPreCreate(cfg.Payment.Alipay, notifyURL, outTradeNo, subject, plan.PriceCny)
-		if err != nil {
-			log.Printf("[payment] alipay create failed: %v", err)
-			http.Error(w, `{"error":"alipay failed: `+err.Error()+`"}`, http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"out_trade_no": outTradeNo, "code_url": codeURL})
 	case "wechat":
-		if cfg.Payment.Wechat == nil || !cfg.Payment.Wechat.Enabled {
+		if yg != nil && yg.Wechat != nil && yg.Wechat.Enabled {
+			// YunGouOS 微信扫码
+			codeURL, err := CreateYungouosWechatNativePay(yg.Wechat, notifyURL, outTradeNo, subject, plan.PriceCny)
+			if err != nil {
+				log.Printf("[payment] yungouos wechat create failed: %v", err)
+				http.Error(w, `{"error":"wechat failed: `+err.Error()+`"}`, http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{"out_trade_no": outTradeNo, "code_url": codeURL})
+		} else if cfg.Payment.Wechat != nil && cfg.Payment.Wechat.Enabled {
+			// 官方微信 Native 支付
+			codeURL, err := CreateWechatNativePay(cfg.Payment.Wechat, notifyURL, outTradeNo, subject, plan.PriceCny)
+			if err != nil {
+				log.Printf("[payment] wechat create failed: %v", err)
+				http.Error(w, `{"error":"wechat failed: `+err.Error()+`"}`, http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{"out_trade_no": outTradeNo, "code_url": codeURL})
+		} else {
 			http.Error(w, `{"error":"wechat not enabled"}`, http.StatusBadRequest)
-			return
 		}
-		codeURL, err := CreateWechatNativePay(cfg.Payment.Wechat, notifyURL, outTradeNo, subject, plan.PriceCny)
-		if err != nil {
-			log.Printf("[payment] wechat create failed: %v", err)
-			http.Error(w, `{"error":"wechat failed: `+err.Error()+`"}`, http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"out_trade_no": outTradeNo, "code_url": codeURL})
 	default:
 		http.Error(w, `{"error":"unsupported channel"}`, http.StatusBadRequest)
 	}
 }
 
-// NotifyAlipay 支付宝异步通知
+// NotifyAlipay 支付宝异步通知（支持 YunGouOS 与官方支付宝）
 func (h *Handler) NotifyAlipay(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -199,11 +223,24 @@ func (h *Handler) NotifyAlipay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg, err := config.Load(h.configPath)
-	if err != nil || cfg.Payment == nil || cfg.Payment.Alipay == nil {
+	if err != nil || cfg.Payment == nil {
 		ACKAlipay(w)
 		return
 	}
-	outTradeNo, tradeNo, totalAmount, err := VerifyAlipayNotify(cfg.Payment.Alipay, r)
+	var outTradeNo, tradeNo string
+	var totalAmount int
+	isYungouos := false
+	// 判断是否为 YunGouOS 回调（含 mch_id 为 YunGouOS 格式）
+	if r.Form.Get("mch_id") != "" && cfg.Payment.Yungouos != nil && cfg.Payment.Yungouos.Alipay != nil {
+		outTradeNo, tradeNo, totalAmount, err = VerifyYungouosNotify(
+			cfg.Payment.Yungouos.Alipay.MchID, cfg.Payment.Yungouos.Alipay.Key, r)
+		isYungouos = true
+	} else if cfg.Payment.Alipay != nil {
+		outTradeNo, tradeNo, totalAmount, err = VerifyAlipayNotify(cfg.Payment.Alipay, r)
+	} else {
+		ACKAlipay(w)
+		return
+	}
 	if err != nil {
 		log.Printf("[payment] alipay notify verify failed: %v", err)
 		ACKAlipay(w)
@@ -233,18 +270,38 @@ func (h *Handler) NotifyAlipay(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	ACKAlipay(w)
+	if isYungouos {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("SUCCESS"))
+	} else {
+		ACKAlipay(w)
+	}
 }
 
-// NotifyWechat 微信支付异步通知
+// NotifyWechat 微信支付异步通知（支持 YunGouOS 与官方微信）
 func (h *Handler) NotifyWechat(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if err := r.ParseForm(); err != nil {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"code":"SUCCESS","message":"成功"}`))
+		return
+	}
 	cfg, err := config.Load(h.configPath)
-	if err != nil || cfg.Payment == nil || cfg.Payment.Wechat == nil {
+	if err != nil || cfg.Payment == nil {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"code":"SUCCESS","message":"成功"}`))
+		return
+	}
+	// 判断是否为 YunGouOS 回调
+	if r.Form.Get("mch_id") != "" && cfg.Payment.Yungouos != nil && cfg.Payment.Yungouos.Wechat != nil {
+		h.handleYungouosWechatNotify(w, r, cfg)
+		return
+	}
+	if cfg.Payment.Wechat == nil {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"code":"SUCCESS","message":"成功"}`))
 		return
@@ -311,4 +368,39 @@ func (h *Handler) NotifyWechat(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"code":"SUCCESS","message":"成功"}`))
+}
+
+// handleYungouosWechatNotify 处理 YunGouOS 微信支付异步通知（需返回 SUCCESS）
+func (h *Handler) handleYungouosWechatNotify(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
+	yg := cfg.Payment.Yungouos.Wechat
+	outTradeNo, tradeNo, totalAmount, err := VerifyYungouosNotify(yg.MchID, yg.Key, r)
+	if err != nil {
+		log.Printf("[payment] yungouos wechat notify verify failed: %v", err)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("FAIL"))
+		return
+	}
+	ok, err := h.db.MarkOrderPaid(outTradeNo, tradeNo)
+	if err != nil {
+		log.Printf("[payment] yungouos wechat mark paid failed: %v", err)
+	}
+	if ok {
+		ord, _ := h.db.GetOrderByOutTradeNo(outTradeNo)
+		if ord != nil && totalAmount >= ord.PriceCny {
+			_ = h.db.AddUserEnergy(ord.UserID, ord.Energy)
+			log.Printf("[payment] yungouos wechat order %s paid, user %d +%d energy", outTradeNo, ord.UserID, ord.Energy)
+			if inviterID, has := h.db.GetUserInviterID(ord.UserID); has && inviterID > 0 {
+				rate := config.GetEnergyConfig(cfg).InviteCommissionRate
+				if rate > 0 && rate <= 100 {
+					commission := ord.Energy * rate / 100
+					if commission > 0 {
+						_ = h.db.AddUserEnergy(inviterID, commission)
+						log.Printf("[payment] invite commission: inviter %d +%d (%.0f%%)", inviterID, commission, float64(rate))
+					}
+				}
+			}
+		}
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("SUCCESS"))
 }

@@ -74,13 +74,31 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		if cfg.Payment.Wechat != nil {
 			payment["wechat"] = map[string]any{
-				"enabled":     cfg.Payment.Wechat.Enabled,
-				"app_id":     cfg.Payment.Wechat.AppID,
-				"mch_id":     cfg.Payment.Wechat.MchID,
-				"api_v3_key": config.MaskAPIKey(cfg.Payment.Wechat.APIv3Key),
-				"serial_no":  cfg.Payment.Wechat.SerialNo,
+				"enabled":      cfg.Payment.Wechat.Enabled,
+				"app_id":      cfg.Payment.Wechat.AppID,
+				"mch_id":      cfg.Payment.Wechat.MchID,
+				"api_v3_key":  config.MaskAPIKey(cfg.Payment.Wechat.APIv3Key),
+				"serial_no":   cfg.Payment.Wechat.SerialNo,
 				"private_key": config.MaskAPIKey(cfg.Payment.Wechat.PrivateKey),
 			}
+		}
+		if cfg.Payment.Yungouos != nil {
+			yg := map[string]any{}
+			if cfg.Payment.Yungouos.Wechat != nil {
+				yg["wechat"] = map[string]any{
+					"enabled": cfg.Payment.Yungouos.Wechat.Enabled,
+					"mch_id":  cfg.Payment.Yungouos.Wechat.MchID,
+					"key":     config.MaskAPIKey(cfg.Payment.Yungouos.Wechat.Key),
+				}
+			}
+			if cfg.Payment.Yungouos.Alipay != nil {
+				yg["alipay"] = map[string]any{
+					"enabled": cfg.Payment.Yungouos.Alipay.Enabled,
+					"mch_id":  cfg.Payment.Yungouos.Alipay.MchID,
+					"key":     config.MaskAPIKey(cfg.Payment.Yungouos.Alipay.Key),
+				}
+			}
+			payment["yungouos"] = yg
 		}
 		resp["payment"] = payment
 	}
@@ -157,13 +175,30 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 				payment.Wechat.PrivateKey = cfg.Payment.Wechat.PrivateKey
 			}
 		}
+		if payment.Yungouos != nil && cfg.Payment != nil && cfg.Payment.Yungouos != nil {
+			if payment.Yungouos.Wechat != nil && cfg.Payment.Yungouos.Wechat != nil &&
+				(payment.Yungouos.Wechat.Key == "" || strings.HasPrefix(payment.Yungouos.Wechat.Key, "****")) {
+				payment.Yungouos.Wechat.Key = cfg.Payment.Yungouos.Wechat.Key
+			}
+			if payment.Yungouos.Alipay != nil && cfg.Payment.Yungouos.Alipay != nil &&
+				(payment.Yungouos.Alipay.Key == "" || strings.HasPrefix(payment.Yungouos.Alipay.Key, "****")) {
+				payment.Yungouos.Alipay.Key = cfg.Payment.Yungouos.Alipay.Key
+			}
+		}
 	}
 	energy := req.Energy
 	if energy == nil {
 		energy = cfg.Energy
 	}
 	if err := config.SaveAdminConfig(h.configPath, channels, smtp, payment, energy); err != nil {
-		http.Error(w, `{"error":"failed to save config"}`, http.StatusInternalServerError)
+		log.Printf("[admin] SaveAdminConfig failed: path=%s err=%v", h.configPath, err)
+		msg := err.Error()
+		if len(msg) > 80 {
+			msg = msg[:80] + "..."
+		}
+		// 简单转义避免破坏 JSON
+		msg = strings.ReplaceAll(strings.ReplaceAll(msg, `\`, `\\`), `"`, `\"`)
+		http.Error(w, `{"error":"failed to save config: `+msg+`"}`, http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
