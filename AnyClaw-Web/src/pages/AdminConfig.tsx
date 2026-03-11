@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
-import { getAdminConfig, putAdminConfig, testChannelConfig, testSMTPConfig, type AdminConfig, type Channel, type SMTPConfig, type PaymentConfig, type PaymentPlan, type AlipayConfig, type WechatConfig, type YungouosChannel, type EnergyConfig } from '../api'
+import { useState, useEffect, useCallback } from 'react'
+import { getAdminConfig, putAdminConfig, testChannelConfig, testSMTPConfig, type AdminConfig, type Channel, type SMTPConfig, type PaymentConfig, type PaymentPlan, type AlipayConfig, type WechatConfig, type YungouosChannel, type EnergyConfig, type ContainerConfig } from '../api'
+import { useUnsavedConfig } from '../contexts/UnsavedConfigContext'
 
 function genId() {
   return 'c-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
@@ -62,6 +63,50 @@ export default function AdminConfig() {
   const [testingSMTP, setTestingSMTP] = useState(false)
   const [smtpTestResult, setSmtpTestResult] = useState<{ ok: boolean; message: string } | null>(null)
 
+  const unsavedCtx = useUnsavedConfig()
+  const hasUnsaved = !!(form && config && JSON.stringify(form) !== JSON.stringify(config))
+
+  useEffect(() => {
+    if (unsavedCtx) unsavedCtx.setHasUnsaved(hasUnsaved)
+  }, [hasUnsaved, unsavedCtx])
+
+  useEffect(() => {
+    if (!unsavedCtx) return
+    const h = (e: BeforeUnloadEvent) => {
+      if (hasUnsaved) e.preventDefault()
+    }
+    window.addEventListener('beforeunload', h)
+    return () => window.removeEventListener('beforeunload', h)
+  }, [hasUnsaved, unsavedCtx])
+
+  const doSave = useCallback(async () => {
+    if (!form || saving) return
+    setSaving(true)
+    setError('')
+    setSuccess('')
+    try {
+      await putAdminConfig(form)
+      setSuccess('保存成功，配置已立即生效')
+      setConfig(form)
+      setAddingChannel(false)
+      setEditingChannel(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存失败')
+      throw err
+    } finally {
+      setSaving(false)
+    }
+  }, [form, saving])
+
+  useEffect(() => {
+    if (!unsavedCtx) return
+    unsavedCtx.registerSaveHandler(hasUnsaved ? doSave : null)
+    return () => {
+      unsavedCtx.registerSaveHandler(null)
+      unsavedCtx.setHasUnsaved(false)
+    }
+  }, [unsavedCtx, hasUnsaved, doSave])
+
   useEffect(() => {
     getAdminConfig()
       .then((c) => {
@@ -85,8 +130,9 @@ export default function AdminConfig() {
         const energy: EnergyConfig = c.energy
           ? { ...c.energy }
           : { tokens_per_energy: 1000, adopt_cost: 100, daily_consume: 10, min_energy_for_task: 5, zero_days_to_delete: 3, invite_reward: 50, new_user_energy: 100, invite_commission_rate: 5 }
-        setConfig({ channels, smtp, payment, energy })
-        setForm({ channels: JSON.parse(JSON.stringify(channels)), smtp, payment: JSON.parse(JSON.stringify(payment)), energy: { ...energy } })
+        const container: ContainerConfig = c.container ? { ...c.container } : { workspace_size_gb: 0 }
+        setConfig({ channels, smtp, payment, energy, container })
+        setForm({ channels: JSON.parse(JSON.stringify(channels)), smtp, payment: JSON.parse(JSON.stringify(payment)), energy: { ...energy }, container: { ...container } })
       })
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
       .finally(() => setLoading(false))
@@ -94,20 +140,10 @@ export default function AdminConfig() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form || saving) return
-    setSaving(true)
-    setError('')
-    setSuccess('')
     try {
-      await putAdminConfig(form)
-      setSuccess('保存成功，配置已立即生效')
-      setConfig(form)
-      setAddingChannel(false)
-      setEditingChannel(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '保存失败')
-    } finally {
-      setSaving(false)
+      await doSave()
+    } catch {
+      // doSave 已处理 setError
     }
   }
 
@@ -281,6 +317,14 @@ export default function AdminConfig() {
     updatePayment({ plans })
   }
 
+  const updateContainer = (upd: Partial<ContainerConfig>) => {
+    if (!form) return
+    setForm({
+      ...form,
+      container: { ...(form.container ?? { workspace_size_gb: 0 }), ...upd },
+    })
+  }
+
   const updateEnergy = (upd: Partial<EnergyConfig>) => {
     if (!form) return
     setForm({
@@ -332,11 +376,27 @@ export default function AdminConfig() {
 
   return (
     <div className="max-w-5xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-slate-800">AI配置</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          添加渠道并配置 API，一次只能启用一个渠道。当前启用：{enabledModel ? enabledModel.name : '无'}。
-        </p>
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-800">AI配置</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            添加渠道并配置 API，一次只能启用一个渠道。当前启用：{enabledModel ? enabledModel.name : '无'}。
+          </p>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          {JSON.stringify(form) !== JSON.stringify(config) && (
+            <button
+              type="button"
+              onClick={() => setForm(config ? JSON.parse(JSON.stringify(config)) : form)}
+              className="px-4 py-2 text-sm border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100"
+            >
+              重置
+            </button>
+          )}
+          <button type="submit" form="admin-config-form" disabled={saving} className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 font-medium">
+            {saving ? '保存中...' : '保存配置'}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -348,7 +408,7 @@ export default function AdminConfig() {
         </div>
       )}
 
-      <form onSubmit={handleSave}>
+      <form id="admin-config-form" onSubmit={handleSave}>
         {/* 经济参数 */}
         <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-200">
@@ -446,6 +506,30 @@ export default function AdminConfig() {
                 />
                 <p className="text-xs text-slate-500 mt-0.5">受邀用户充值时邀请人获得 %</p>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 容器存储 */}
+        <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200">
+            <h2 className="font-semibold text-slate-800">容器存储</h2>
+            <p className="text-sm text-slate-500 mt-1">每个宠物实例工作区存储上限，0 表示不限制</p>
+          </div>
+          <div className="px-5 py-4">
+            <div className="flex items-center gap-4">
+              <div className="w-48">
+                <label className="block text-sm font-medium text-slate-700 mb-1">工作区上限 (GB)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={1000}
+                  value={form?.container?.workspace_size_gb ?? 0}
+                  onChange={(e) => updateContainer({ workspace_size_gb: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
+                />
+              </div>
+              <p className="text-sm text-slate-500 mt-6">0 = 不限制；新领养实例生效</p>
             </div>
           </div>
         </div>
@@ -953,18 +1037,9 @@ export default function AdminConfig() {
           </div>
         </div>
 
-        <div className="flex justify-end gap-2">
-          {JSON.stringify(form) !== JSON.stringify(config) && (
-            <button
-              type="button"
-              onClick={() => setForm(config ? JSON.parse(JSON.stringify(config)) : form)}
-              className="px-4 py-2 text-sm border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100"
-            >
-              重置
-            </button>
-          )}
+        <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
           <button type="submit" disabled={saving} className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-            {saving ? '保存中...' : '保存'}
+            {saving ? '保存中...' : '保存配置'}
           </button>
         </div>
       </form>

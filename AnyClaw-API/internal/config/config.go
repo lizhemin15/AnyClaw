@@ -20,6 +20,23 @@ type Config struct {
 	SMTP         *SMTPConfig    `json:"smtp,omitempty"` // 注册验证码邮件
 	Payment      *PaymentConfig `json:"payment,omitempty"`
 	Energy       *EnergyConfig  `json:"energy,omitempty"` // 金币/活力经济参数，即时生效
+	Container    *ContainerConfig `json:"container,omitempty"` // 宠物容器配置
+}
+
+// ContainerConfig 宠物容器配置
+type ContainerConfig struct {
+	WorkspaceSizeGB int `json:"workspace_size_gb"` // 每个实例工作区存储上限(GB)，0 表示不限制
+}
+
+// GetWorkspaceSizeGB 返回工作区存储上限(GB)，0 表示不限制
+func GetWorkspaceSizeGB(cfg *Config) int {
+	if cfg == nil || cfg.Container == nil {
+		return 0
+	}
+	if cfg.Container.WorkspaceSizeGB < 0 {
+		return 0
+	}
+	return cfg.Container.WorkspaceSizeGB
 }
 
 // EnergyConfig 金币经济配置，全部即时生效
@@ -279,10 +296,11 @@ func Load(path string) (*Config, error) {
 	if LoadFromDB != nil {
 		if b, err := LoadFromDB(); err == nil && len(b) > 0 {
 			var dbCfg struct {
-				Channels []Channel      `json:"channels"`
-				SMTP     *SMTPConfig    `json:"smtp"`
-				Payment  *PaymentConfig `json:"payment"`
-				Energy   *EnergyConfig  `json:"energy"`
+				Channels  []Channel          `json:"channels"`
+				SMTP     *SMTPConfig        `json:"smtp"`
+				Payment  *PaymentConfig     `json:"payment"`
+				Energy   *EnergyConfig      `json:"energy"`
+				Container *ContainerConfig `json:"container"`
 			}
 			if json.Unmarshal(b, &dbCfg) == nil {
 				if len(dbCfg.Channels) > 0 {
@@ -296,6 +314,9 @@ func Load(path string) (*Config, error) {
 				}
 				if dbCfg.Energy != nil {
 					cfg.Energy = dbCfg.Energy
+				}
+				if dbCfg.Container != nil {
+					cfg.Container = dbCfg.Container
 				}
 			}
 		}

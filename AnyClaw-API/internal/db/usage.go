@@ -5,12 +5,51 @@ import (
 	"time"
 )
 
-func (d *DB) InsertUsage(instanceID, userID, model, provider string, promptTokens, completionTokens int) error {
+func (d *DB) InsertUsage(instanceID, userID, model, provider string, promptTokens, completionTokens, coinsCost int) error {
 	_, err := d.Exec(
-		"INSERT INTO usage_log (instance_id, user_id, model, provider, prompt_tokens, completion_tokens) VALUES (?, ?, ?, ?, ?, ?)",
-		instanceID, userID, model, provider, promptTokens, completionTokens,
+		"INSERT INTO usage_log (instance_id, user_id, model, provider, prompt_tokens, completion_tokens, coins_cost) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		instanceID, userID, model, provider, promptTokens, completionTokens, coinsCost,
 	)
 	return err
+}
+
+// UsageLogEntry 用户消耗记录单条
+type UsageLogEntry struct {
+	ID               int64  `json:"id"`
+	InstanceID       string `json:"instance_id"`
+	Model            string `json:"model"`
+	PromptTokens     int    `json:"prompt_tokens"`
+	CompletionTokens int    `json:"completion_tokens"`
+	CoinsCost        int    `json:"coins_cost"`
+	CreatedAt        string `json:"created_at"`
+}
+
+func (d *DB) ListUserUsage(userID int64, limit, offset int) ([]*UsageLogEntry, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	uid := fmt.Sprintf("%d", userID)
+	rows, err := d.Query(
+		`SELECT id, instance_id, model, prompt_tokens, completion_tokens, COALESCE(coins_cost,0), created_at 
+		 FROM usage_log WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		uid, limit, offset,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list user usage: %w", err)
+	}
+	defer rows.Close()
+	var list []*UsageLogEntry
+	for rows.Next() {
+		var e UsageLogEntry
+		if err := rows.Scan(&e.ID, &e.InstanceID, &e.Model, &e.PromptTokens, &e.CompletionTokens, &e.CoinsCost, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, &e)
+	}
+	return list, nil
 }
 
 type UsageStats struct {

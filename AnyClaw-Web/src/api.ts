@@ -130,11 +130,18 @@ export async function deleteInstance(id: number): Promise<void> {
   await fetchApi(`/instances/${id}`, { method: 'DELETE' });
 }
 
-export async function feedInstance(id: number, amount: number): Promise<Instance> {
-  return fetchApi<Instance>(`/instances/${id}/feed`, {
-    method: 'POST',
-    body: JSON.stringify({ amount }),
-  });
+export interface UsageLogEntry {
+  id: number;
+  instance_id: string;
+  model: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  coins_cost: number;
+  created_at: string;
+}
+
+export async function getMyUsage(limit = 50, offset = 0): Promise<{ items: UsageLogEntry[] }> {
+  return fetchApi<{ items: UsageLogEntry[] }>(`/me/usage?limit=${limit}&offset=${offset}`);
 }
 
 export interface ChatMessage {
@@ -376,11 +383,16 @@ export interface EnergyConfig {
   invite_commission_rate: number;
 }
 
+export interface ContainerConfig {
+  workspace_size_gb: number;
+}
+
 export interface AdminConfig {
   channels: Channel[];
   smtp?: SMTPConfig;
   payment?: PaymentConfig;
   energy?: EnergyConfig;
+  container?: ContainerConfig;
 }
 
 export async function getAdminConfig(): Promise<AdminConfig> {

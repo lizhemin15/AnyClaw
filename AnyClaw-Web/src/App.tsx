@@ -11,6 +11,7 @@ const refreshUser = async (setUser: (u: User | null) => void) => {
   }
 }
 import Layout from './Layout'
+import { UnsavedConfigProvider } from './contexts/UnsavedConfigContext'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Home from './pages/Home'
@@ -18,6 +19,7 @@ import Chat from './pages/Chat'
 import Hosts from './pages/Hosts'
 import Energy from './pages/Energy'
 import Recharge from './pages/Recharge'
+import Usage from './pages/Usage'
 import Orders from './pages/Orders'
 import AdminConfig from './pages/AdminConfig'
 import AdminStats from './pages/AdminStats'
@@ -110,6 +112,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <UnsavedConfigProvider>
       <Routes>
         <Route path="/setup" element={<Navigate to="/" replace />} />
         <Route path="/login" element={
@@ -172,6 +175,13 @@ export default function App() {
             </Layout>
           </ProtectedRoute>
         } />
+        <Route path="/usage" element={
+          <ProtectedRoute>
+            <Layout user={user} onLogout={handleLogout}>
+              <Usage />
+            </Layout>
+          </ProtectedRoute>
+        } />
         <Route path="/orders" element={
           <ProtectedRoute>
             <Layout user={user} onLogout={handleLogout}>
@@ -181,6 +191,7 @@ export default function App() {
         } />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </UnsavedConfigProvider>
     </BrowserRouter>
   );
 }

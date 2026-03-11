@@ -1,5 +1,6 @@
-import { Link, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import type { User } from './api'
+import { SafeLink } from './components/SafeLink'
 
 interface LayoutProps {
   user: User | null;
@@ -11,6 +12,7 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
   const loc = useLocation()
   const isHome = loc.pathname === '/'
   const isRecharge = loc.pathname === '/recharge'
+  const isUsage = loc.pathname === '/usage'
   const isOrders = loc.pathname === '/orders'
   const isHosts = loc.pathname.startsWith('/admin/hosts')
   const isEnergy = loc.pathname.startsWith('/admin/energy')
@@ -21,40 +23,46 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
   return (
     <div className={`min-h-screen bg-slate-50 flex flex-col ${isChat ? 'pb-0' : 'pb-16 sm:pb-0'}`}>
       <header className={`sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200 px-4 py-3 flex items-center justify-between ${isChat ? 'hidden' : ''}`}>
-        <Link to="/" className="text-lg font-semibold text-slate-800 active:opacity-70">
+        <SafeLink to="/" className="text-lg font-semibold text-slate-800 active:opacity-70">
           OpenClaw
-        </Link>
+        </SafeLink>
         {user && (
           <div className="flex items-center gap-2">
-            <Link
+            <SafeLink
+              to="/usage"
+              className="px-2.5 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-sm"
+            >
+              消耗
+            </SafeLink>
+            <SafeLink
               to="/orders"
               className="px-2.5 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-sm"
             >
               订单
-            </Link>
-            <Link
+            </SafeLink>
+            <SafeLink
               to="/recharge"
               className="px-3 py-1.5 rounded-lg bg-amber-100 text-amber-800 font-medium hover:bg-amber-200 active:bg-amber-300 text-sm"
             >
               🪙 {user.energy ?? 0} · 充值
-            </Link>
+            </SafeLink>
           </div>
         )}
         <nav className="flex items-center gap-2 sm:gap-4">
           {user?.role === 'admin' && (
             <>
-              <Link to="/admin/config" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isConfig ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
+              <SafeLink to="/admin/config" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isConfig ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
                 配置
-              </Link>
-              <Link to="/admin/stats" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isStats ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
+              </SafeLink>
+              <SafeLink to="/admin/stats" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isStats ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
                 监控
-              </Link>
-              <Link to="/admin/energy" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isEnergy ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
+              </SafeLink>
+              <SafeLink to="/admin/energy" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isEnergy ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
                 金币
-              </Link>
-              <Link to="/admin/hosts" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isHosts ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
+              </SafeLink>
+              <SafeLink to="/admin/hosts" className={`px-3 py-2 text-sm rounded-lg -m-1 ${isHosts ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}>
                 服务器
-              </Link>
+              </SafeLink>
             </>
           )}
           {user && (
@@ -73,61 +81,68 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
       </main>
       {/* 移动端底部导航 - 聊天页隐藏 */}
       <nav className={`fixed bottom-0 left-0 right-0 sm:hidden bg-white/95 backdrop-blur border-t border-slate-200 flex justify-around items-center z-20 pb-safe ${isChat ? 'hidden' : ''}`}>
-        <Link
+        <SafeLink
           to="/"
           className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isHome ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
         >
           <span className="text-lg">🏠</span>
           <span className="text-xs mt-0.5">首页</span>
-        </Link>
+        </SafeLink>
         {user && (
           <>
-            <Link
+            <SafeLink
+              to="/usage"
+              className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isUsage ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
+            >
+              <span className="text-lg">📊</span>
+              <span className="text-xs mt-0.5">消耗</span>
+            </SafeLink>
+            <SafeLink
               to="/orders"
               className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isOrders ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
             >
               <span className="text-lg">📋</span>
               <span className="text-xs mt-0.5">订单</span>
-            </Link>
-            <Link
+            </SafeLink>
+            <SafeLink
               to="/recharge"
               className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isRecharge ? 'text-amber-600 font-medium' : 'text-slate-500'}`}
             >
               <span className="text-lg">💰</span>
               <span className="text-xs mt-0.5">充值</span>
-            </Link>
+            </SafeLink>
           </>
         )}
         {user?.role === 'admin' && (
           <>
-            <Link
+            <SafeLink
               to="/admin/config"
               className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isConfig ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
             >
               <span className="text-lg">🤖</span>
               <span className="text-xs mt-0.5">AI</span>
-            </Link>
-            <Link
+            </SafeLink>
+            <SafeLink
               to="/admin/stats"
               className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isStats ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
             >
               <span className="text-lg">📊</span>
               <span className="text-xs mt-0.5">监控</span>
-            </Link>
-            <Link
+            </SafeLink>
+            <SafeLink
               to="/admin/energy"
               className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isEnergy ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
             >
               <span className="text-lg">🪙</span>
               <span className="text-xs mt-0.5">金币</span>
-            </Link>
-            <Link
+            </SafeLink>
+            <SafeLink
               to="/admin/hosts"
               className={`flex-1 flex flex-col items-center py-3 px-2 active:bg-slate-50 ${isHosts ? 'text-slate-800 font-medium' : 'text-slate-500'}`}
             >
               <span className="text-lg">🖥️</span>
               <span className="text-xs mt-0.5">服务器</span>
-            </Link>
+            </SafeLink>
           </>
         )}
       </nav>

@@ -81,12 +81,26 @@ func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string, api
 	if apiURLOverride != "" {
 		apiURL = apiURLOverride
 	}
-	log.Printf("[scheduler] instance %d: using host %q (%s:%d), image=%s, apiURL=%s",
-		instanceID, host.Name, host.Addr, host.SSHPort, image, apiURL)
+	workspaceSizeGB := 0
+	if cfg, err := config.Load(s.configPath); err == nil {
+		workspaceSizeGB = config.GetWorkspaceSizeGB(cfg)
+	}
+	log.Printf("[scheduler] instance %d: using host %q (%s:%d), image=%s, apiURL=%s, workspace_size_gb=%d",
+		instanceID, host.Name, host.Addr, host.SSHPort, image, apiURL, workspaceSizeGB)
 
-	// Create workspace directory (container runs as uid 1000)
-	ensureWorkspace := fmt.Sprintf(`export PATH=/usr/local/bin:/usr/bin:$PATH; mkdir -p /var/lib/anyclaw && \
-		WS="/var/lib/anyclaw/ws-%d" && mkdir -p "$WS" && chown -R 1000:1000 "$WS"`, instanceID)
+	// Create workspace: size>0 用 loop+ext4 限制存储，否则用普通目录
+	var ensureWorkspace string
+	if workspaceSizeGB > 0 {
+		ensureWorkspace = fmt.Sprintf(`export PATH=/usr/local/bin:/usr/bin:$PATH; \
+			mkdir -p /var/lib/anyclaw && \
+			WS="/var/lib/anyclaw/ws-%d" FILE="/var/lib/anyclaw/ws-%d.img" SIZE=%d && \
+			if [ ! -f "$FILE" ]; then truncate -s ${SIZE}G "$FILE" && mkfs.ext4 -F "$FILE"; fi && \
+			mkdir -p "$WS" && (mountpoint -q "$WS" || mount -o loop "$FILE" "$WS") && chown -R 1000:1000 "$WS"`,
+			instanceID, instanceID, workspaceSizeGB)
+	} else {
+		ensureWorkspace = fmt.Sprintf(`export PATH=/usr/local/bin:/usr/bin:$PATH; mkdir -p /var/lib/anyclaw && \
+			WS="/var/lib/anyclaw/ws-%d" && mkdir -p "$WS" && chown -R 1000:1000 "$WS"`, instanceID)
+	}
 	if _, err := runSSH(host, ensureWorkspace); err != nil {
 		log.Printf("[scheduler] ensure workspace on %s failed: %v", host.Addr, err)
 		return "", "", fmt.Errorf("ensure workspace: %w", err)
@@ -177,11 +191,12 @@ func (s *Scheduler) Stop(ctx context.Context, hostID, containerID string, instan
 			continue
 		}
 		log.Printf("[scheduler] container %s removed on host %s", rmTarget, host.ID)
-		// Remove workspace (plain dir or legacy loop mount)
+		// Remove workspace: 先 umount 固定卷（若有），再删目录和 .img 文件
 		if instanceID > 0 {
 			cleanup := fmt.Sprintf(`export PATH=/usr/local/bin:/usr/bin:$PATH; \
 				WS="/var/lib/anyclaw/ws-%d" FILE="/var/lib/anyclaw/ws-%d.img"; \
-				mountpoint -q "$WS" 2>/dev/null && umount "$WS"; rm -rf "$WS"; rm -f "$FILE"`, instanceID, instanceID)
+				(mountpoint -q "$WS" 2>/dev/null && umount "$WS") || true; \
+				rm -rf "$WS" || true; rm -f "$FILE" || true`, instanceID, instanceID)
 			if _, err := runSSH(host, cleanup); err != nil {
 				log.Printf("[scheduler] workspace cleanup on %s failed (non-fatal): %v", host.Addr, err)
 			}

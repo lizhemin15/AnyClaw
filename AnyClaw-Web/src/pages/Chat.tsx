@@ -328,7 +328,16 @@ export default function Chat() {
               </div>
             )}
             {messages.length === 0 && !typing && (
-              <p className="text-slate-400 text-sm py-12 text-center">打个招呼吧～</p>
+              <div className="py-8 px-4 text-center space-y-4">
+                <p className="text-slate-600 text-sm">打个招呼吧～</p>
+                <div className="text-left max-w-sm mx-auto p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500 space-y-2">
+                  <p className="font-medium text-slate-600">OpenClaw 与普通 AI 不同</p>
+                  <p>· 擅长复杂任务，会调用工具、查资料、执行操作</p>
+                  <p>· 拥有超长记忆，会记住你们的对话与约定</p>
+                  <p>· 每只宠物都有唯一的灵魂，会随相处而成长</p>
+                  <p>· 回答前会深入思考，请耐心等待～</p>
+                </div>
+              </div>
             )}
             <div className="space-y-3">
               {messages.map((m) => {

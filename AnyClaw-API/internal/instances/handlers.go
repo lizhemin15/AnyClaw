@@ -92,7 +92,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := "inst-" + uuid.New().String()
-	inst, err := h.db.CreateInstance(claims.UserID, name, token, 0, ec.DailyConsume)
+	inst, err := h.db.CreateInstance(claims.UserID, name, token, 0, 0)
 	if err != nil {
 		http.Error(w, `{"error":"failed to create instance"}`, http.StatusInternalServerError)
 		return
@@ -135,7 +135,6 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to save instance"}`, http.StatusInternalServerError)
 		return
 	}
-	_ = h.db.AddInstanceEnergy(inst.ID, ec.AdoptCost)
 	inst, _ = h.db.GetInstanceByID(inst.ID)
 	log.Printf("[instances] instance %d container started: %s on host %s", inst.ID, containerID, hostID)
 	w.Header().Set("Content-Type", "application/json")
@@ -233,48 +232,3 @@ func (h *Handler) AdminDelete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) Feed(w http.ResponseWriter, r *http.Request) {
-	claims := request.FromContext(r.Context())
-	if claims == nil {
-		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-		return
-	}
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		http.Error(w, `{"error":"invalid instance id"}`, http.StatusBadRequest)
-		return
-	}
-	var req struct {
-		Amount int `json:"amount"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Amount <= 0 {
-		http.Error(w, `{"error":"amount 必须为正整数"}`, http.StatusBadRequest)
-		return
-	}
-	if req.Amount > 1000 {
-		http.Error(w, `{"error":"单次喂养最多 1000 活力"}`, http.StatusBadRequest)
-		return
-	}
-	inst, err := h.db.GetInstanceByID(id)
-	if err != nil || inst == nil {
-		http.Error(w, `{"error":"宠物不存在"}`, http.StatusNotFound)
-		return
-	}
-	if inst.UserID != claims.UserID {
-		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
-		return
-	}
-	ok, err := h.db.DeductUserEnergy(claims.UserID, req.Amount)
-	if err != nil || !ok {
-		http.Error(w, `{"error":"金币不足"}`, http.StatusBadRequest)
-		return
-	}
-	if err := h.db.AddInstanceEnergy(id, req.Amount); err != nil {
-		_ = h.db.AddUserEnergy(claims.UserID, req.Amount)
-		http.Error(w, `{"error":"喂养失败"}`, http.StatusInternalServerError)
-		return
-	}
-	inst, _ = h.db.GetInstanceByID(id)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(inst)
-}

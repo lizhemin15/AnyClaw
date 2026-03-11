@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getInstances, createInstance, deleteInstance, feedInstance, getInviteCode, useInviteCode, type Instance, type User } from '../api'
+import { getInstances, createInstance, deleteInstance, getInviteCode, useInviteCode, type Instance, type User } from '../api'
 
 const ADOPT_COST = 100
-const MIN_VITALITY = 5
 
 export default function Home({ user, onRefresh }: { user: User | null; onRefresh?: () => void }) {
   const [instances, setInstances] = useState<Instance[]>([])
@@ -15,7 +14,6 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
   const [myCode, setMyCode] = useState('')
   const [showInvite, setShowInvite] = useState(false)
   const [deleting, setDeleting] = useState<number | null>(null)
-  const [feeding, setFeeding] = useState<number | null>(null)
 
   const navigate = useNavigate()
 
@@ -92,39 +90,6 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
     }
   }
 
-  const handleFeed = async (e: React.MouseEvent, inst: Instance) => {
-    e.stopPropagation()
-    const amount = 50
-    if ((user?.energy ?? 0) < amount) {
-      setError(`金币不足，喂养需要 ${amount} 金币`)
-      return
-    }
-    setFeeding(inst.id)
-    setError('')
-    try {
-      const updated = await feedInstance(inst.id, amount)
-      setInstances((prev) => prev.map((i) => (i.id === inst.id ? updated : i)))
-      onRefresh?.()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '喂养失败')
-    } finally {
-      setFeeding(null)
-    }
-  }
-
-  const vitalityBar = (v: number, max = 100) => {
-    const pct = Math.min(100, (v / max) * 100)
-    const low = v < MIN_VITALITY
-    return (
-      <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-        <div
-          className={`h-full transition-all ${low ? 'bg-red-500' : v < 30 ? 'bg-amber-500' : 'bg-green-500'}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    )
-  }
-
   return (
     <div className="max-w-2xl mx-auto">
       {/* 金币与邀请 - 移动端极简 */}
@@ -134,6 +99,12 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
           <span className="text-xl font-bold text-slate-800">🪙 {user?.energy ?? 0}</span>
         </div>
         <div className="flex gap-1.5 sm:gap-2">
+          <Link
+            to="/usage"
+            className="px-3 py-1.5 sm:px-4 sm:py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50"
+          >
+            消耗
+          </Link>
           <Link
             to="/recharge"
             className="px-3 py-1.5 sm:px-4 sm:py-2 text-sm font-medium bg-amber-500 text-amber-950 rounded-lg hover:bg-amber-400 active:bg-amber-600"
@@ -211,6 +182,7 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
       {/* 领养新宠物 */}
       <div className="mb-6">
         <h2 className="text-base sm:text-lg font-semibold text-slate-800 mb-2 sm:mb-3">领养 OpenClaw</h2>
+        <p className="text-sm text-slate-500 mb-3">每只宠物都有唯一的灵魂，擅长复杂任务、拥有超长记忆，回答会稍慢一些～</p>
         <form onSubmit={handleAdopt} className="flex flex-col sm:flex-row gap-3">
           <input
             type="text"
@@ -256,27 +228,8 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-slate-800 truncate">{inst.name}</p>
-                  <div className="mt-2">
-                    <div className="flex justify-between text-xs text-slate-500 mb-1">
-                      <span className="hidden sm:inline">活力</span>
-                      <span className={inst.energy < MIN_VITALITY ? 'text-red-600' : ''}>
-                        {inst.energy}
-                      </span>
-                    </div>
-                    {vitalityBar(inst.energy)}
-                  </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {inst.energy < 100 && (
-                    <button
-                      onClick={(e) => handleFeed(e, inst)}
-                      disabled={!!feeding || (user?.energy ?? 0) < 50}
-                      className="px-2 py-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg active:bg-amber-100 disabled:opacity-50"
-                      title="喂养 50 活力 (消耗 50 金币)"
-                    >
-                      {feeding === inst.id ? '喂养中...' : '喂养'}
-                    </button>
-                  )}
                   <span
                     className={`px-2.5 py-1 text-xs rounded-full ${
                       inst.status === 'running'
@@ -300,9 +253,6 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
                   </button>
                 </div>
               </div>
-              {inst.energy < MIN_VITALITY && inst.status === 'running' && (
-                <p className="mt-2 text-xs text-amber-600">活力不足，喂养后即可对话</p>
-              )}
             </div>
           ))}
         </div>

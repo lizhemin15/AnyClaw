@@ -106,15 +106,9 @@ func (h *Handler) RunDaily(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	if err := h.db.RunDailyConsume(); err != nil {
-		http.Error(w, `{"error":"failed"}`, http.StatusInternalServerError)
-		return
-	}
-	cfg, _ := config.Load(h.configPath)
-	days := config.GetEnergyConfig(cfg).ZeroDaysToDelete
-	n, _ := h.db.DeleteInstancesZeroOverDays(days)
+	// 已改为全部扣用户金币，不再对实例做每日扣费，也不再按零活力删除
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "deleted": n})
+	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "deleted": 0})
 }
 
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {

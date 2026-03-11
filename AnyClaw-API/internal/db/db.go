@@ -171,12 +171,16 @@ func (d *DB) migrate() error {
 		provider VARCHAR(128),
 		prompt_tokens INT NOT NULL DEFAULT 0,
 		completion_tokens INT NOT NULL DEFAULT 0,
+		coins_cost INT NOT NULL DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		INDEX idx_usage_instance (instance_id),
 		INDEX idx_usage_user (user_id),
 		INDEX idx_usage_created (created_at)
 	)`); err != nil {
 		log.Printf("[db] create usage_log: %v", err)
+	}
+	if _, err := d.Exec("ALTER TABLE usage_log ADD COLUMN coins_cost INT NOT NULL DEFAULT 0"); err != nil && !isDuplicateColumn(err) {
+		log.Printf("[db] alter usage_log coins_cost: %v", err)
 	}
 	// 管理配置存 DB，解决 Sealos/K8s 等 /data 不持久化导致配置丢失
 	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS system_config (

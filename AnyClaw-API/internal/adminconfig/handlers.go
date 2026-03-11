@@ -110,6 +110,11 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 		def := config.GetEnergyDefaults()
 		resp["energy"] = def
 	}
+	if cfg.Container != nil {
+		resp["container"] = cfg.Container
+	} else {
+		resp["container"] = map[string]any{"workspace_size_gb": 0}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -121,10 +126,11 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Channels []config.Channel      `json:"channels"`
-		SMTP     *config.SMTPConfig    `json:"smtp"`
-		Payment  *config.PaymentConfig `json:"payment"`
-		Energy   *config.EnergyConfig  `json:"energy"`
+		Channels  []config.Channel       `json:"channels"`
+		SMTP     *config.SMTPConfig     `json:"smtp"`
+		Payment  *config.PaymentConfig  `json:"payment"`
+		Energy   *config.EnergyConfig   `json:"energy"`
+		Container *config.ContainerConfig `json:"container"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
@@ -192,8 +198,15 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 	if energy == nil {
 		energy = cfg.Energy
 	}
+	container := req.Container
+	if container == nil {
+		container = cfg.Container
+	}
+	if container != nil && container.WorkspaceSizeGB < 0 {
+		container.WorkspaceSizeGB = 0
+	}
 	// 全部写入数据库，DB 为唯一数据源
-	dbPayload := map[string]any{"channels": channels, "smtp": smtp, "payment": payment, "energy": energy}
+	dbPayload := map[string]any{"channels": channels, "smtp": smtp, "payment": payment, "energy": energy, "container": container}
 	dbBytes, _ := json.Marshal(dbPayload)
 	if h.database == nil {
 		http.Error(w, `{"error":"database not configured"}`, http.StatusInternalServerError)

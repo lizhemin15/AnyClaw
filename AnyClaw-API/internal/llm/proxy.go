@@ -85,18 +85,25 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":{"message":"invalid token"}}`, http.StatusUnauthorized)
 		return
 	}
-
-	// Check and deduct energy for DB-backed instances
-	if p.db != nil {
-		cfg, _ := config.Load(p.configPath)
-		minEnergy := config.GetEnergyConfig(cfg).MinEnergyForTask
+	if userID == "" && p.db != nil {
 		instID, _ := strconv.ParseInt(instanceID, 10, 64)
-		inst, err := p.db.GetInstanceByID(instID)
-		if err == nil && inst != nil {
-			if inst.Energy < minEnergy {
-				http.Error(w, `{"error":{"message":"活力不足，无法完成对话（需至少 `+strconv.Itoa(minEnergy)+` 活力）"}}`, http.StatusPaymentRequired)
-				return
-			}
+		if inst, err := p.db.GetInstanceByID(instID); err == nil && inst != nil {
+			userID = strconv.FormatInt(inst.UserID, 10)
+		}
+	}
+
+	// 检查用户金币（对话消耗用户金币）
+	if p.db != nil && userID != "" {
+		cfg, _ := config.Load(p.configPath)
+		minCoins := config.GetEnergyConfig(cfg).MinEnergyForTask
+		if minCoins < 1 {
+			minCoins = 1
+		}
+		uid, _ := strconv.ParseInt(userID, 10, 64)
+		u, err := p.db.GetUserByID(uid)
+		if err == nil && u != nil && u.Energy < minCoins {
+			http.Error(w, `{"error":{"message":"金币不足，无法完成对话（需至少 `+strconv.Itoa(minCoins)+` 金币）"}}`, http.StatusPaymentRequired)
+			return
 		}
 	}
 
@@ -174,20 +181,24 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	if resp.StatusCode == http.StatusOK {
 		promptTokens, completionTokens := parseUsageFromResponse(respBody)
-		p.logUsage(instanceID, userID, model, apiBase, promptTokens, completionTokens)
-		// Deduct energy based on actual token consumption
-		if p.db != nil {
+		if p.db != nil && userID != "" {
 			cfg, _ := config.Load(p.configPath)
 			tokensPerEnergy := config.GetEnergyConfig(cfg).TokensPerEnergy
-			instID, _ := strconv.ParseInt(instanceID, 10, 64)
 			cost := energyFromTokens(promptTokens, completionTokens, tokensPerEnergy)
-			_, _ = p.db.DeductInstanceEnergy(instID, cost)
+			uid, _ := strconv.ParseInt(userID, 10, 64)
+			if ok, _ := p.db.DeductUserEnergy(uid, cost); ok {
+				p.logUsage(instanceID, userID, model, apiBase, promptTokens, completionTokens, cost)
+			} else {
+				p.logUsage(instanceID, userID, model, apiBase, promptTokens, completionTokens, 0)
+			}
+		} else {
+			p.logUsage(instanceID, userID, model, apiBase, promptTokens, completionTokens, 0)
 		}
 	}
 }
 
 
-func (p *Proxy) logUsage(instanceID, userID, model, provider string, promptTokens, completionTokens int) {
+func (p *Proxy) logUsage(instanceID, userID, model, provider string, promptTokens, completionTokens, coinsCost int) {
 	rec := UsageRecord{
 		InstanceID:       instanceID,
 		UserID:           userID,
@@ -196,9 +207,9 @@ func (p *Proxy) logUsage(instanceID, userID, model, provider string, promptToken
 		PromptTokens:     promptTokens,
 		CompletionTokens: completionTokens,
 	}
-	log.Printf("[usage] %+v", rec)
+	log.Printf("[usage] %+v coins_cost=%d", rec, coinsCost)
 	if p.db != nil {
-		_ = p.db.InsertUsage(instanceID, userID, model, provider, promptTokens, completionTokens)
+		_ = p.db.InsertUsage(instanceID, userID, model, provider, promptTokens, completionTokens, coinsCost)
 	}
 }
 

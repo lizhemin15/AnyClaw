@@ -18,6 +18,7 @@ import (
 	"github.com/anyclaw/anyclaw-api/internal/llm"
 	"github.com/anyclaw/anyclaw-api/internal/messages"
 	"github.com/anyclaw/anyclaw-api/internal/payment"
+	"github.com/anyclaw/anyclaw-api/internal/usage"
 	"github.com/anyclaw/anyclaw-api/internal/scheduler"
 	"github.com/anyclaw/anyclaw-api/internal/setup"
 	"github.com/anyclaw/anyclaw-api/internal/web"
@@ -101,6 +102,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	wsHub := ws.NewHub()
 	wsHandler := ws.NewHandler(database, wsHub)
 	msgHandler := messages.New(database)
+	usageHandler := usage.New(database)
 	energyHandler := energy.New(database, configPath)
 	paymentHandler := payment.New(configPath, database, apiURL)
 
@@ -135,6 +137,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	r.Route("/me", func(r chi.Router) {
 		r.Use(authSvc.Middleware)
 		r.Get("/", authSvc.HandleMe)
+		r.Get("/usage", usageHandler.ListMyUsage)
 	})
 
 	r.Route("/instances", func(r chi.Router) {
@@ -143,7 +146,6 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Post("/", instHandler.Create)
 		r.Get("/{id}/ws", wsHandler.HandleUserWS)
 		r.Get("/{id}/messages", msgHandler.List)
-		r.Post("/{id}/feed", instHandler.Feed)
 		r.Get("/{id}", instHandler.Get)
 		r.Delete("/{id}", instHandler.Delete)
 	})
