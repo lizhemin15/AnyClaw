@@ -85,6 +85,30 @@ func (d *DB) CountInstancesByUserID(userID int64) (int, error) {
 	return n, err
 }
 
+func (d *DB) ListRunningInstances() ([]*Instance, error) {
+	rows, err := d.Query(
+		`SELECT id, user_id, name, status, COALESCE(energy,100), COALESCE(daily_consume,10), zero_energy_since,
+		 COALESCE(container_id,''), COALESCE(host_id,''), token, created_at FROM instances WHERE status = 'running'`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []*Instance
+	for rows.Next() {
+		var i Instance
+		var zeroSince sql.NullString
+		if err := rows.Scan(&i.ID, &i.UserID, &i.Name, &i.Status, &i.Energy, &i.DailyConsume, &zeroSince, &i.ContainerID, &i.HostID, &i.Token, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		if zeroSince.Valid {
+			i.ZeroEnergySince = &zeroSince.String
+		}
+		list = append(list, &i)
+	}
+	return list, nil
+}
+
 // AdminInstance 管理员查看的实例，含用户邮箱和宿主机名
 type AdminInstance struct {
 	Instance

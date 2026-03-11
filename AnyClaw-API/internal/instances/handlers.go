@@ -99,6 +99,14 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("[instances] creating instance id=%d name=%q, waiting for container", inst.ID, name)
 	apiURL := h.resolveAPIURL(r)
+	if apiURL == "" {
+		if cfg, _ := config.Load(h.configPath); cfg != nil && cfg.APIURL != "" {
+			apiURL = strings.TrimSpace(cfg.APIURL)
+		}
+	}
+	if apiURL == "" {
+		apiURL = h.apiURL
+	}
 	containerID, hostID, err := h.scheduler.Run(context.Background(), inst.ID, token, apiURL)
 	if err != nil {
 		log.Printf("[instances] scheduler.Run failed for instance %d: %v", inst.ID, err)
@@ -235,6 +243,45 @@ func (h *Handler) AdminList(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(list)
+}
+
+func (h *Handler) AdminReconnect(w http.ResponseWriter, r *http.Request) {
+	claims := request.FromContext(r.Context())
+	if claims == nil || claims.Role != "admin" {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	list, err := h.db.ListRunningInstances()
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	cfg, _ := config.Load(h.configPath)
+	apiURL := strings.TrimSpace(cfg.APIURL)
+	if apiURL == "" {
+		apiURL = h.apiURL
+	}
+	if apiURL == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "message": "请先在 AI 配置中设置 API 地址"})
+		return
+	}
+	reconnected := 0
+	for _, inst := range list {
+		if err := h.scheduler.Stop(r.Context(), inst.HostID, inst.ContainerID, inst.ID); err != nil {
+			log.Printf("[instances] reconnect: stop instance %d failed: %v", inst.ID, err)
+			continue
+		}
+		containerID, hostID, err := h.scheduler.Run(r.Context(), inst.ID, inst.Token, apiURL)
+		if err != nil {
+			log.Printf("[instances] reconnect: run instance %d failed: %v", inst.ID, err)
+			continue
+		}
+		_ = h.db.UpdateInstanceContainer(inst.ID, containerID, hostID)
+		reconnected++
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "message": "已重新连接", "reconnected": reconnected})
 }
 
 func (h *Handler) AdminDelete(w http.ResponseWriter, r *http.Request) {

@@ -201,6 +201,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	r.Route("/admin/instances", func(r chi.Router) {
 		r.Use(authSvc.AdminMiddleware)
 		r.Get("/", instHandler.AdminList)
+		r.Post("/reconnect", instHandler.AdminReconnect)
 		r.Delete("/{id}", instHandler.AdminDelete)
 	})
 

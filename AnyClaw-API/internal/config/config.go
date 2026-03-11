@@ -275,11 +275,12 @@ func Load(path string) (*Config, error) {
 	if LoadFromDB != nil {
 		if b, err := LoadFromDB(); err == nil && len(b) > 0 {
 			var dbCfg struct {
-				Channels  []Channel          `json:"channels"`
-				SMTP     *SMTPConfig        `json:"smtp"`
-				Payment  *PaymentConfig     `json:"payment"`
-				Energy   *EnergyConfig      `json:"energy"`
-				Container *ContainerConfig `json:"container"`
+				Channels   []Channel          `json:"channels"`
+				SMTP       *SMTPConfig        `json:"smtp"`
+				Payment    *PaymentConfig     `json:"payment"`
+				Energy     *EnergyConfig      `json:"energy"`
+				Container  *ContainerConfig   `json:"container"`
+				APIURL     string             `json:"api_url"`
 			}
 			if json.Unmarshal(b, &dbCfg) == nil {
 				if len(dbCfg.Channels) > 0 {
@@ -296,6 +297,9 @@ func Load(path string) (*Config, error) {
 				}
 				if dbCfg.Container != nil {
 					cfg.Container = dbCfg.Container
+				}
+				if dbCfg.APIURL != "" {
+					cfg.APIURL = strings.TrimSpace(dbCfg.APIURL)
 				}
 			}
 		}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getAdminConfig, putAdminConfig, testChannelConfig, testSMTPConfig, type AdminConfig, type Channel, type SMTPConfig, type PaymentConfig, type PaymentPlan, type YungouosChannel, type EnergyConfig, type ContainerConfig } from '../api'
+import { getAdminConfig, putAdminConfig, testChannelConfig, testSMTPConfig, adminReconnectInstances, type AdminConfig, type Channel, type SMTPConfig, type PaymentConfig, type PaymentPlan, type YungouosChannel, type EnergyConfig, type ContainerConfig } from '../api'
 import { useUnsavedConfig } from '../contexts/UnsavedConfigContext'
 
 function genId() {
@@ -62,6 +62,8 @@ export default function AdminConfig() {
   const [newTestResult, setNewTestResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [testingSMTP, setTestingSMTP] = useState(false)
   const [smtpTestResult, setSmtpTestResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [reconnecting, setReconnecting] = useState(false)
+  const [reconnectResult, setReconnectResult] = useState<{ ok: boolean; message: string; reconnected?: number } | null>(null)
 
   const unsavedCtx = useUnsavedConfig()
   const hasUnsaved = !!(form && config && JSON.stringify(form) !== JSON.stringify(config))
@@ -131,8 +133,9 @@ export default function AdminConfig() {
           ? { ...c.energy }
           : { tokens_per_energy: 1000, adopt_cost: 100, daily_consume: 10, min_energy_for_task: 5, zero_days_to_delete: 3, invite_reward: 50, new_user_energy: 100, invite_commission_rate: 5 }
         const container: ContainerConfig = c.container ? { ...c.container } : { workspace_size_gb: 0 }
-        setConfig({ channels, smtp, payment, energy, container })
-        setForm({ channels: JSON.parse(JSON.stringify(channels)), smtp, payment: JSON.parse(JSON.stringify(payment)), energy: { ...energy }, container: { ...container } })
+        const api_url = (c as { api_url?: string }).api_url ?? ''
+        setConfig({ channels, smtp, payment, energy, container, api_url })
+        setForm({ channels: JSON.parse(JSON.stringify(channels)), smtp, payment: JSON.parse(JSON.stringify(payment)), energy: { ...energy }, container: { ...container }, api_url })
       })
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
       .finally(() => setLoading(false))
@@ -494,6 +497,53 @@ export default function AdminConfig() {
                 />
                 <p className="text-xs text-slate-500 mt-0.5">受邀用户充值时邀请人获得 %</p>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 部署配置 - API 地址与迁移 */}
+        <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200">
+            <h2 className="font-semibold text-slate-800">部署配置</h2>
+            <p className="text-sm text-slate-500 mt-1">API 地址供宠物容器连接，迁移域名后需更新并重新连接</p>
+          </div>
+          <div className="px-5 py-4 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">API 地址</label>
+              <input
+                type="url"
+                value={form?.api_url ?? ''}
+                onChange={(e) => setForm((f) => (f ? { ...f, api_url: e.target.value } : f))}
+                placeholder="https://your-domain.com"
+                className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
+              />
+              <p className="text-xs text-slate-500 mt-1">迁移后在此更新新地址，保存后点击「重新连接实例」</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  setReconnecting(true)
+                  setReconnectResult(null)
+                  try {
+                    const res = await adminReconnectInstances()
+                    setReconnectResult(res)
+                  } catch (err) {
+                    setReconnectResult({ ok: false, message: err instanceof Error ? err.message : '操作失败' })
+                  } finally {
+                    setReconnecting(false)
+                  }
+                }}
+                disabled={reconnecting}
+                className="px-4 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
+              >
+                {reconnecting ? '重新连接中...' : '重新连接实例'}
+              </button>
+              {reconnectResult && (
+                <span className={`text-sm ${reconnectResult.ok ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {reconnectResult.ok ? `✓ ${reconnectResult.message}（${reconnectResult.reconnected ?? 0} 个）` : `✗ ${reconnectResult.message}`}
+                </span>
+              )}
             </div>
           </div>
         </div>

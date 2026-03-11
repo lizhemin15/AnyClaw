@@ -379,6 +379,7 @@ export interface AdminConfig {
   payment?: PaymentConfig;
   energy?: EnergyConfig;
   container?: ContainerConfig;
+  api_url?: string;
 }
 
 export async function getAdminConfig(): Promise<AdminConfig> {
@@ -441,6 +442,12 @@ export async function getAdminStats(days?: number): Promise<AdminStats> {
 
 export async function resetAdminDb(): Promise<void> {
   await fetchApi<{ status: string }>('/admin/db/reset', { method: 'POST' });
+}
+
+export async function adminReconnectInstances(): Promise<{ ok: boolean; message: string; reconnected?: number }> {
+  return fetchApi<{ ok: boolean; message: string; reconnected?: number }>('/admin/instances/reconnect', {
+    method: 'POST',
+  });
 }
 
 export async function adminRechargeUser(userId: number, amount: number): Promise<void> {
