@@ -193,6 +193,7 @@ export interface Host {
   ssh_user: string;
   docker_image?: string;
   enabled: boolean;
+  instance_capacity?: number;
   status: string;
   last_check_at?: string;
   created_at: string;
@@ -212,6 +213,7 @@ export interface CreateHostRequest {
   ssh_password?: string;
   docker_image?: string;
   enabled?: boolean;
+  instance_capacity?: number;
 }
 
 export interface UpdateHostRequest {
@@ -223,6 +225,7 @@ export interface UpdateHostRequest {
   ssh_password?: string;
   docker_image?: string;
   enabled?: boolean;
+  instance_capacity?: number;
 }
 
 export async function createHost(data: CreateHostRequest): Promise<Host> {
@@ -237,6 +240,7 @@ export async function createHost(data: CreateHostRequest): Promise<Host> {
       ssh_password: data.ssh_password || '',
       docker_image: data.docker_image || '',
       enabled: data.enabled ?? true,
+      instance_capacity: data.instance_capacity ?? 0,
     }),
   });
 }
@@ -253,8 +257,13 @@ export async function updateHost(id: string, data: UpdateHostRequest): Promise<H
       ssh_password: data.ssh_password || '',
       docker_image: data.docker_image || '',
       enabled: data.enabled ?? true,
+      instance_capacity: data.instance_capacity ?? 0,
     }),
   });
+}
+
+export async function drainHost(id: string): Promise<{ ok: boolean; message: string; migrated: number; failed: number }> {
+  return fetchApi(`/admin/hosts/${id}/drain`, { method: 'POST' });
 }
 
 export async function deleteHost(id: string): Promise<void> {
@@ -265,18 +274,20 @@ export async function checkHostStatus(id: string): Promise<{ status: string }> {
   return fetchApi<{ status: string }>(`/admin/hosts/${id}/check`, { method: 'POST' });
 }
 
-export async function getHostUpdateStatus(id: string): Promise<{
+export async function getHostInstanceImageStatus(id: string): Promise<{
   update_available: boolean;
-  script_exists: boolean;
+  image: string;
   current_digest?: string;
   latest_digest?: string;
+  instance_count: number;
+  instance_ids?: number[];
   message?: string;
 }> {
-  return fetchApi(`/admin/hosts/${id}/update-status`);
+  return fetchApi(`/admin/hosts/${id}/instance-image-status`);
 }
 
-export async function updateHostMainService(id: string): Promise<{ ok: boolean; message: string; output?: string }> {
-  return fetchApi<{ ok: boolean; message: string; output?: string }>(`/admin/hosts/${id}/update`, { method: 'POST' });
+export async function pullAndRestartInstances(id: string): Promise<{ ok: boolean; message: string; failed_ids?: number[] }> {
+  return fetchApi<{ ok: boolean; message: string; failed_ids?: number[] }>(`/admin/hosts/${id}/pull-and-restart-instances`, { method: 'POST' });
 }
 
 export interface AdminInstance {
@@ -300,6 +311,13 @@ export async function getAdminInstances(): Promise<AdminInstance[]> {
 
 export async function adminDeleteInstance(id: number): Promise<void> {
   await fetchApi(`/admin/instances/${id}`, { method: 'DELETE' });
+}
+
+export async function adminMigrateInstance(id: number, targetHostId: string): Promise<{ ok: boolean; message: string; host_id?: string }> {
+  return fetchApi<{ ok: boolean; message: string; host_id?: string }>(`/admin/instances/${id}/migrate`, {
+    method: 'POST',
+    body: JSON.stringify({ target_host_id: targetHostId }),
+  });
 }
 
 export interface UserWithInstances extends User {

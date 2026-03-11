@@ -6,10 +6,12 @@ import {
   updateHost,
   deleteHost,
   checkHostStatus,
-  getHostUpdateStatus,
-  updateHostMainService,
+  getHostInstanceImageStatus,
+  pullAndRestartInstances,
+  drainHost,
   getAdminInstances,
   adminDeleteInstance,
+  adminMigrateInstance,
   type Host,
   type CreateHostRequest,
   type AdminInstance,
@@ -30,14 +32,18 @@ export default function Hosts() {
     ssh_password: '',
     docker_image: '',
     enabled: true,
+    instance_capacity: 0,
   })
   const [submitting, setSubmitting] = useState(false)
   const [checking, setChecking] = useState<string | null>(null)
-  const [updating, setUpdating] = useState<string | null>(null)
-  const [updateStatus, setUpdateStatus] = useState<Record<string, { update_available: boolean; script_exists: boolean; message?: string }>>({})
+  const [instanceImageStatus, setInstanceImageStatus] = useState<Record<string, { update_available: boolean; image: string; instance_count: number; message?: string }>>({})
+  const [pullingInstances, setPullingInstances] = useState<string | null>(null)
+  const [draining, setDraining] = useState<string | null>(null)
   const [instances, setInstances] = useState<AdminInstance[]>([])
   const [instancesLoading, setInstancesLoading] = useState(true)
   const [deletingInst, setDeletingInst] = useState<number | null>(null)
+  const [migratingInst, setMigratingInst] = useState<number | null>(null)
+  const [migrateModal, setMigrateModal] = useState<AdminInstance | null>(null)
 
   const loadHosts = () => {
     setLoading(true)
@@ -60,29 +66,30 @@ export default function Hosts() {
     loadInstances()
   }, [])
 
-  const checkUpdateStatus = useCallback(async (id: string) => {
+  const checkInstanceImageStatus = useCallback(async (id: string) => {
     try {
-      const res = await getHostUpdateStatus(id)
-      setUpdateStatus((prev) => ({
+      const res = await getHostInstanceImageStatus(id)
+      setInstanceImageStatus((prev) => ({
         ...prev,
         [id]: {
           update_available: res.update_available,
-          script_exists: res.script_exists,
+          image: res.image,
+          instance_count: res.instance_count,
           message: res.message,
         },
       }))
     } catch {
-      setUpdateStatus((prev) => ({ ...prev, [id]: { update_available: false, script_exists: false } }))
+      setInstanceImageStatus((prev) => ({ ...prev, [id]: { update_available: false, image: '', instance_count: 0 } }))
     }
   }, [])
 
   useEffect(() => {
     hosts.filter((h) => h.enabled).forEach((h) => {
-      if (updateStatus[h.id] === undefined) {
-        checkUpdateStatus(h.id)
+      if (instanceImageStatus[h.id] === undefined) {
+        checkInstanceImageStatus(h.id)
       }
     })
-  }, [hosts, updateStatus, checkUpdateStatus])
+  }, [hosts, instanceImageStatus, checkInstanceImageStatus])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -109,7 +116,7 @@ export default function Hosts() {
       }
       setModal(null)
       setEditing(null)
-      setForm({ name: '', addr: '', ssh_port: 22, ssh_user: '', ssh_key: '', ssh_password: '', docker_image: '', enabled: true })
+      setForm({ name: '', addr: '', ssh_port: 22, ssh_user: '', ssh_key: '', ssh_password: '', docker_image: '', enabled: true, instance_capacity: 0 })
       loadHosts()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save')
@@ -123,7 +130,7 @@ export default function Hosts() {
     try {
       const { status } = await checkHostStatus(id)
       setHosts((prev) => prev.map((h) => (h.id === id ? { ...h, status } : h)))
-      checkUpdateStatus(id)
+      checkInstanceImageStatus(id)
     } catch {
       setHosts((prev) => prev.map((h) => (h.id === id ? { ...h, status: 'error' } : h)))
     } finally {
@@ -131,23 +138,55 @@ export default function Hosts() {
     }
   }
 
-  const handleUpdateMain = async (h: Host) => {
-    if (!confirm(`确定在「${h.name}」上执行更新主服务？将运行 /opt/anyclaw/update.sh`)) return
-    setUpdating(h.id)
+  const handleDrain = async (h: Host) => {
+    const count = instanceImageStatus[h.id]?.instance_count ?? 0
+    if (count === 0) {
+      alert('该主机无运行中实例')
+      return
+    }
+    if (!confirm(`确定排空「${h.name}」？将把 ${count} 个实例迁移到其他主机。`)) return
+    setDraining(h.id)
     setError('')
     try {
-      const res = await updateHostMainService(h.id)
+      const res = await drainHost(h.id)
+      if (res.ok) {
+        alert(res.message)
+        checkInstanceImageStatus(h.id)
+        loadInstances()
+        loadHosts()
+      } else {
+        setError(res.message || '排空失败')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '排空失败')
+    } finally {
+      setDraining(null)
+    }
+  }
+
+  const handlePullAndRestartInstances = async (h: Host) => {
+    const imgStatus = instanceImageStatus[h.id]
+    const count = imgStatus?.instance_count ?? 0
+    const msg = count > 0
+      ? `确定在「${h.name}」上拉取最新实例镜像并重启 ${count} 个实例？`
+      : `确定在「${h.name}」上拉取最新实例镜像？（该主机暂无运行中的实例）`
+    if (!confirm(msg)) return
+    setPullingInstances(h.id)
+    setError('')
+    try {
+      const res = await pullAndRestartInstances(h.id)
       if (res.ok) {
         setError('')
-        alert(res.output ? `更新已执行：\n${res.output}` : res.message)
-        checkUpdateStatus(h.id)
+        alert(res.message)
+        checkInstanceImageStatus(h.id)
+        loadInstances()
       } else {
-        setError(res.output ? `${res.message}\n${res.output}` : res.message)
+        setError(res.failed_ids?.length ? `${res.message}，失败 ID: ${res.failed_ids.join(', ')}` : res.message)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '更新失败')
     } finally {
-      setUpdating(null)
+      setPullingInstances(null)
     }
   }
 
@@ -174,6 +213,26 @@ export default function Hosts() {
     }
   }
 
+  const handleMigrateInstance = async (inst: AdminInstance, targetHostId: string) => {
+    if (!targetHostId || targetHostId === inst.host_id) return
+    setMigratingInst(inst.id)
+    setError('')
+    try {
+      const res = await adminMigrateInstance(inst.id, targetHostId)
+      if (res.ok) {
+        setMigrateModal(null)
+        loadInstances()
+        loadHosts()
+      } else {
+        setError(res.message || '迁移失败')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '迁移失败')
+    } finally {
+      setMigratingInst(null)
+    }
+  }
+
   const openEdit = (h: Host) => {
     setEditing(h)
     setForm({
@@ -185,6 +244,7 @@ export default function Hosts() {
       ssh_password: '',
       docker_image: h.docker_image || '',
       enabled: h.enabled,
+      instance_capacity: h.instance_capacity ?? 0,
     })
     setModal('edit')
   }
@@ -200,7 +260,7 @@ export default function Hosts() {
           onClick={() => {
             setModal('add')
             setEditing(null)
-            setForm({ name: '', addr: '', ssh_port: 22, ssh_user: '', ssh_key: '', ssh_password: '', docker_image: '', enabled: true })
+            setForm({ name: '', addr: '', ssh_port: 22, ssh_user: '', ssh_key: '', ssh_password: '', docker_image: '', enabled: true, instance_capacity: 0 })
           }}
           className="w-full sm:w-auto px-6 py-3 bg-slate-800 text-white rounded-xl active:bg-slate-700 min-h-[48px] touch-target"
         >
@@ -232,6 +292,9 @@ export default function Hosts() {
                 <p className="text-sm text-slate-500 mt-1 truncate">
                   {h.ssh_user}@{h.addr}:{h.ssh_port}
                   {h.docker_image && ` · ${h.docker_image}`}
+                  {(instanceImageStatus[h.id]?.instance_count ?? 0) > 0 && (
+                    <span className="ml-1 text-emerald-600">· {(instanceImageStatus[h.id]?.instance_count ?? 0)} 实例</span>
+                  )}
                 </p>
               </div>
               <div className="flex gap-2 flex-shrink-0 flex-wrap">
@@ -243,25 +306,34 @@ export default function Hosts() {
                   {checking === h.id ? '检测中...' : '检测'}
                 </button>
                 <button
-                  onClick={() => handleUpdateMain(h)}
+                  onClick={() => handleDrain(h)}
+                  disabled={!!draining || !!pullingInstances || (instanceImageStatus[h.id]?.instance_count ?? 0) === 0}
+                  title="将该主机上所有实例迁移到其他主机"
+                  className="flex-1 sm:flex-none px-4 py-2 text-sm border border-amber-300 text-amber-700 rounded-lg active:bg-amber-50 disabled:opacity-50 min-h-[44px]"
+                >
+                  {draining === h.id ? '排空中...' : '排空'}
+                </button>
+                <button
+                  onClick={() => handlePullAndRestartInstances(h)}
                   disabled={
-                    !!updating ||
-                    (updateStatus[h.id] && !updateStatus[h.id].script_exists) ||
-                    (updateStatus[h.id] && !updateStatus[h.id].update_available)
+                    !!pullingInstances ||
+                    (instanceImageStatus[h.id] && !instanceImageStatus[h.id].update_available)
                   }
                   title={
-                    updateStatus[h.id]?.message ||
-                    (updateStatus[h.id] && !updateStatus[h.id].update_available ? '当前已是最新版本' : undefined)
+                    instanceImageStatus[h.id]?.message ||
+                    (instanceImageStatus[h.id] && !instanceImageStatus[h.id].update_available
+                      ? `实例镜像已是最新 (${instanceImageStatus[h.id]?.image || ''})`
+                      : `拉取 ${instanceImageStatus[h.id]?.image || ''} 并重启该主机上 ${instanceImageStatus[h.id]?.instance_count ?? 0} 个实例`)
                   }
-                  className="flex-1 sm:flex-none px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg active:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+                  className="flex-1 sm:flex-none px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg active:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
                 >
-                  {updating === h.id
-                    ? '执行中...'
-                    : updateStatus[h.id] === undefined
+                  {pullingInstances === h.id
+                    ? '拉取中...'
+                    : instanceImageStatus[h.id] === undefined
                       ? '检查中...'
-                      : updateStatus[h.id].update_available
-                        ? '更新主服务'
-                        : '已是最新'}
+                      : instanceImageStatus[h.id].update_available
+                        ? `更新实例 (${instanceImageStatus[h.id].instance_count})`
+                        : '实例已最新'}
                 </button>
                 <button
                   onClick={() => openEdit(h)}
@@ -313,6 +385,15 @@ export default function Hosts() {
                   >
                     打开
                   </Link>
+                  {inst.status === 'running' && inst.host_id && hosts.filter((h) => h.enabled && h.id !== inst.host_id).length > 0 && (
+                    <button
+                      onClick={() => setMigrateModal(inst)}
+                      disabled={!!migratingInst}
+                      className="px-4 py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50 disabled:opacity-50 min-h-[44px]"
+                    >
+                      迁移
+                    </button>
+                  )}
                   <button
                     onClick={() => handleDeleteInstance(inst)}
                     disabled={deletingInst === inst.id}
@@ -326,6 +407,31 @@ export default function Hosts() {
           </div>
         )}
       </div>
+
+      {migrateModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => !migratingInst && setMigrateModal(null)}>
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl p-6 max-w-md w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold mb-4">迁移实例 #{migrateModal.id} {migrateModal.name}</h2>
+            <p className="text-sm text-slate-500 mb-4">选择目标宿主机，将复制工作区并重启容器</p>
+            <div className="space-y-2 mb-4">
+              {hosts.filter((h) => h.enabled && h.id !== migrateModal.host_id).map((h) => (
+                <button
+                  key={h.id}
+                  onClick={() => handleMigrateInstance(migrateModal, h.id)}
+                  disabled={!!migratingInst}
+                  className="w-full px-4 py-3 text-left border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-50 flex items-center justify-between"
+                >
+                  <span>{h.name}</span>
+                  <span className="text-slate-500 text-sm">{(instanceImageStatus[h.id]?.instance_count ?? 0)} 实例</span>
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={() => setMigrateModal(null)} className="w-full py-3 border border-slate-300 rounded-xl active:bg-slate-50">
+              取消
+            </button>
+          </div>
+        </div>
+      )}
 
       {modal && (
         <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => setModal(null)}>
@@ -406,6 +512,16 @@ export default function Hosts() {
                   onChange={(e) => setForm((f) => ({ ...f, docker_image: e.target.value }))}
                   className="w-full px-4 py-3 border border-slate-300 rounded-xl"
                   placeholder="openclaw/openclaw"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">实例容量上限（0=不限）</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={form.instance_capacity ?? 0}
+                  onChange={(e) => setForm((f) => ({ ...f, instance_capacity: parseInt(e.target.value) || 0 }))}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl"
                 />
               </div>
               <div className="flex items-center gap-3 min-h-[44px]">

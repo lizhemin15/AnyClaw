@@ -172,9 +172,18 @@ func (c *Config) GetEnabledModel() string {
 	return ""
 }
 
-// FindChannelForModel 返回能提供该模型的已启用渠道
-func (c *Config) FindChannelForModel(model string) (apiBase, apiKey string) {
+// ChannelEndpoint 渠道端点，用于调度
+type ChannelEndpoint struct {
+	ChannelID string
+	APIBase   string
+	APIKey    string
+}
+
+// FindChannelsForModel 返回能提供该模型的所有已启用渠道（用于负载均衡）
+func (c *Config) FindChannelsForModel(model string) []ChannelEndpoint {
 	model = strings.ToLower(strings.TrimSpace(model))
+	var out []ChannelEndpoint
+	seen := make(map[string]bool)
 	for _, ch := range c.Channels {
 		if !ch.Enabled || ch.APIKey == "" {
 			continue
@@ -185,9 +194,17 @@ func (c *Config) FindChannelForModel(model string) (apiBase, apiKey string) {
 				if base == "" {
 					base = "https://api.openai.com/v1"
 				}
-				return strings.TrimSuffix(base, "/"), ch.APIKey
+				key := ch.ID + "|" + base
+				if !seen[key] {
+					seen[key] = true
+					out = append(out, ChannelEndpoint{ChannelID: ch.ID, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey})
+				}
+				break
 			}
 		}
+	}
+	if len(out) > 0 {
+		return out
 	}
 	for _, ch := range c.Channels {
 		if !ch.Enabled || ch.APIKey == "" {
@@ -199,11 +216,22 @@ func (c *Config) FindChannelForModel(model string) (apiBase, apiKey string) {
 		}
 		chLower := strings.ToLower(ch.Name)
 		if (strings.Contains(model, "gpt") || strings.Contains(model, "openai")) && (strings.Contains(chLower, "openai") || strings.Contains(chLower, "openrouter")) {
-			return strings.TrimSuffix(base, "/"), ch.APIKey
+			key := ch.ID + "|" + base
+			if !seen[key] {
+				seen[key] = true
+				out = append(out, ChannelEndpoint{ChannelID: ch.ID, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey})
+			}
 		}
 		if strings.Contains(model, "claude") && strings.Contains(chLower, "anthropic") {
-			return strings.TrimSuffix(base, "/"), ch.APIKey
+			key := ch.ID + "|" + base
+			if !seen[key] {
+				seen[key] = true
+				out = append(out, ChannelEndpoint{ChannelID: ch.ID, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey})
+			}
 		}
+	}
+	if len(out) > 0 {
+		return out
 	}
 	for _, ch := range c.Channels {
 		if ch.Enabled && ch.APIKey != "" && len(ch.Models) > 0 {
@@ -211,10 +239,23 @@ func (c *Config) FindChannelForModel(model string) (apiBase, apiKey string) {
 			if base == "" {
 				base = "https://api.openai.com/v1"
 			}
-			return strings.TrimSuffix(base, "/"), ch.APIKey
+			key := ch.ID + "|" + base
+			if !seen[key] {
+				seen[key] = true
+				out = append(out, ChannelEndpoint{ChannelID: ch.ID, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey})
+			}
 		}
 	}
-	return "", ""
+	return out
+}
+
+// FindChannelForModel 返回能提供该模型的已启用渠道（兼容旧逻辑，取第一个）
+func (c *Config) FindChannelForModel(model string) (apiBase, apiKey string) {
+	list := c.FindChannelsForModel(model)
+	if len(list) == 0 {
+		return "", ""
+	}
+	return list[0].APIBase, list[0].APIKey
 }
 
 type KeyPool struct {

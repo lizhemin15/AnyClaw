@@ -95,6 +95,9 @@ func (d *DB) migrate() error {
 	if _, err := d.Exec("ALTER TABLE hosts ADD COLUMN ssh_password TEXT"); err != nil && !isDuplicateColumn(err) {
 		log.Printf("[db] alter hosts: %v", err)
 	}
+	if _, err := d.Exec("ALTER TABLE hosts ADD COLUMN instance_capacity INT NOT NULL DEFAULT 0"); err != nil && !isDuplicateColumn(err) {
+		log.Printf("[db] alter hosts instance_capacity: %v", err)
+	}
 	// Energy system
 	if _, err := d.Exec("ALTER TABLE users ADD COLUMN energy INT NOT NULL DEFAULT 100"); err != nil && !isDuplicateColumn(err) {
 		log.Printf("[db] alter users: %v", err)

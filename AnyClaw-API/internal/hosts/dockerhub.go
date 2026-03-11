@@ -9,10 +9,6 @@ import (
 	"time"
 )
 
-const (
-	defaultMainImage = "jamlily/anyclaw-manager:latest"
-)
-
 var httpClient = &http.Client{Timeout: 15 * time.Second}
 
 // getDockerHubToken 获取 Docker Hub 拉取 token（公开镜像无需认证）

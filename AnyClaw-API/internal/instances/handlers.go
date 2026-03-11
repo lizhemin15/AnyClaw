@@ -284,6 +284,68 @@ func (h *Handler) AdminReconnect(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"ok": true, "message": "已重新连接", "reconnected": reconnected})
 }
 
+func (h *Handler) AdminMigrate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	claims := request.FromContext(r.Context())
+	if claims == nil || claims.Role != "admin" {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, `{"error":"invalid instance id"}`, http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		TargetHostID string `json:"target_host_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	req.TargetHostID = strings.TrimSpace(req.TargetHostID)
+	if req.TargetHostID == "" {
+		http.Error(w, `{"error":"target_host_id required"}`, http.StatusBadRequest)
+		return
+	}
+	inst, err := h.db.GetInstanceByID(id)
+	if err != nil || inst == nil {
+		http.Error(w, `{"error":"instance not found"}`, http.StatusNotFound)
+		return
+	}
+	if inst.Status != "running" {
+		http.Error(w, `{"error":"instance must be running to migrate"}`, http.StatusBadRequest)
+		return
+	}
+	if inst.HostID == "" {
+		http.Error(w, `{"error":"instance has no host"}`, http.StatusBadRequest)
+		return
+	}
+	cfg, _ := config.Load(h.configPath)
+	apiURL := strings.TrimSpace(cfg.APIURL)
+	if apiURL == "" {
+		apiURL = h.apiURL
+	}
+	cid, newHostID, err := h.scheduler.MigrateWithInstance(r.Context(), inst, req.TargetHostID, apiURL)
+	if err != nil {
+		log.Printf("[instances] migrate %d failed: %v", id, err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "迁移失败: " + err.Error()})
+		return
+	}
+	if err := h.db.UpdateInstanceContainer(id, cid, newHostID); err != nil {
+		log.Printf("[instances] migrate %d: update container failed: %v", id, err)
+		http.Error(w, `{"error":"迁移成功但更新失败"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "message": "迁移完成", "host_id": newHostID})
+}
+
 func (h *Handler) AdminDelete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

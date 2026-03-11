@@ -116,6 +116,49 @@ type AdminInstance struct {
 	HostName  string `json:"host_name"`
 }
 
+// CountRunningInstancesByHostID 返回指定宿主机上运行中的实例数量
+func (d *DB) CountRunningInstancesByHostID(hostID string) (int, error) {
+	if hostID == "" {
+		return 0, nil
+	}
+	var n int
+	err := d.QueryRow("SELECT COUNT(*) FROM instances WHERE host_id = ? AND status = 'running'", hostID).Scan(&n)
+	return n, err
+}
+
+// ListRunningInstancesByHostID 返回指定宿主机上运行中的实例
+func (d *DB) ListRunningInstancesByHostID(hostID string) ([]*Instance, error) {
+	if hostID == "" {
+		return nil, nil
+	}
+	rows, err := d.Query(
+		`SELECT i.id, i.user_id, i.name, i.status, COALESCE(i.energy,100), COALESCE(i.daily_consume,10), i.zero_energy_since,
+		 COALESCE(i.container_id,''), COALESCE(i.host_id,''), i.token, i.created_at,
+		 0 as unread
+		 FROM instances i
+		 WHERE i.host_id = ? AND i.status = 'running'`,
+		hostID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []*Instance
+	for rows.Next() {
+		var i Instance
+		var zeroSince sql.NullString
+		if err := rows.Scan(&i.ID, &i.UserID, &i.Name, &i.Status, &i.Energy, &i.DailyConsume, &zeroSince,
+			&i.ContainerID, &i.HostID, &i.Token, &i.CreatedAt, &i.Unread); err != nil {
+			return nil, err
+		}
+		if zeroSince.Valid {
+			i.ZeroEnergySince = &zeroSince.String
+		}
+		list = append(list, &i)
+	}
+	return list, nil
+}
+
 func (d *DB) ListAllInstancesAdmin() ([]*AdminInstance, error) {
 	rows, err := d.Query(
 		`SELECT i.id, i.user_id, i.name, i.status, COALESCE(i.energy,100), COALESCE(i.daily_consume,10), i.zero_energy_since,

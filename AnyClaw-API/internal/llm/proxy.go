@@ -37,6 +37,7 @@ type Proxy struct {
 	resolver   TokenResolver
 	db         *db.DB
 	client     *http.Client
+	scheduler  *ModelScheduler
 	mu         sync.RWMutex
 }
 
@@ -45,10 +46,17 @@ func New(configPath string, resolver TokenResolver, database *db.DB) *Proxy {
 		configPath: configPath,
 		resolver:   resolver,
 		db:         database,
+		scheduler:  NewModelScheduler(),
 		client: &http.Client{
 			Timeout: 120 * time.Second,
 		},
 	}
+}
+
+// StartKeepAlive 启动保活协程，定期向各渠道发送最小请求
+func (p *Proxy) StartKeepAlive(interval time.Duration) {
+	ka := NewKeepAlive(p.configPath, interval)
+	ka.Start()
 }
 
 func (p *Proxy) loadConfig() (*config.Config, error) {
@@ -132,7 +140,13 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		model = "gpt-4o"
 	}
 	req["model"] = model
-	apiBase, apiKey := cfg.FindChannelForModel(model)
+	candidates := cfg.FindChannelsForModel(model)
+	var apiBase, apiKey string
+	if len(candidates) > 0 {
+		if ep, ok := p.scheduler.Pick(model, candidates); ok {
+			apiBase, apiKey = ep.APIBase, ep.APIKey
+		}
+	}
 	if apiBase == "" || apiKey == "" {
 		log.Printf("[llm] no key for model %q", model)
 		http.Error(w, `{"error":{"message":"no provider configured for model"}}`, http.StatusServiceUnavailable)

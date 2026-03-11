@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/anyclaw/anyclaw-api/internal/config"
@@ -44,7 +45,9 @@ type HostStore interface {
 	ListEnabledHosts() ([]*db.Host, error)
 	ListAllHostsWithCredentials() ([]*db.Host, error)
 	GetHost(id string) (*db.Host, error)
+	CountRunningInstancesByHostID(hostID string) (int, error)
 }
+
 
 type Scheduler struct {
 	apiURL     string
@@ -61,8 +64,8 @@ func New(apiURL, defaultImage, configPath string, hosts HostStore) *Scheduler {
 }
 
 // Run creates a Docker container on a remote host via SSH and returns (containerID, hostID).
+// 负载均衡：选择当前实例数最少的宿主机。
 // apiURLOverride: when non-empty, use instead of s.apiURL (e.g. from request Host for auto-detect).
-// Workspace is a plain directory at /var/lib/anyclaw/ws-{instanceID}, removed on Stop.
 func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string, apiURLOverride string) (containerID, hostID string, err error) {
 	list, err := s.hosts.ListEnabledHosts()
 	if err != nil {
@@ -72,7 +75,91 @@ func (s *Scheduler) Run(ctx context.Context, instanceID int64, token string, api
 		log.Printf("[scheduler] no enabled hosts in DB - add a host at /admin/hosts with enabled=true")
 		return "", "", fmt.Errorf("no enabled hosts configured")
 	}
-	host := list[0]
+	// 按实例数升序，选择负载最低的宿主机；排除已达容量上限的主机
+	list = s.filterByCapacity(list)
+	if len(list) == 0 {
+		return "", "", fmt.Errorf("all hosts at capacity")
+	}
+	host := s.pickLeastLoadedHost(list)
+	log.Printf("[scheduler] load balance: picked host %q (instance count: %d)", host.Name, s.hostInstanceCount(host.ID))
+	return s.runOnHost(ctx, host, instanceID, token, apiURLOverride)
+}
+
+func (s *Scheduler) hostInstanceCount(hostID string) int {
+	n, _ := s.hosts.CountRunningInstancesByHostID(hostID)
+	return n
+}
+
+// filterByCapacity 排除已达实例容量上限的宿主机（capacity 0 表示不限）
+func (s *Scheduler) filterByCapacity(hosts []*db.Host) []*db.Host {
+	var out []*db.Host
+	for _, h := range hosts {
+		cap := h.InstanceCapacity
+		if cap == 0 {
+			out = append(out, h)
+			continue
+		}
+		if s.hostInstanceCount(h.ID) < cap {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
+func (s *Scheduler) pickLeastLoadedHost(hosts []*db.Host) *db.Host {
+	if len(hosts) == 0 {
+		return nil
+	}
+	if len(hosts) == 1 {
+		return hosts[0]
+	}
+	type hostWithCount struct {
+		host  *db.Host
+		count int
+	}
+	withCounts := make([]hostWithCount, len(hosts))
+	for i, h := range hosts {
+		withCounts[i] = hostWithCount{host: h, count: s.hostInstanceCount(h.ID)}
+	}
+	sort.Slice(withCounts, func(i, j int) bool {
+		return withCounts[i].count < withCounts[j].count
+	})
+	return withCounts[0].host
+}
+
+// PickTargetHostForMigration 返回最适合迁移目标的主机（排除指定主机，选择实例数最少且未达容量上限的）
+func (s *Scheduler) PickTargetHostForMigration(excludeHostID string) (*db.Host, error) {
+	list, err := s.hosts.ListEnabledHosts()
+	if err != nil {
+		return nil, err
+	}
+	var filtered []*db.Host
+	for _, h := range list {
+		if h.ID != excludeHostID {
+			filtered = append(filtered, h)
+		}
+	}
+	filtered = s.filterByCapacity(filtered)
+	if len(filtered) == 0 {
+		return nil, fmt.Errorf("no other enabled hosts with capacity")
+	}
+	return s.pickLeastLoadedHost(filtered), nil
+}
+
+// RunOnHost 在指定宿主机上创建实例容器，用于拉取最新镜像后重启
+func (s *Scheduler) RunOnHost(ctx context.Context, hostID string, instanceID int64, token string, apiURL string) (containerID string, err error) {
+	host, err := s.hosts.GetHost(hostID)
+	if err != nil || host == nil {
+		return "", fmt.Errorf("host not found")
+	}
+	if host.SSHKey == "" && host.SSHPassword == "" {
+		return "", fmt.Errorf("host has no SSH credentials")
+	}
+	cid, _, err := s.runOnHost(ctx, host, instanceID, token, apiURL)
+	return cid, err
+}
+
+func (s *Scheduler) runOnHost(ctx context.Context, host *db.Host, instanceID int64, token string, apiURLOverride string) (containerID, hostID string, err error) {
 	image := host.DockerImage
 	if image == "" {
 		image = s.defaultImg
@@ -204,4 +291,76 @@ func (s *Scheduler) Stop(ctx context.Context, hostID, containerID string, instan
 		return nil
 	}
 	return lastErr
+}
+
+// MigrateWithInstance 将实例迁移到目标宿主机，返回新的 containerID 和 hostID
+func (s *Scheduler) MigrateWithInstance(ctx context.Context, inst *db.Instance, targetHostID string, apiURL string) (containerID, hostID string, err error) {
+	if inst == nil || inst.HostID == "" {
+		return "", "", fmt.Errorf("instance or host_id invalid")
+	}
+	if targetHostID == inst.HostID {
+		return "", "", fmt.Errorf("target host is same as current")
+	}
+	sourceHost, err := s.hosts.GetHost(inst.HostID)
+	if err != nil || sourceHost == nil {
+		return "", "", fmt.Errorf("source host not found")
+	}
+	targetHost, err := s.hosts.GetHost(targetHostID)
+	if err != nil || targetHost == nil {
+		return "", "", fmt.Errorf("target host not found")
+	}
+	if !targetHost.Enabled {
+		return "", "", fmt.Errorf("target host is disabled")
+	}
+	if targetHost.SSHKey == "" && targetHost.SSHPassword == "" {
+		return "", "", fmt.Errorf("target host has no SSH credentials")
+	}
+	// 1. 停止源主机上的容器
+	if err := s.Stop(ctx, inst.HostID, inst.ContainerID, inst.ID); err != nil {
+		return "", "", fmt.Errorf("stop source container: %w", err)
+	}
+	// 2. 在源主机上打包工作区内容并流式传输到目标
+	wsDir := fmt.Sprintf("/var/lib/anyclaw/ws-%d", inst.ID)
+	tarCmd := fmt.Sprintf("export PATH=/usr/local/bin:/usr/bin:$PATH; tar czf - -C %s . 2>/dev/null || true", wsDir)
+	src, err := runSSHStreamOut(sourceHost, tarCmd)
+	if err != nil {
+		return "", "", fmt.Errorf("tar on source: %w", err)
+	}
+	defer src.Close()
+	// 3. 在目标主机上准备目录并解压
+	workspaceSizeGB := 0
+	if cfg, err := config.Load(s.configPath); err == nil {
+		workspaceSizeGB = config.GetWorkspaceSizeGB(cfg)
+	}
+	var ensureWorkspace string
+	if workspaceSizeGB > 0 {
+		ensureWorkspace = fmt.Sprintf(`export PATH=/usr/local/bin:/usr/bin:$PATH; \
+			mkdir -p /var/lib/anyclaw && \
+			WS="/var/lib/anyclaw/ws-%d" FILE="/var/lib/anyclaw/ws-%d.img" SIZE=%d && \
+			if [ ! -f "$FILE" ]; then truncate -s ${SIZE}G "$FILE" && mkfs.ext4 -F "$FILE"; fi && \
+			mkdir -p "$WS" && (mountpoint -q "$WS" || mount -o loop "$FILE" "$WS") && chown -R 1000:1000 "$WS"`,
+			inst.ID, inst.ID, workspaceSizeGB)
+	} else {
+		ensureWorkspace = fmt.Sprintf(`export PATH=/usr/local/bin:/usr/bin:$PATH; mkdir -p /var/lib/anyclaw && \
+			WS="/var/lib/anyclaw/ws-%d" && mkdir -p "$WS" && chown -R 1000:1000 "$WS"`, inst.ID)
+	}
+	if _, err := runSSH(targetHost, ensureWorkspace); err != nil {
+		return "", "", fmt.Errorf("ensure workspace on target: %w", err)
+	}
+	extractCmd := fmt.Sprintf("tar xzf - -C /var/lib/anyclaw/ws-%d", inst.ID)
+	if err := runSSHStreamIn(targetHost, extractCmd, src); err != nil {
+		return "", "", fmt.Errorf("extract on target: %w", err)
+	}
+	// 4. 在目标主机上启动容器
+	cid, newHostID, err := s.runOnHost(ctx, targetHost, inst.ID, inst.Token, apiURL)
+	if err != nil {
+		return "", "", fmt.Errorf("run on target: %w", err)
+	}
+	// 5. 清理源主机工作区
+	cleanup := fmt.Sprintf(`export PATH=/usr/local/bin:/usr/bin:$PATH; \
+		WS="/var/lib/anyclaw/ws-%d" FILE="/var/lib/anyclaw/ws-%d.img"; \
+		(mountpoint -q "$WS" 2>/dev/null && umount "$WS") || true; \
+		rm -rf "$WS" || true; rm -f "$FILE" || true`, inst.ID, inst.ID)
+	_, _ = runSSH(sourceHost, cleanup)
+	return cid, newHostID, nil
 }

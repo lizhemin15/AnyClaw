@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/anyclaw/anyclaw-api/internal/adminconfig"
 	"github.com/anyclaw/anyclaw-api/internal/adminstats"
@@ -96,7 +97,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	sched := scheduler.New(apiURL, cfg.DockerImage, configPath, database)
 	instHandler := instances.New(database, sched, apiURL, configPath)
 	hostChecker := scheduler.HostChecker{}
-	hostHandler := hosts.New(database, hostChecker)
+	hostHandler := hosts.New(database, hostChecker, sched, apiURL, cfg.DockerImage)
 	adminStatsHandler := adminstats.New(database)
 
 	wsHub := ws.NewHub()
@@ -107,6 +108,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	paymentHandler := payment.New(configPath, database, apiURL)
 
 	proxy := llm.New(configPath, database, database)
+	proxy.StartKeepAlive(5 * time.Minute)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -195,13 +197,15 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Put("/{id}", hostHandler.Update)
 		r.Delete("/{id}", hostHandler.Delete)
 		r.Post("/{id}/check", hostHandler.CheckStatus)
-		r.Get("/{id}/update-status", hostHandler.UpdateStatus)
-		r.Post("/{id}/update", hostHandler.UpdateMainService)
+		r.Get("/{id}/instance-image-status", hostHandler.InstanceImageStatus)
+		r.Post("/{id}/pull-and-restart-instances", hostHandler.PullAndRestartInstances)
+		r.Post("/{id}/drain", hostHandler.Drain)
 	})
 	r.Route("/admin/instances", func(r chi.Router) {
 		r.Use(authSvc.AdminMiddleware)
 		r.Get("/", instHandler.AdminList)
 		r.Post("/reconnect", instHandler.AdminReconnect)
+		r.Post("/{id}/migrate", instHandler.AdminMigrate)
 		r.Delete("/{id}", instHandler.AdminDelete)
 	})
 

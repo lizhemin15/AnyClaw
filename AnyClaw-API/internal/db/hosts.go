@@ -5,26 +5,27 @@ import (
 )
 
 type Host struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Addr        string  `json:"addr"`
-	SSHPort     int     `json:"ssh_port"`
-	SSHUser     string  `json:"ssh_user"`
-	SSHKey      string  `json:"-"` // never expose
-	SSHPassword string  `json:"-"` // never expose
-	DockerImage string  `json:"docker_image,omitempty"`
-	Enabled     bool    `json:"enabled"`
-	Status      string  `json:"status"`
-	LastCheckAt *string `json:"last_check_at,omitempty"`
-	CreatedAt   string  `json:"created_at"`
+	ID               string  `json:"id"`
+	Name             string  `json:"name"`
+	Addr             string  `json:"addr"`
+	SSHPort          int     `json:"ssh_port"`
+	SSHUser          string  `json:"ssh_user"`
+	SSHKey           string  `json:"-"` // never expose
+	SSHPassword      string  `json:"-"` // never expose
+	DockerImage      string  `json:"docker_image,omitempty"`
+	Enabled          bool    `json:"enabled"`
+	InstanceCapacity int     `json:"instance_capacity"` // 0=不限
+	Status           string  `json:"status"`
+	LastCheckAt      *string `json:"last_check_at,omitempty"`
+	CreatedAt        string  `json:"created_at"`
 }
 
 func (d *DB) CreateHost(h *Host) error {
 	_, err := d.Exec(
-		`INSERT INTO hosts (id, name, addr, ssh_port, ssh_user, ssh_key, ssh_password, docker_image, enabled, status)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO hosts (id, name, addr, ssh_port, ssh_user, ssh_key, ssh_password, docker_image, enabled, instance_capacity, status)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		h.ID, h.Name, h.Addr, h.SSHPort, h.SSHUser, h.SSHKey, h.SSHPassword, h.DockerImage,
-		enabledInt(h.Enabled), h.Status,
+		enabledInt(h.Enabled), h.InstanceCapacity, h.Status,
 	)
 	return err
 }
@@ -36,11 +37,11 @@ func (d *DB) GetHost(id string) (*Host, error) {
 	var lastCheck sql.NullString
 	var enabled int
 	err := d.QueryRow(
-		`SELECT id, name, addr, ssh_port, ssh_user, ssh_key, ssh_password, docker_image, enabled, status, last_check_at, created_at
+		`SELECT id, name, addr, ssh_port, ssh_user, ssh_key, ssh_password, docker_image, enabled, COALESCE(instance_capacity,0), status, last_check_at, created_at
 		 FROM hosts WHERE id = ?`,
 		id,
 	).Scan(&h.ID, &h.Name, &h.Addr, &h.SSHPort, &h.SSHUser, &sshKey, &sshPass, &dockerImage,
-		&enabled, &h.Status, &lastCheck, &h.CreatedAt)
+		&enabled, &h.InstanceCapacity, &h.Status, &lastCheck, &h.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -65,7 +66,7 @@ func (d *DB) GetHost(id string) (*Host, error) {
 
 func (d *DB) ListHosts() ([]*Host, error) {
 	rows, err := d.Query(
-		`SELECT id, name, addr, ssh_port, ssh_user, docker_image, enabled, status, last_check_at, created_at
+		`SELECT id, name, addr, ssh_port, ssh_user, docker_image, enabled, COALESCE(instance_capacity,0), status, last_check_at, created_at
 		 FROM hosts ORDER BY created_at ASC`)
 	if err != nil {
 		return nil, err
@@ -77,7 +78,7 @@ func (d *DB) ListHosts() ([]*Host, error) {
 		var dockerImage sql.NullString
 		var lastCheck sql.NullString
 		var enabled int
-		if err := rows.Scan(&h.ID, &h.Name, &h.Addr, &h.SSHPort, &h.SSHUser, &dockerImage, &enabled, &h.Status, &lastCheck, &h.CreatedAt); err != nil {
+		if err := rows.Scan(&h.ID, &h.Name, &h.Addr, &h.SSHPort, &h.SSHUser, &dockerImage, &enabled, &h.InstanceCapacity, &h.Status, &lastCheck, &h.CreatedAt); err != nil {
 			return nil, err
 		}
 		h.Enabled = enabled != 0
@@ -94,7 +95,7 @@ func (d *DB) ListHosts() ([]*Host, error) {
 
 func (d *DB) ListAllHostsWithCredentials() ([]*Host, error) {
 	rows, err := d.Query(
-		`SELECT id, name, addr, ssh_port, ssh_user, ssh_key, ssh_password, docker_image, enabled, status
+		`SELECT id, name, addr, ssh_port, ssh_user, ssh_key, ssh_password, docker_image, enabled, COALESCE(instance_capacity,0), status
 		 FROM hosts ORDER BY created_at ASC`)
 	if err != nil {
 		return nil, err
@@ -106,7 +107,7 @@ func (d *DB) ListAllHostsWithCredentials() ([]*Host, error) {
 		var sshKey, sshPass sql.NullString
 		var dockerImage sql.NullString
 		var enabled int
-		if err := rows.Scan(&h.ID, &h.Name, &h.Addr, &h.SSHPort, &h.SSHUser, &sshKey, &sshPass, &dockerImage, &enabled, &h.Status); err != nil {
+		if err := rows.Scan(&h.ID, &h.Name, &h.Addr, &h.SSHPort, &h.SSHUser, &sshKey, &sshPass, &dockerImage, &enabled, &h.InstanceCapacity, &h.Status); err != nil {
 			return nil, err
 		}
 		h.Enabled = enabled != 0
@@ -126,7 +127,7 @@ func (d *DB) ListAllHostsWithCredentials() ([]*Host, error) {
 
 func (d *DB) ListEnabledHosts() ([]*Host, error) {
 	rows, err := d.Query(
-		`SELECT id, name, addr, ssh_port, ssh_user, ssh_key, ssh_password, docker_image, enabled, status
+		`SELECT id, name, addr, ssh_port, ssh_user, ssh_key, ssh_password, docker_image, enabled, COALESCE(instance_capacity,0), status
 		 FROM hosts WHERE enabled = 1 ORDER BY created_at ASC`)
 	if err != nil {
 		return nil, err
@@ -138,7 +139,7 @@ func (d *DB) ListEnabledHosts() ([]*Host, error) {
 		var sshKey, sshPass sql.NullString
 		var dockerImage sql.NullString
 		var enabled int
-		if err := rows.Scan(&h.ID, &h.Name, &h.Addr, &h.SSHPort, &h.SSHUser, &sshKey, &sshPass, &dockerImage, &enabled, &h.Status); err != nil {
+		if err := rows.Scan(&h.ID, &h.Name, &h.Addr, &h.SSHPort, &h.SSHUser, &sshKey, &sshPass, &dockerImage, &enabled, &h.InstanceCapacity, &h.Status); err != nil {
 			return nil, err
 		}
 		h.Enabled = true
@@ -158,9 +159,9 @@ func (d *DB) ListEnabledHosts() ([]*Host, error) {
 
 func (d *DB) UpdateHost(h *Host) error {
 	_, err := d.Exec(
-		`UPDATE hosts SET name=?, addr=?, ssh_port=?, ssh_user=?, ssh_key=?, ssh_password=?, docker_image=?, enabled=?
+		`UPDATE hosts SET name=?, addr=?, ssh_port=?, ssh_user=?, ssh_key=?, ssh_password=?, docker_image=?, enabled=?, instance_capacity=?
 		 WHERE id = ?`,
-		h.Name, h.Addr, h.SSHPort, h.SSHUser, h.SSHKey, h.SSHPassword, h.DockerImage, enabledInt(h.Enabled), h.ID,
+		h.Name, h.Addr, h.SSHPort, h.SSHUser, h.SSHKey, h.SSHPassword, h.DockerImage, enabledInt(h.Enabled), h.InstanceCapacity, h.ID,
 	)
 	return err
 }
@@ -175,9 +176,9 @@ func (d *DB) UpdateHostStatus(id, status string) error {
 
 func (d *DB) UpdateHostNoKey(h *Host) error {
 	_, err := d.Exec(
-		`UPDATE hosts SET name=?, addr=?, ssh_port=?, ssh_user=?, docker_image=?, enabled=?
+		`UPDATE hosts SET name=?, addr=?, ssh_port=?, ssh_user=?, docker_image=?, enabled=?, instance_capacity=?
 		 WHERE id = ?`,
-		h.Name, h.Addr, h.SSHPort, h.SSHUser, h.DockerImage, enabledInt(h.Enabled), h.ID,
+		h.Name, h.Addr, h.SSHPort, h.SSHUser, h.DockerImage, enabledInt(h.Enabled), h.InstanceCapacity, h.ID,
 	)
 	return err
 }
