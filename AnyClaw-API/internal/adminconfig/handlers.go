@@ -41,12 +41,12 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	out := make([]map[string]any, len(channels))
 	for i, ch := range channels {
 		out[i] = map[string]any{
-			"id":      ch.ID,
-			"name":    ch.Name,
-			"api_key": config.MaskAPIKey(ch.APIKey),
+			"id":       ch.ID,
+			"name":     ch.Name,
+			"api_key":  config.MaskAPIKey(ch.APIKey),
 			"api_base": ch.APIBase,
-			"enabled": ch.Enabled,
-			"models":  ch.Models,
+			"enabled":  ch.Enabled,
+			"models":   ch.Models,
 		}
 	}
 	resp := map[string]any{"channels": out}
@@ -171,10 +171,9 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 
 // TestChannelRequest 测试渠道/模型连通性
 type TestChannelRequest struct {
-	ChannelID string `json:"channel_id"` // 从已保存配置查找
-	Model     string `json:"model"`      // 模型名
-	// 或直接传凭证（测试未保存的配置）
-	APIBase string `json:"api_base"`
+	ChannelID  string `json:"channel_id"`  // 从已保存配置查找
+	Model      string `json:"model"`       // 模型名
+	APIBase string `json:"api_base"` // 或直接传凭证
 	APIKey  string `json:"api_key"`
 }
 

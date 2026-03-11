@@ -79,33 +79,68 @@ export default function Recharge() {
         <p className="text-slate-500 py-8 text-center">暂无可购买的充值档位，请联系管理员配置</p>
       ) : (
         <div className="space-y-4">
-          {plans.map((p) => (
-            <div
-              key={p.id}
-              className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between"
-            >
-              <div>
-                <div className="font-medium text-slate-800">{p.name}</div>
-                <div className="text-sm text-slate-500">¥{(p.price_cny / 100).toFixed(2)}</div>
+          {plans.map((p, i) => {
+            const discount = i === 0 ? 0 : i === 1 ? 10 : 20
+            const origPrice = discount > 0 ? Math.round((p.price_cny / 100) / (1 - discount / 100) * 100) / 100 : p.price_cny / 100
+            const isPopular = i === 1
+            const isBest = i === 2
+            return (
+              <div
+                key={p.id}
+                className={`relative rounded-2xl overflow-hidden ${
+                  isBest ? 'bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200 shadow-lg' :
+                  isPopular ? 'bg-gradient-to-br from-indigo-50 to-slate-50 border-2 border-indigo-200' :
+                  'bg-white border border-slate-200'
+                }`}
+              >
+                {isPopular && (
+                  <div className="absolute top-0 right-0 bg-indigo-600 text-white text-xs font-medium px-3 py-1 rounded-bl-lg">
+                    推荐
+                  </div>
+                )}
+                {isBest && (
+                  <div className="absolute top-0 right-0 bg-amber-500 text-white text-xs font-medium px-3 py-1 rounded-bl-lg">
+                    最划算
+                  </div>
+                )}
+                <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-slate-800 text-lg">{p.name}</span>
+                      {discount > 0 && (
+                        <span className="text-xs font-medium bg-emerald-500 text-white px-2 py-0.5 rounded-full">
+                          {discount}% OFF
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 flex items-baseline gap-2">
+                      <span className="text-xl font-bold text-slate-800">¥{(p.price_cny / 100).toFixed(2)}</span>
+                      {discount > 0 && (
+                        <span className="text-sm text-slate-400 line-through">¥{origPrice.toFixed(2)}</span>
+                      )}
+                    </div>
+                    <div className="text-sm text-slate-500 mt-0.5">{p.energy} 金币 · 约 ¥{(p.price_cny / 100 / p.energy).toFixed(3)}/枚</div>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => handlePay(p, 'alipay')}
+                      disabled={!!paying}
+                      className="px-4 py-2.5 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 font-medium"
+                    >
+                      {paying === p.id + '-alipay' ? '跳转中...' : '支付宝'}
+                    </button>
+                    <button
+                      onClick={() => handlePay(p, 'wechat')}
+                      disabled={!!paying}
+                      className="px-4 py-2.5 text-sm bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-50 font-medium"
+                    >
+                      {paying === p.id + '-wechat' ? '生成中...' : '微信'}
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handlePay(p, 'alipay')}
-                  disabled={!!paying}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {paying === p.id + '-alipay' ? '跳转中...' : '支付宝'}
-                </button>
-                <button
-                  onClick={() => handlePay(p, 'wechat')}
-                  disabled={!!paying}
-                  className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
-                >
-                  {paying === p.id + '-wechat' ? '生成中...' : '微信'}
-                </button>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

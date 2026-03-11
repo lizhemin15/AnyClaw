@@ -27,10 +27,24 @@ func New(configPath string, database *db.DB, apiBaseURL string) *Handler {
 	return &Handler{configPath: configPath, db: database, apiBaseURL: apiBaseURL}
 }
 
-// GetPlans 获取充值档位（公开，登录用户）
+// 固定三档充值档位默认值
+var defaultPlans = []config.PaymentPlan{
+	{ID: "plan-1", Name: "入门", Energy: 100, PriceCny: 100, Sort: 0},
+	{ID: "plan-2", Name: "进阶", Energy: 500, PriceCny: 450, Sort: 1},
+	{ID: "plan-3", Name: "尊享", Energy: 2000, PriceCny: 1600, Sort: 2},
+}
+
+// GetPlans 获取充值档位（固定三档，至少有一个支付渠道启用时返回）
 func (h *Handler) GetPlans(w http.ResponseWriter, r *http.Request) {
 	cfg, err := config.Load(h.configPath)
 	if err != nil || cfg.Payment == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]any{})
+		return
+	}
+	hasChannel := (cfg.Payment.Alipay != nil && cfg.Payment.Alipay.Enabled) ||
+		(cfg.Payment.Wechat != nil && cfg.Payment.Wechat.Enabled)
+	if !hasChannel {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]any{})
 		return
@@ -39,14 +53,19 @@ func (h *Handler) GetPlans(w http.ResponseWriter, r *http.Request) {
 	if plans == nil {
 		plans = []config.PaymentPlan{}
 	}
-	// 过滤：至少有一个支付渠道启用时才返回
-	hasChannel := (cfg.Payment.Alipay != nil && cfg.Payment.Alipay.Enabled) ||
-		(cfg.Payment.Wechat != nil && cfg.Payment.Wechat.Enabled)
-	if !hasChannel {
-		plans = []config.PaymentPlan{}
+	// 固定三档：取配置前 3 个，不足则用默认值补齐
+	out := make([]config.PaymentPlan, 3)
+	for i := 0; i < 3; i++ {
+		if i < len(plans) {
+			out[i] = plans[i]
+			out[i].ID = defaultPlans[i].ID
+			out[i].Sort = i
+		} else {
+			out[i] = defaultPlans[i]
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(plans)
+	json.NewEncoder(w).Encode(out)
 }
 
 // CreateOrderRequest 创建订单请求

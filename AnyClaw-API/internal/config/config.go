@@ -128,12 +128,12 @@ type SMTPConfig struct {
 
 // Channel 渠道：用户添加，可配置、启用，每个渠道可添加多个模型
 type Channel struct {
-	ID      string        `json:"id"`
-	Name    string        `json:"name"`    // 如 "OpenAI 主账号"
-	APIKey  string        `json:"api_key"`
-	APIBase string        `json:"api_base"`
-	Enabled bool          `json:"enabled"`
-	Models  []ModelEntry  `json:"models"` // 该渠道下的模型列表
+	ID      string       `json:"id"`
+	Name    string       `json:"name"`    // 如 "OpenAI 主账号"
+	APIKey  string       `json:"api_key"`
+	APIBase string       `json:"api_base"`
+	Enabled bool         `json:"enabled"`
+	Models  []ModelEntry `json:"models"`  // 该渠道下的模型列表
 }
 
 type ModelEntry struct {
@@ -174,7 +174,6 @@ func (c *Config) FindChannelForModel(model string) (apiBase, apiKey string) {
 			}
 		}
 	}
-	// 无精确匹配时，按模型名推断渠道（gpt->openai风格, claude->anthropic风格）
 	for _, ch := range c.Channels {
 		if !ch.Enabled || ch.APIKey == "" {
 			continue
@@ -191,7 +190,6 @@ func (c *Config) FindChannelForModel(model string) (apiBase, apiKey string) {
 			return strings.TrimSuffix(base, "/"), ch.APIKey
 		}
 	}
-	// 最后尝试：任意有模型的已启用渠道
 	for _, ch := range c.Channels {
 		if ch.Enabled && ch.APIKey != "" && len(ch.Models) > 0 {
 			base := ch.APIBase

@@ -70,9 +70,16 @@ export default function AdminConfig() {
           return { ...ch, models }
         })
         const smtp = c.smtp ? { ...c.smtp } : undefined
+        const defPlans: PaymentPlan[] = [
+          { id: 'plan-1', name: '入门', energy: 100, price_cny: 100, sort: 0 },
+          { id: 'plan-2', name: '进阶', energy: 500, price_cny: 450, sort: 1 },
+          { id: 'plan-3', name: '尊享', energy: 2000, price_cny: 1600, sort: 2 },
+        ]
+        const rawPlans = c.payment?.plans || []
+        const plans = [0, 1, 2].map((i) => rawPlans[i] || defPlans[i])
         const payment: PaymentConfig = c.payment
-          ? { ...c.payment, plans: c.payment.plans || [], alipay: c.payment.alipay ? { ...c.payment.alipay } : undefined, wechat: c.payment.wechat ? { ...c.payment.wechat } : undefined }
-          : { plans: [], alipay: { enabled: false, app_id: '', private_key: '', alipay_public_key: '', is_sandbox: false }, wechat: { enabled: false, app_id: '', mch_id: '', api_v3_key: '', serial_no: '', private_key: '' } }
+          ? { ...c.payment, plans, alipay: c.payment.alipay ? { ...c.payment.alipay } : undefined, wechat: c.payment.wechat ? { ...c.payment.wechat } : undefined }
+          : { plans: defPlans, alipay: { enabled: false, app_id: '', private_key: '', alipay_public_key: '', is_sandbox: false }, wechat: { enabled: false, app_id: '', mch_id: '', api_v3_key: '', serial_no: '', private_key: '' } }
         const energy: EnergyConfig = c.energy
           ? { ...c.energy }
           : { tokens_per_energy: 1000, adopt_cost: 100, daily_consume: 10, min_energy_for_task: 5, zero_days_to_delete: 3, invite_reward: 50, new_user_energy: 100, invite_commission_rate: 5 }
@@ -198,6 +205,7 @@ export default function AdminConfig() {
     setTestResult(null)
     try {
       const res = await testChannelConfig({
+        channel_id: ch.id,
         api_base: ch.api_base?.trim() || 'https://api.openai.com/v1',
         api_key: ch.api_key.trim(),
         model,
@@ -239,23 +247,22 @@ export default function AdminConfig() {
     updatePayment({ wechat: { ...prev, ...upd } })
   }
 
-  const addPlan = () => {
-    if (!form) return
-    const plans = form.payment?.plans || []
-    const newPlan: PaymentPlan = { id: 'p-' + Date.now(), name: '100 金币', energy: 100, price_cny: 100, sort: plans.length }
-    updatePayment({ plans: [...plans, newPlan] })
-  }
+  const FIXED_PLAN_IDS = ['plan-1', 'plan-2', 'plan-3'] as const
+  const defaultPlans: PaymentPlan[] = [
+    { id: 'plan-1', name: '入门', energy: 100, price_cny: 100, sort: 0 },
+    { id: 'plan-2', name: '进阶', energy: 500, price_cny: 450, sort: 1 },
+    { id: 'plan-3', name: '尊享', energy: 2000, price_cny: 1600, sort: 2 },
+  ]
 
   const updatePlan = (id: string, upd: Partial<PaymentPlan>) => {
-    if (!form?.payment?.plans) return
-    updatePayment({
-      plans: form.payment.plans.map((p) => (p.id === id ? { ...p, ...upd } : p)),
-    })
-  }
-
-  const removePlan = (id: string) => {
-    if (!form?.payment?.plans) return
-    updatePayment({ plans: form.payment.plans.filter((p) => p.id !== id) })
+    if (!form?.payment) return
+    const prev = form.payment.plans || []
+    const byId = new Map(prev.map((p) => [p.id, p]))
+    const def = defaultPlans.find((d) => d.id === id) || { id, name: '', energy: 0, price_cny: 0, sort: 0 }
+    const existing = byId.get(id) || def
+    byId.set(id, { ...existing, ...upd })
+    const plans = FIXED_PLAN_IDS.map((pid) => byId.get(pid) || defaultPlans.find((d) => d.id === pid)!)
+    updatePayment({ plans })
   }
 
   const updateEnergy = (upd: Partial<EnergyConfig>) => {
@@ -427,10 +434,10 @@ export default function AdminConfig() {
           </div>
         </div>
 
-        {/* 添加渠道 */}
+        {/* AI 渠道配置 */}
         <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-            <h2 className="font-semibold text-slate-800">渠道列表</h2>
+            <h2 className="font-semibold text-slate-800">AI 渠道配置</h2>
             {!addingChannel ? (
               <button
                 type="button"
@@ -698,53 +705,70 @@ export default function AdminConfig() {
             <p className="text-sm text-slate-500 mt-1">配置支付宝、微信商家支付，用户可购买金币</p>
           </div>
           <div className="px-5 py-4 space-y-6">
-            {/* 充值档位 */}
+            {/* 充值档位（固定三档） */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-slate-700">充值档位</h3>
-                <button type="button" onClick={addPlan} className="text-sm text-indigo-600 hover:text-indigo-700">
-                  + 添加档位
-                </button>
-              </div>
+              <h3 className="text-sm font-medium text-slate-700 mb-2">充值档位（固定三档）</h3>
               <div className="space-y-2">
-                {(form?.payment?.plans || []).map((p) => (
-                  <div key={p.id} className="flex gap-2 items-center flex-wrap">
-                    <input
-                      type="text"
-                      value={p.name}
-                      onChange={(e) => updatePlan(p.id, { name: e.target.value })}
-                      placeholder="名称"
-                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-28"
-                    />
-                    <input
-                      type="number"
-                      value={p.energy}
-                      onChange={(e) => updatePlan(p.id, { energy: parseInt(e.target.value, 10) || 0 })}
-                      placeholder="金币"
-                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-20"
-                    />
-                    <span className="text-slate-500 text-sm">金币</span>
-                    <input
-                      type="number"
-                      value={p.price_cny}
-                      onChange={(e) => updatePlan(p.id, { price_cny: parseInt(e.target.value, 10) || 0 })}
-                      placeholder="价格(分)"
-                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-24"
-                    />
-                    <span className="text-slate-500 text-sm">分 (¥{(p.price_cny / 100).toFixed(2)})</span>
-                    <button type="button" onClick={() => removePlan(p.id)} className="text-sm text-red-600 hover:text-red-700">
-                      删除
-                    </button>
-                  </div>
-                ))}
+                {(() => {
+                  const plans = form?.payment?.plans || []
+                  const fixed = [
+                    { id: 'plan-1', name: '入门', energy: 100, price_cny: 100 },
+                    { id: 'plan-2', name: '进阶', energy: 500, price_cny: 450 },
+                    { id: 'plan-3', name: '尊享', energy: 2000, price_cny: 1600 },
+                  ]
+                  return fixed.map((def, i) => {
+                    const p = plans[i] || def
+                    return (
+                      <div key={def.id} className="flex gap-2 items-center flex-wrap">
+                        <input
+                          type="text"
+                          value={p.name}
+                          onChange={(e) => updatePlan(def.id, { name: e.target.value })}
+                          placeholder="名称"
+                          className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-28"
+                        />
+                        <input
+                          type="number"
+                          value={p.energy}
+                          onChange={(e) => updatePlan(def.id, { energy: parseInt(e.target.value, 10) || 0 })}
+                          placeholder="金币"
+                          className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-20"
+                        />
+                        <span className="text-slate-500 text-sm">金币</span>
+                        <input
+                          type="number"
+                          value={p.price_cny}
+                          onChange={(e) => updatePlan(def.id, { price_cny: parseInt(e.target.value, 10) || 0 })}
+                          placeholder="价格(分)"
+                          className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-24"
+                        />
+                        <span className="text-slate-500 text-sm">分 (¥{(p.price_cny / 100).toFixed(2)})</span>
+                      </div>
+                    )
+                  })
+                })()}
               </div>
             </div>
             {/* 支付宝 */}
             <div>
               <h3 className="text-sm font-medium text-slate-700 mb-2">支付宝</h3>
               <div className="flex items-center gap-2 mb-2">
-                <input type="checkbox" checked={form?.payment?.alipay?.enabled ?? false} onChange={(e) => updateAlipay({ enabled: e.target.checked })} />
-                <span className="text-sm">启用</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form?.payment?.alipay?.enabled ?? false}
+                  onClick={() => updateAlipay({ enabled: !(form?.payment?.alipay?.enabled ?? false) })}
+                  className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${
+                    form?.payment?.alipay?.enabled ? 'bg-indigo-600' : 'bg-slate-200'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
+                      form?.payment?.alipay?.enabled ? 'translate-x-4' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+                <span className="text-sm">{form?.payment?.alipay?.enabled ? '已启用' : '未启用'}</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -787,8 +811,22 @@ export default function AdminConfig() {
             <div>
               <h3 className="text-sm font-medium text-slate-700 mb-2">微信支付</h3>
               <div className="flex items-center gap-2 mb-2">
-                <input type="checkbox" checked={form?.payment?.wechat?.enabled ?? false} onChange={(e) => updateWechat({ enabled: e.target.checked })} />
-                <span className="text-sm">启用</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form?.payment?.wechat?.enabled ?? false}
+                  onClick={() => updateWechat({ enabled: !(form?.payment?.wechat?.enabled ?? false) })}
+                  className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${
+                    form?.payment?.wechat?.enabled ? 'bg-indigo-600' : 'bg-slate-200'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
+                      form?.payment?.wechat?.enabled ? 'translate-x-4' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+                <span className="text-sm">{form?.payment?.wechat?.enabled ? '已启用' : '未启用'}</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
