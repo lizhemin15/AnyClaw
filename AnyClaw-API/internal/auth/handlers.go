@@ -67,24 +67,75 @@ func (a *Auth) smtpConfigured() bool {
 }
 
 func (a *Auth) smtpParams() *mail.SMTPParams {
-	if cfg, err := config.Load(a.configPath); err == nil && cfg.SMTP != nil && cfg.SMTP.Host != "" {
-		port := cfg.SMTP.Port
-		if port <= 0 {
-			port = 587
-		}
-		return &mail.SMTPParams{
-			Host: cfg.SMTP.Host,
-			Port: port,
-			User: cfg.SMTP.User,
-			Pass: cfg.SMTP.Pass,
-			From: cfg.SMTP.From,
-		}
+	params := a.smtpParamsFromConfig()
+	if params != nil && params.Pass != "" && !strings.HasPrefix(params.Pass, "****") {
+		return params
+	}
+	// 配置中密码为空或脱敏时，直接从 DB 读取（注册/发验证码与测试接口同源）
+	if p := a.smtpParamsFromDB(); p != nil {
+		return p
+	}
+	if params != nil {
+		return params
 	}
 	host, port, user, pass, from, ok := mail.ConfigFromEnv()
 	if !ok {
 		return nil
 	}
 	return &mail.SMTPParams{Host: host, Port: port, User: user, Pass: pass, From: from}
+}
+
+func (a *Auth) smtpParamsFromConfig() *mail.SMTPParams {
+	cfg, err := config.Load(a.configPath)
+	if err != nil || cfg.SMTP == nil || cfg.SMTP.Host == "" {
+		return nil
+	}
+	port := cfg.SMTP.Port
+	if port <= 0 {
+		port = 587
+	}
+	return &mail.SMTPParams{
+		Host: cfg.SMTP.Host,
+		Port: port,
+		User: cfg.SMTP.User,
+		Pass: cfg.SMTP.Pass,
+		From: cfg.SMTP.From,
+	}
+}
+
+func (a *Auth) smtpParamsFromDB() *mail.SMTPParams {
+	if a.db == nil {
+		return nil
+	}
+	b, err := a.db.GetAdminConfigJSON()
+	if err != nil || len(b) == 0 {
+		return nil
+	}
+	var raw struct {
+		SMTP *struct {
+			Host string `json:"host"`
+			Port int    `json:"port"`
+			User string `json:"user"`
+			Pass string `json:"pass"`
+			From string `json:"from"`
+		} `json:"smtp"`
+	}
+	if json.Unmarshal(b, &raw) != nil || raw.SMTP == nil || raw.SMTP.Host == "" {
+		return nil
+	}
+	s := raw.SMTP
+	if s.Pass == "" || strings.HasPrefix(s.Pass, "****") {
+		return nil
+	}
+	port := s.Port
+	if port <= 0 {
+		port = 587
+	}
+	from := s.From
+	if from == "" {
+		from = s.User
+	}
+	return &mail.SMTPParams{Host: s.Host, Port: port, User: s.User, Pass: s.Pass, From: from}
 }
 
 func (a *Auth) HandleAuthConfig(w http.ResponseWriter, r *http.Request) {
@@ -140,13 +191,23 @@ func (a *Auth) HandleSendCode(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
-	if err := mail.SendVerificationCode(email, code, a.smtpParams()); err != nil {
+	params := a.smtpParams()
+	if params == nil || params.Pass == "" || strings.HasPrefix(params.Pass, "****") {
+		log.Printf("[auth] send verification code: SMTP password not available (missing or masked)")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "发送邮件失败（SMTP 密码未正确配置，请在管理后台重新填写邮箱密码并保存）"})
+		return
+	}
+	if err := mail.SendVerificationCode(email, code, params); err != nil {
 		log.Printf("[auth] send verification code to %s failed: %v", email, err)
 		msg := "发送邮件失败"
 		if strings.Contains(strings.ToLower(err.Error()), "535") || strings.Contains(strings.ToLower(err.Error()), "authentication") {
-			msg = "发送邮件失败（SMTP 认证错误，请检查管理后台的邮件配置是否正确保存）"
+			msg = "发送邮件失败（SMTP 认证错误，163/QQ 等须用授权码而非登录密码）"
 		}
-		http.Error(w, `{"error":"`+msg+`"}`, http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": msg})
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
