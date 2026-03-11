@@ -44,6 +44,7 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
       const inst = await createInstance(name)
       setInstances((prev) => [inst, ...prev])
       setNewName('')
+      onRefresh?.()
       navigate(`/instances/${inst.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : '领养失败')
