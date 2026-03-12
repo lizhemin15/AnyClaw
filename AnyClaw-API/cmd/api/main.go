@@ -103,7 +103,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	wsHandler := ws.NewHandler(database, wsHub)
 	msgHandler := messages.New(database)
 	usageHandler := usage.New(database)
-	energyHandler := energy.New(database, configPath)
+	energyHandler := energy.New(database, configPath, authSvc)
 	proxy := llm.New(configPath, database, database)
 	proxy.StartKeepAlive(5 * time.Minute)
 
@@ -190,6 +190,8 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Get("/stats", adminStatsHandler.GetStats)
 		r.Get("/usage", usageHandler.ListAdminUsage)
 		r.Get("/energy/users", energyHandler.ListUsers)
+		r.Post("/energy/users", energyHandler.AdminCreateUser)
+		r.Put("/energy/users/{id}", energyHandler.AdminUpdateUser)
 		r.Post("/energy/recharge", energyHandler.Recharge)
 		r.Post("/energy/daily", energyHandler.RunDaily)
 		r.Post("/energy/users/{id}/recharge", energyHandler.AdminRechargeUser)

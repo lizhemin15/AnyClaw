@@ -91,6 +91,22 @@ func (d *DB) AddUserEnergy(userID int64, amount int) error {
 	return err
 }
 
+func (d *DB) SetUserEnergy(userID int64, energy int) error {
+	if energy < 0 {
+		energy = 0
+	}
+	_, err := d.Exec("UPDATE users SET energy = ? WHERE id = ?", energy, userID)
+	return err
+}
+
+func (d *DB) UpdateUserRole(userID int64, role string) error {
+	if role != "user" && role != "admin" {
+		role = "user"
+	}
+	_, err := d.Exec("UPDATE users SET role = ? WHERE id = ?", role, userID)
+	return err
+}
+
 func (d *DB) DeductUserEnergy(userID int64, amount int) (ok bool, err error) {
 	if amount <= 0 {
 		return true, nil

@@ -15,13 +15,18 @@ import (
 
 const codeChars = "abcdefghijklmnopqrstuvwxyz0123456789"
 
+type PasswordHasher interface {
+	HashPassword(password string) (string, error)
+}
+
 type Handler struct {
 	db         *db.DB
 	configPath string
+	auth       PasswordHasher
 }
 
-func New(db *db.DB, configPath string) *Handler {
-	return &Handler{db: db, configPath: configPath}
+func New(db *db.DB, configPath string, auth PasswordHasher) *Handler {
+	return &Handler{db: db, configPath: configPath, auth: auth}
 }
 
 func (h *Handler) Recharge(w http.ResponseWriter, r *http.Request) {
@@ -316,6 +321,98 @@ func (h *Handler) AdminRedeemActivationCode(w http.ResponseWriter, r *http.Reque
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "energy": energy, "user_id": req.UserID})
+}
+
+func (h *Handler) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
+	claims := request.FromContext(r.Context())
+	if claims == nil || claims.Role != "admin" {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	if h.auth == nil {
+		http.Error(w, `{"error":"auth not configured"}`, http.StatusInternalServerError)
+		return
+	}
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+		Role     string `json:"role"`
+		Energy   int    `json:"energy"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	email := strings.TrimSpace(strings.ToLower(req.Email))
+	if email == "" || len(req.Password) < 6 {
+		http.Error(w, `{"error":"email required, password at least 6 chars"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Role != "admin" && req.Role != "user" {
+		req.Role = "user"
+	}
+	if req.Energy < 0 {
+		req.Energy = 0
+	}
+	hash, err := h.auth.HashPassword(req.Password)
+	if err != nil {
+		http.Error(w, `{"error":"hash failed"}`, http.StatusInternalServerError)
+		return
+	}
+	u, err := h.db.CreateUser(email, hash, req.Role, true, req.Energy)
+	if err != nil {
+		if strings.Contains(err.Error(), "Duplicate") || strings.Contains(err.Error(), "UNIQUE") {
+			http.Error(w, `{"error":"邮箱已存在"}`, http.StatusBadRequest)
+			return
+		}
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "user": map[string]any{"id": u.ID, "email": u.Email, "role": u.Role, "energy": u.Energy}})
+}
+
+func (h *Handler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
+	claims := request.FromContext(r.Context())
+	if claims == nil || claims.Role != "admin" {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	userID, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if userID <= 0 {
+		http.Error(w, `{"error":"invalid user id"}`, http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Role   *string `json:"role"`
+		Energy *int    `json:"energy"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Role != nil {
+		role := strings.TrimSpace(*req.Role)
+		if role != "user" && role != "admin" {
+			role = "user"
+		}
+		if err := h.db.UpdateUserRole(userID, role); err != nil {
+			http.Error(w, `{"error":"update role failed"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+	if req.Energy != nil {
+		e := *req.Energy
+		if e < 0 {
+			e = 0
+		}
+		if err := h.db.SetUserEnergy(userID, e); err != nil {
+			http.Error(w, `{"error":"update energy failed"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
 }
 
 func generateCode(n int) string {

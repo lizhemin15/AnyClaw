@@ -338,6 +338,20 @@ export async function getAdminUsers(): Promise<UserWithInstances[]> {
   return Array.isArray(data) ? data : [];
 }
 
+export async function adminCreateUser(email: string, password: string, role: 'user' | 'admin', energy: number): Promise<{ user: User }> {
+  return fetchApi<{ user: User }>('/admin/energy/users', {
+    method: 'POST',
+    body: JSON.stringify({ email, password, role, energy }),
+  });
+}
+
+export async function adminUpdateUser(userId: number, updates: { role?: 'user' | 'admin'; energy?: number }): Promise<void> {
+  await fetchApi(`/admin/energy/users/${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify(updates),
+  });
+}
+
 export interface ModelEntry {
   id: string;
   name: string;
