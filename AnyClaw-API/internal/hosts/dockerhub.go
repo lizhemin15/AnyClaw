@@ -28,14 +28,14 @@ func getDockerHubDigestViaHost(runner runCommandOnHost, host *db.Host, image str
 	if !strings.Contains(repo, "/") {
 		repo = "library/" + repo
 	}
-	// 使用 HEAD 请求获取 Docker-Content-Digest，单次请求（你测试成功的 manifest.list）
-	// 不用 bash -c，避免引号转义问题；POSIX sh 兼容
+	// 使用 HEAD 请求获取 Docker-Content-Digest
+	// 多个 Accept 用逗号分隔，Registry 返回任一格式都会带 Docker-Content-Digest 头
 	cmd := fmt.Sprintf(`export PATH=/usr/local/bin:/usr/bin:$PATH
 REPO="%s"
 TAG="%s"
 TOKEN=$(curl -sSL -A "Docker-Client/20.0.0" "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${REPO}:pull" 2>/dev/null | grep -oE '"(token|access_token)":"[^"]*"' | head -1 | cut -d'"' -f4)
 [ -z "$TOKEN" ] && echo "ERR:token" && exit 1
-curl -sSL -I -A "Docker-Client/20.0.0" -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" "https://registry-1.docker.io/v2/${REPO}/manifests/${TAG}" 2>/dev/null | grep -i "docker-content-digest" | sed 's/.*: *//' | tr -d '\r\n' | grep -oE 'sha256:[a-fA-F0-9]{64}'`,
+curl -sSL -I -A "Docker-Client/20.0.0" -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json" "https://registry-1.docker.io/v2/${REPO}/manifests/${TAG}" 2>/dev/null | grep -i "docker-content-digest" | sed 's/^[^:]*: *//' | tr -d '\r\n' | grep -oE 'sha256:[a-fA-F0-9]{64}'`,
 		strings.ReplaceAll(repo, `"`, `\"`),
 		strings.ReplaceAll(tag, `"`, `\"`))
 	out, err := runner.RunCommand(host, cmd)
