@@ -56,8 +56,10 @@ func NewHandler(db *db.DB, hub *Hub) *Handler {
 				stored = true
 			}
 		}
-		if !stored && msg.Type == "message.create" && !strings.HasPrefix(content, "Thinking") {
-			log.Printf("[ws] instance %d: WARNING message.create not stored contentLen=%d", instanceID, len(content))
+		if !stored && content != "" && !strings.HasPrefix(content, "Thinking") {
+			// 兜底：其他类型也尝试存储，防止漏存
+			_, err := h.db.InsertMessage(instanceID, role, content)
+			log.Printf("[ws] instance %d: fallback store type=%s len=%d err=%v", instanceID, msg.Type, len(content), err)
 		}
 	})
 	return h
