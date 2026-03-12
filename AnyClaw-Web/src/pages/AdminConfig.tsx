@@ -511,7 +511,8 @@ export default function AdminConfig() {
                       <label className="block text-xs text-slate-500 mb-0.5">价格（元）</label>
                       <input
                         type="number"
-                        min={1}
+                        min={0.01}
+                        step={0.01}
                         value={form?.payment?.plans?.[i]?.price_cny ? (form.payment.plans[i].price_cny / 100).toString() : ''}
                         onChange={(e) => {
                           if (!form) return
@@ -520,7 +521,7 @@ export default function AdminConfig() {
                           plans[i] = { ...plans[i], price_cny: Math.round((parseFloat(e.target.value) || 0) * 100) }
                           setForm({ ...form, payment: { ...form.payment, plans } })
                         }}
-                        placeholder="元"
+                        placeholder="如 9.9"
                         className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
                       />
                     </div>
