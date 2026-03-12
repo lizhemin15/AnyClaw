@@ -291,8 +291,8 @@ export async function getHostInstanceImageStatus(id: string): Promise<{
   return fetchApi(`/admin/hosts/${id}/instance-image-status`);
 }
 
-export async function pullAndRestartInstances(id: string): Promise<{ ok: boolean; message: string; failed_ids?: number[] }> {
-  return fetchApi<{ ok: boolean; message: string; failed_ids?: number[] }>(`/admin/hosts/${id}/pull-and-restart-instances`, { method: 'POST' });
+export async function pullAndRestartInstances(id: string): Promise<{ ok: boolean; message: string; failed_ids?: number[]; failed_reasons?: Record<number, string> }> {
+  return fetchApi<{ ok: boolean; message: string; failed_ids?: number[]; failed_reasons?: Record<number, string> }>(`/admin/hosts/${id}/pull-and-restart-instances`, { method: 'POST' });
 }
 
 export async function pruneHostImages(id: string): Promise<{ ok: boolean; message: string }> {

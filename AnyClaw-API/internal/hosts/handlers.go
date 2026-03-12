@@ -424,17 +424,24 @@ func (h *Handler) PullAndRestartInstances(w http.ResponseWriter, r *http.Request
 	// 2. 逐个停止并重启
 	ctx := r.Context()
 	var failed []int64
+	failedReasons := make(map[int64]string)
 	for _, inst := range instances {
-		if err := h.sched.Stop(ctx, host.ID, inst.ContainerID, inst.ID, false); err != nil {
+		if err := h.sched.Stop(ctx, host.ID, inst.ContainerID, inst.ID, false, true); err != nil {
 			log.Printf("[hosts] stop instance %d failed: %v", inst.ID, err)
 			failed = append(failed, inst.ID)
+			failedReasons[inst.ID] = "停止容器失败: " + err.Error()
 			continue
 		}
 		_ = h.db.UpdateInstanceStatus(inst.ID, "creating")
 		cid, err := h.sched.RunOnHost(ctx, host.ID, inst.ID, inst.Token, h.apiURL)
 		if err != nil {
+			// 重试一次（可能是瞬时网络/资源问题）
+			cid, err = h.sched.RunOnHost(ctx, host.ID, inst.ID, inst.Token, h.apiURL)
+		}
+		if err != nil {
 			log.Printf("[hosts] restart instance %d failed: %v", inst.ID, err)
 			failed = append(failed, inst.ID)
+			failedReasons[inst.ID] = "启动容器失败: " + err.Error()
 			_ = h.db.UpdateInstanceStatus(inst.ID, "error")
 			continue
 		}
@@ -446,7 +453,7 @@ func (h *Handler) PullAndRestartInstances(w http.ResponseWriter, r *http.Request
 	if len(failed) > 0 {
 		msg = "部分实例重启失败"
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"ok": len(failed) < len(instances), "message": msg, "failed_ids": failed})
+		json.NewEncoder(w).Encode(map[string]any{"ok": len(failed) < len(instances), "message": msg, "failed_ids": failed, "failed_reasons": failedReasons})
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

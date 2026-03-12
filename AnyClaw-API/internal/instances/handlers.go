@@ -119,7 +119,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	ok, err := h.db.DeductUserEnergy(claims.UserID, ec.AdoptCost)
 	if err != nil || !ok {
 		log.Printf("[instances] deduct energy failed for user %d, container already running", claims.UserID)
-		_ = h.scheduler.Stop(context.Background(), hostID, containerID, inst.ID, true)
+		_ = h.scheduler.Stop(context.Background(), hostID, containerID, inst.ID, true, false)
 		_ = h.db.DeleteInstance(inst.ID)
 		http.Error(w, `{"error":"金币不足或系统异常"}`, http.StatusInternalServerError)
 		return
@@ -137,7 +137,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if updateErr != nil {
 		_ = h.db.AddUserEnergy(claims.UserID, ec.AdoptCost)
-		_ = h.scheduler.Stop(context.Background(), hostID, containerID, inst.ID, true)
+		_ = h.scheduler.Stop(context.Background(), hostID, containerID, inst.ID, true, false)
 		_ = h.db.DeleteInstance(inst.ID)
 		log.Printf("[instances] failed to save instance %d after retries: %v", inst.ID, updateErr)
 		http.Error(w, `{"error":"failed to save instance"}`, http.StatusInternalServerError)
@@ -221,7 +221,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	if err := h.scheduler.Stop(r.Context(), inst.HostID, inst.ContainerID, id, true); err != nil {
+	if err := h.scheduler.Stop(r.Context(), inst.HostID, inst.ContainerID, id, true, false); err != nil {
 		log.Printf("[instances] Stop failed for instance %d (container may still run): %v", id, err)
 	}
 	_ = h.db.DeleteMessagesByInstance(id)
@@ -268,7 +268,7 @@ func (h *Handler) AdminReconnect(w http.ResponseWriter, r *http.Request) {
 	}
 	reconnected := 0
 	for _, inst := range list {
-		if err := h.scheduler.Stop(r.Context(), inst.HostID, inst.ContainerID, inst.ID, true); err != nil {
+		if err := h.scheduler.Stop(r.Context(), inst.HostID, inst.ContainerID, inst.ID, true, false); err != nil {
 			log.Printf("[instances] reconnect: stop instance %d failed: %v", inst.ID, err)
 			continue
 		}
@@ -357,7 +357,7 @@ func (h *Handler) AdminDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"instance not found"}`, http.StatusNotFound)
 		return
 	}
-	if err := h.scheduler.Stop(r.Context(), inst.HostID, inst.ContainerID, id, true); err != nil {
+	if err := h.scheduler.Stop(r.Context(), inst.HostID, inst.ContainerID, id, true, false); err != nil {
 		log.Printf("[instances] Admin Stop failed for instance %d: %v", id, err)
 	}
 	_ = h.db.DeleteMessagesByInstance(id)

@@ -209,7 +209,11 @@ export default function Hosts() {
         alert(res.message)
         loadInstances()
       } else {
-        setError(res.failed_ids?.length ? `${res.message}，失败 ID: ${res.failed_ids.join(', ')}` : res.message)
+        const reasons = res.failed_reasons
+        const detail = res.failed_ids?.length
+          ? res.failed_ids.map((id) => reasons?.[id] ? `#${id}: ${reasons[id]}` : `#${id}`).join('；')
+          : res.message
+        setError(`${res.message}${detail ? `（${detail}）` : ''}`)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '更新失败')

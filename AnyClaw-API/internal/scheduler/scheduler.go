@@ -6,6 +6,7 @@ import (
 	"log"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/anyclaw/anyclaw-api/internal/config"
@@ -222,8 +223,8 @@ func (s *Scheduler) runOnHost(ctx context.Context, host *db.Host, instanceID int
 // If instanceID > 0 and removeWorkspace is true, also unmounts and removes the workspace volume.
 // When removeWorkspace is false (e.g. PullAndRestart, Migrate), workspace is preserved for reuse.
 // When hostID is empty, tries ALL hosts (including disabled) until docker rm succeeds.
-// Prefer container name anyclaw-inst-{id} when instanceID known (more reliable than stored container_id).
-func (s *Scheduler) Stop(ctx context.Context, hostID, containerID string, instanceID int64, removeWorkspace bool) error {
+// skipVerify: when true (e.g. PullAndRestart from ListRunningInstancesByHostID), skip env check to allow old/legacy containers.
+func (s *Scheduler) Stop(ctx context.Context, hostID, containerID string, instanceID int64, removeWorkspace bool, skipVerify bool) error {
 	containerName := fmt.Sprintf("anyclaw-inst-%d", instanceID)
 	rmTarget := ""
 	if instanceID > 0 {
@@ -256,9 +257,9 @@ func (s *Scheduler) Stop(ctx context.Context, hostID, containerID string, instan
 		hostsToTry = allHosts
 		log.Printf("[scheduler] host_id empty or invalid, trying all %d hosts for rm target %s", len(allHosts), rmTarget)
 	}
-	// Safety: when instanceID is known, always verify container belongs to this instance before rm
-	// to avoid accidentally deleting wrong containers (wrong DB data or manual name collision).
-	verifyBeforeRm := instanceID > 0
+	// Safety: when instanceID is known and not skipVerify, verify container belongs to this instance before rm.
+	// Lenient parse: accept "ANYCLAW_INSTANCE_ID=5" or "ANYCLAW_INSTANCE_ID=\"5\"" (old Docker/env formats).
+	verifyBeforeRm := instanceID > 0 && !skipVerify
 	var lastErr error
 	for _, host := range hostsToTry {
 		if verifyBeforeRm {
@@ -268,10 +269,17 @@ func (s *Scheduler) Stop(ctx context.Context, hostID, containerID string, instan
 				lastErr = err
 				continue
 			}
-			expected := fmt.Sprintf("ANYCLAW_INSTANCE_ID=%d", instanceID)
-			if strings.TrimSpace(out) != expected {
-				if strings.TrimSpace(out) != "" {
-					log.Printf("[scheduler] skip rm on %s: container %s env mismatch (got %q, expect %q)", host.Addr, rmTarget, strings.TrimSpace(out), expected)
+			line := strings.TrimSpace(out)
+			verified := false
+			if strings.HasPrefix(line, "ANYCLAW_INSTANCE_ID=") {
+				valStr := strings.Trim(strings.TrimPrefix(line, "ANYCLAW_INSTANCE_ID="), "\" ")
+				if v, e := strconv.ParseInt(valStr, 10, 64); e == nil && v == instanceID {
+					verified = true
+				}
+			}
+			if !verified {
+				if line != "" {
+					log.Printf("[scheduler] skip rm on %s: container %s env mismatch (got %q, expect ANYCLAW_INSTANCE_ID=%d)", host.Addr, rmTarget, line, instanceID)
 					lastErr = fmt.Errorf("container %s does not belong to instance %d", rmTarget, instanceID)
 				}
 				continue
@@ -322,7 +330,7 @@ func (s *Scheduler) MigrateWithInstance(ctx context.Context, inst *db.Instance, 
 		return "", "", fmt.Errorf("target host has no SSH credentials")
 	}
 	// 1. 停止源主机上的容器（保留工作区，后续 tar 并显式清理）
-	if err := s.Stop(ctx, inst.HostID, inst.ContainerID, inst.ID, false); err != nil {
+	if err := s.Stop(ctx, inst.HostID, inst.ContainerID, inst.ID, false, false); err != nil {
 		return "", "", fmt.Errorf("stop source container: %w", err)
 	}
 	// 2. 在源主机上打包工作区内容并流式传输到目标
