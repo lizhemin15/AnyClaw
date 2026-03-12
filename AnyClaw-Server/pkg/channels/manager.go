@@ -638,11 +638,11 @@ func (m *Manager) dispatchOutbound(ctx context.Context) {
 							mirrorMsg.ChatID = mc.MirrorChatID()
 							select {
 							case wBridge.queue <- mirrorMsg:
+								// 确保 mirror 写入，不跳过，否则 AI 回复无法持久化到 DB
 							case <-ctx.Done():
 								return false
-							default:
-								// Bridge queue full, skip mirror (avoid blocking)
 							}
+							// 移除 default：队列满时阻塞等待，避免漏存 assistant 消息
 						}
 					}
 				}
