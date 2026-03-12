@@ -424,6 +424,14 @@ export default function Chat() {
         <span className={`text-sm text-slate-500 ${connected ? 'hidden sm:block' : ''}`}>
           {connected ? '在线' : '离线'}
         </span>
+        <button
+          type="button"
+          onClick={() => loadMessages().then((list) => mergeMessagesFromServer(list, setMessages))}
+          className="text-xs px-2 py-1 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded"
+          title="刷新消息"
+        >
+          刷新
+        </button>
       </div>
 
       {error && (

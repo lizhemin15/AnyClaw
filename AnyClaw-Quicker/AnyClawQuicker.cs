@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -380,6 +381,44 @@ static string UnescapeJsonString(string s)
 {
     if (string.IsNullOrEmpty(s)) return s;
     return s.Replace("\\\"", "\"").Replace("\\\\", "\\").Replace("\\n", "\n").Replace("\\r", "\r");
+}
+
+// 解析 WebSocket 消息，优先用 JSON 解析（支持复杂 content 如错误信息），失败时回退到正则
+static (string type, string content, string role, string messageId) ParseWsMessage(string json)
+{
+    if (string.IsNullOrEmpty(json)) return ("", "", "", "");
+    try
+    {
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        var type = root.TryGetProperty("type", out var t) ? t.GetString() ?? "" : "";
+        var messageId = "";
+        var content = "";
+        var role = "";
+        if (root.TryGetProperty("payload", out var payload))
+        {
+            if (payload.TryGetProperty("message_id", out var mid))
+                messageId = mid.ValueKind == JsonValueKind.Number ? mid.GetInt64().ToString() : mid.GetString() ?? "";
+            if (payload.TryGetProperty("content", out var c))
+                content = c.GetString() ?? "";
+            if (payload.TryGetProperty("role", out var r))
+                role = r.GetString() ?? "";
+        }
+        return (type ?? "", content ?? "", role ?? "", messageId ?? "");
+    }
+    catch
+    {
+        var typeMatch = Regex.Match(json, "\"type\"\\s*:\\s*\"([^\"]+)\"");
+        var msgIdMatch = Regex.Match(json, "\"message_id\"\\s*:\\s*(\\d+)");
+        var contentMatch = Regex.Match(json, "\"content\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+        var roleMatch = Regex.Match(json, "\"role\"\\s*:\\s*\"([^\"]+)\"");
+        return (
+            typeMatch.Success ? typeMatch.Groups[1].Value : "",
+            contentMatch.Success ? UnescapeJsonString(contentMatch.Groups[1].Value) : "",
+            roleMatch.Success ? roleMatch.Groups[1].Value : "",
+            msgIdMatch.Success ? msgIdMatch.Groups[1].Value : ""
+        );
+    }
 }
 
 static string GetDesktopConfigPath(string apiBase)
@@ -1119,26 +1158,17 @@ class ClawMascotWindow : Window
                     _badgeText.Text = "●";
                 });
 
-                var typeMatch = Regex.Match(json, "\"type\"\\s*:\\s*\"([^\"]+)\"");
-                var type = typeMatch.Success ? typeMatch.Groups[1].Value : "";
-                var msgIdMatch = Regex.Match(json, "\"message_id\"\\s*:\\s*(\\d+)");
-                var contentMatch = Regex.Match(json, "\"content\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
-                var content = contentMatch.Success ? UnescapeJsonString(contentMatch.Groups[1].Value) : "";
-                var msgIdStr = msgIdMatch.Success ? msgIdMatch.Groups[1].Value : "";
-
-                // 检查 role 字段 - 支持多种格式
-                var roleMatch = Regex.Match(json, "\"role\"\\s*:\\s*\"([^\"]+)\"");
-                var role = roleMatch.Success ? roleMatch.Groups[1].Value : "";
+                var (type, content, role, msgIdStr) = ParseWsMessage(json);
 
                 // 调试：显示收到的消息类型和角色
                 Dispatcher.Invoke(() =>
                 {
                     _notificationBadge.Background = new SolidColorBrush(Color.FromRgb(139, 92, 246));
                     _notificationBadge.Visibility = Visibility.Visible;
-                    _badgeText.Text = type == "message.create" ? "C" : (type == "message.update" ? "U" : type.Substring(0, 1));
+                    _badgeText.Text = type == "message.create" ? "C" : (type == "message.update" ? "U" : (type.Length > 0 ? type.Substring(0, 1) : "?"));
                 });
 
-                // 处理助手消息 (role 可以是 assistant, model, 或为空)
+                // 处理助手消息 (role 可以是 assistant, model, 或为空；含错误信息也显示)
                 bool isAssistantMessage = role != "user" && !string.IsNullOrEmpty(content);
                 if ((type == "message.create" || type == "message.update") && isAssistantMessage && !content.StartsWith("Thinking"))
                 {
@@ -1689,7 +1719,7 @@ class AnyClawChatWindow : Window
                             {
                                 assistantContents.Add(m.Content);
                                 _messages.Add(new ChatMsg { Id = m.Id, Content = m.Content, IsUser = false });
-                                AddBubble(m.Content, false, false);
+                                AddBubble(m.Content, false, false, m.Content.StartsWith("Error processing message"));
                                 added = true;
                             }
                         }
@@ -1837,12 +1867,7 @@ class AnyClawChatWindow : Window
                 } while (!result.EndOfMessage);
                 var json = sb.ToString();
                 if (string.IsNullOrEmpty(json)) continue;
-                var typeMatch = Regex.Match(json, @"""type""\s*:\s*""([^""]+)""");
-                var type = typeMatch.Success ? typeMatch.Groups[1].Value : "";
-                var msgIdMatch = Regex.Match(json, @"""message_id""\s*:\s*(\d+)");
-                var msgId = msgIdMatch.Success ? msgIdMatch.Groups[1].Value : "";
-                var contentMatch = Regex.Match(json, @"""content""\s*:\s*""((?:[^""\\]|\\.)*)""");
-                var content = contentMatch.Success ? UnescapeJsonString(contentMatch.Groups[1].Value) : "";
+                var (type, content, _, msgId) = ParseWsMessage(json);
                 Dispatcher.Invoke(() =>
                 {
                     if (type == "typing.start")
@@ -1870,7 +1895,7 @@ class AnyClawChatWindow : Window
                         }
                         var m = new ChatMsg { Id = msgId, Content = content, IsUser = false };
                         _messages.Add(m);
-                        AddBubble(content, false, false);
+                        AddBubble(content, false, false, content.StartsWith("Error processing message"));
                     }
                 });
             }
@@ -1887,23 +1912,23 @@ class AnyClawChatWindow : Window
         }
     }
 
-    void AddBubble(string content, bool isUser, bool isSystem)
+    void AddBubble(string content, bool isUser, bool isSystem, bool isError = false)
     {
-        var wrap = CreateBubbleWrap(content, isUser, isSystem);
+        var wrap = CreateBubbleWrap(content, isUser, isSystem, isError);
         _msgPanel.Children.Add(wrap);
         ScrollToBottom();
     }
 
-    void AddBubbleToTop(string content, bool isUser, bool isSystem)
+    void AddBubbleToTop(string content, bool isUser, bool isSystem, bool isError = false)
     {
-        var wrap = CreateBubbleWrap(content, isUser, isSystem);
+        var wrap = CreateBubbleWrap(content, isUser, isSystem, isError);
         if (_msgPanel.Children.Count > 0)
             _msgPanel.Children.Insert(0, wrap);
         else
             _msgPanel.Children.Add(wrap);
     }
 
-    StackPanel CreateBubbleWrap(string content, bool isUser, bool isSystem)
+    StackPanel CreateBubbleWrap(string content, bool isUser, bool isSystem, bool isError = false)
     {
         var wrap = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0), Tag = isSystem ? "sys" : (isUser ? "user" : "assistant") };
         wrap.HorizontalAlignment = isUser ? HorizontalAlignment.Right : HorizontalAlignment.Left;
@@ -1915,7 +1940,13 @@ class AnyClawChatWindow : Window
             MaxWidth = 320
         };
 
-        if (isSystem)
+        if (isError)
+        {
+            bubbleContainer.Background = new SolidColorBrush(Color.FromRgb(254, 242, 242));
+            bubbleContainer.BorderBrush = new SolidColorBrush(Color.FromRgb(254, 202, 202));
+            bubbleContainer.BorderThickness = new Thickness(1, 1, 1, 1);
+        }
+        else if (isSystem)
         {
             bubbleContainer.Background = new SolidColorBrush(Color.FromRgb(241, 245, 249));
             bubbleContainer.BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240));
