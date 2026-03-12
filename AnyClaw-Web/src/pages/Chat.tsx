@@ -190,8 +190,17 @@ export default function Chat() {
           const prevIds = new Set(prev.map((m) => m.id))
           const merged = [...prev]
           for (const m of reversed) {
+            const role = m.role ?? 'assistant'
+            const content = m.content ?? ''
+            if (role === 'user') {
+              const idx = merged.findIndex((x) => x.role === 'user' && x.content === content && String(x.id).startsWith('u-'))
+              if (idx >= 0) {
+                merged[idx] = { id: m.id, content, role }
+                continue
+              }
+            }
             if (!prevIds.has(m.id)) {
-              merged.push({ id: m.id, content: m.content ?? '', role: m.role ?? 'assistant' })
+              merged.push({ id: m.id, content, role })
               prevIds.add(m.id)
             }
           }
@@ -264,8 +273,17 @@ export default function Chat() {
                   const reversed = [...arr].reverse()
                   let merged = [...prev]
                   for (const m of reversed) {
+                    const role = m.role ?? 'assistant'
+                    const content = m.content ?? ''
+                    if (role === 'user') {
+                      const idx = merged.findIndex((x) => x.role === 'user' && x.content === content && String(x.id).startsWith('u-'))
+                      if (idx >= 0) {
+                        merged[idx] = { id: m.id, content, role }
+                        continue
+                      }
+                    }
                     if (!prevIds.has(m.id)) {
-                      merged = [...merged, { id: m.id, content: m.content ?? '', role: m.role ?? 'assistant' }]
+                      merged = [...merged, { id: m.id, content, role }]
                       prevIds.add(m.id)
                     }
                   }
