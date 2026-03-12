@@ -140,8 +140,13 @@ func (a *Auth) smtpParamsFromDB() *mail.SMTPParams {
 
 func (a *Auth) HandleAuthConfig(w http.ResponseWriter, r *http.Request) {
 	ok := a.smtpConfigured()
+	cfg, _ := config.Load(a.configPath)
+	ec := config.GetEnergyConfig(cfg)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"email_verification_required": ok})
+	json.NewEncoder(w).Encode(map[string]any{
+		"email_verification_required": ok,
+		"adopt_cost":                  ec.AdoptCost,
+	})
 }
 
 func (a *Auth) HandleSendCode(w http.ResponseWriter, r *http.Request) {
@@ -340,6 +345,17 @@ func (a *Auth) HandleMe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"user not found"}`, http.StatusNotFound)
 		return
 	}
+	cfg, _ := config.Load(a.configPath)
+	ec := config.GetEnergyConfig(cfg)
+	resp := map[string]any{
+		"id":             user.ID,
+		"email":          user.Email,
+		"role":           user.Role,
+		"energy":         user.Energy,
+		"email_verified": user.EmailVerified,
+		"created_at":     user.CreatedAt,
+		"adopt_cost":     ec.AdoptCost,
+	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+	json.NewEncoder(w).Encode(resp)
 }

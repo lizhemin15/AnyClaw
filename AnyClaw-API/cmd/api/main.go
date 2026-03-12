@@ -153,6 +153,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Delete("/{id}", instHandler.Delete)
 	})
 
+	r.Get("/energy/config", energyHandler.GetPublicConfig)
 	r.Route("/energy", func(r chi.Router) {
 		r.Use(authSvc.Middleware)
 		r.Get("/recharge/plans", energyHandler.GetRechargePlans)

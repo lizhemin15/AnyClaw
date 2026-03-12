@@ -76,8 +76,12 @@ async function fetchApi<T>(
   return data as T;
 }
 
-export async function getAuthConfig(): Promise<{ email_verification_required: boolean }> {
-  return fetchApi<{ email_verification_required: boolean }>('/auth/config');
+export async function getAuthConfig(): Promise<{ email_verification_required: boolean; adopt_cost?: number }> {
+  return fetchApi<{ email_verification_required: boolean; adopt_cost?: number }>('/auth/config');
+}
+
+export async function getEnergyConfig(): Promise<{ adopt_cost?: number }> {
+  return fetchApi<{ adopt_cost?: number }>('/energy/config');
 }
 
 export async function sendVerificationCode(email: string): Promise<void> {

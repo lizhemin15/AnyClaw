@@ -5,7 +5,6 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,6 +14,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using PathShape = System.Windows.Shapes.Path;
@@ -180,62 +180,75 @@ class LoginWindow : Window
     {
         _apiBase = apiBase;
         Title = "AnyClaw 登录";
-        Width = 360;
-        Height = 280;
-        MinHeight = 280;
+        Width = 400;
+        Height = 460;
+        MinHeight = 420;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         ResizeMode = ResizeMode.NoResize;
+        Topmost = true;
         Background = GradBg();
 
-        var grid = new Grid();
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var main = new Border { Margin = new Thickness(24, 24, 24, 24), Padding = new Thickness(32, 28, 32, 28), Background = Brushes.White, CornerRadius = new CornerRadius(20), Effect = CardShadow(), BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)), BorderThickness = new Thickness(1, 1, 1, 1) };
 
-        var sp = new StackPanel { Margin = new Thickness(28, 24, 28, 16) };
-        sp.Children.Add(new TextBlock { Text = "邮箱", FontSize = 13, Margin = new Thickness(0, 0, 0, 6), Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105)) });
-        _emailBox = new TextBox { Height = 36, Padding = new Thickness(12, 8, 12, 8), FontSize = 14 };
+        var stack = new StackPanel();
+        stack.Children.Add(new TextBlock { Text = "登录", FontSize = 22, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)), Margin = new Thickness(0, 0, 0, 24) });
+
+        stack.Children.Add(new TextBlock { Text = "邮箱", FontSize = 13, FontWeight = FontWeights.Medium, Margin = new Thickness(0, 0, 0, 8), Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105)) });
+        _emailBox = new TextBox { Height = 44, Padding = new Thickness(14, 10, 14, 10), FontSize = 14 };
         _emailBox.Text = defaultEmail ?? "";
-        _emailBox.BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240));
+        _emailBox.BorderBrush = new SolidColorBrush(Color.FromRgb(203, 213, 225));
         _emailBox.BorderThickness = new Thickness(1, 1, 1, 1);
-        sp.Children.Add(_emailBox);
+        _emailBox.Margin = new Thickness(0, 0, 0, 20);
+        stack.Children.Add(_emailBox);
 
-        sp.Children.Add(new TextBlock { Text = "密码", FontSize = 13, Margin = new Thickness(0, 16, 0, 6), Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105)) });
-        _pwdBox = new PasswordBox { Height = 36, Padding = new Thickness(12, 8, 12, 8), FontSize = 14 };
+        stack.Children.Add(new TextBlock { Text = "密码", FontSize = 13, FontWeight = FontWeights.Medium, Margin = new Thickness(0, 0, 0, 8), Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105)) });
+        _pwdBox = new PasswordBox { Height = 44, Padding = new Thickness(14, 10, 14, 10), FontSize = 14 };
         _pwdBox.Password = defaultPassword ?? "";
-        _pwdBox.BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240));
+        _pwdBox.BorderBrush = new SolidColorBrush(Color.FromRgb(203, 213, 225));
         _pwdBox.BorderThickness = new Thickness(1, 1, 1, 1);
-        sp.Children.Add(_pwdBox);
+        _pwdBox.Margin = new Thickness(0, 0, 0, 16);
+        stack.Children.Add(_pwdBox);
 
-        _errorText = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(239, 68, 68)), FontSize = 12, Margin = new Thickness(0, 10, 0, 0), TextWrapping = TextWrapping.Wrap };
-        sp.Children.Add(_errorText);
+        _errorText = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(239, 68, 68)), FontSize = 12, Margin = new Thickness(0, 0, 0, 16), TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
+        stack.Children.Add(_errorText);
 
-        Grid.SetRow(sp, 0);
-        grid.Children.Add(sp);
-
-        var btnRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(28, 0, 28, 24) };
-        _loginBtn = new Button { Content = "确定", Width = 88, Height = 38, Foreground = Brushes.White, BorderThickness = new Thickness(0, 0, 0, 0) };
-        _loginBtn.Background = AccentGrad();
+        _loginBtn = new Button { Content = "登录", Height = 48, Foreground = Brushes.White, BorderThickness = new Thickness(0, 0, 0, 0) };
+        _loginBtn.Background = new SolidColorBrush(Color.FromRgb(30, 41, 59));
         _loginBtn.Effect = SoftShadow();
+        _loginBtn.FontSize = 15;
         _loginBtn.Click += OnLogin;
-        var cancelBtn = new Button { Content = "取消", Width = 88, Height = 38, Margin = new Thickness(14, 0, 0, 0), Background = Brushes.White, BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)), BorderThickness = new Thickness(1, 1, 1, 1) };
-        cancelBtn.Effect = SoftShadow();
-        cancelBtn.Click += (s, e) => { DialogResult = false; Close(); };
-        btnRow.Children.Add(_loginBtn);
-        btnRow.Children.Add(cancelBtn);
-        Grid.SetRow(btnRow, 1);
-        grid.Children.Add(btnRow);
+        stack.Children.Add(_loginBtn);
 
-        Content = grid;
+        var regRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 20, 0, 0), HorizontalAlignment = HorizontalAlignment.Center };
+        regRow.Children.Add(new TextBlock { Text = "还没有账号？ ", FontSize = 13, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), VerticalAlignment = VerticalAlignment.Center });
+        var regBtn = new Button { Content = "注册", Background = Brushes.Transparent, Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)), BorderThickness = new Thickness(0, 0, 0, 0), FontWeight = FontWeights.Medium, FontSize = 13, Padding = new Thickness(4, 2, 4, 2), Cursor = Cursors.Hand };
+        regBtn.Click += (s, e) =>
+        {
+            var regWin = new RegisterWindow(_apiBase);
+            regWin.Owner = this;
+            if (regWin.ShowDialog() == true && !string.IsNullOrEmpty(regWin.Token))
+            {
+                Token = regWin.Token;
+                DialogResult = true;
+                Close();
+            }
+        };
+        regRow.Children.Add(regBtn);
+        stack.Children.Add(regRow);
+
+        main.Child = stack;
+        Content = main;
     }
 
     void OnLogin(object s, RoutedEventArgs e)
     {
         var email = _emailBox.Text?.Trim();
         var password = _pwdBox.Password;
-        if (string.IsNullOrEmpty(email)) { _errorText.Text = "请输入邮箱"; return; }
-        if (string.IsNullOrEmpty(password)) { _errorText.Text = "请输入密码"; return; }
+        if (string.IsNullOrEmpty(email)) { _errorText.Text = "请输入邮箱"; _errorText.Visibility = Visibility.Visible; return; }
+        if (string.IsNullOrEmpty(password)) { _errorText.Text = "请输入密码"; _errorText.Visibility = Visibility.Visible; return; }
 
         _errorText.Text = "";
+        _errorText.Visibility = Visibility.Collapsed;
         _loginBtn.IsEnabled = false;
         var api = _apiBase;
         Task.Run(() =>
@@ -257,10 +270,167 @@ class LoginWindow : Window
                 Dispatcher.Invoke(() =>
                 {
                     _errorText.Text = msg;
+                    _errorText.Visibility = Visibility.Visible;
                     _loginBtn.IsEnabled = true;
                 });
             }
         });
+    }
+}
+
+class RegisterWindow : Window
+{
+    public string Token { get; private set; }
+    readonly string _apiBase;
+    readonly bool _verificationRequired;
+    TextBox _emailBox;
+    TextBox _codeBox;
+    StackPanel _codePanel;
+    StackPanel _pwdPanel;
+    PasswordBox _pwdBox;
+    Button _primaryBtn;
+    TextBlock _errorText;
+    int _step = 1;
+
+    public RegisterWindow(string apiBase)
+    {
+        _apiBase = apiBase;
+        _verificationRequired = GetAuthConfigVerificationRequired(apiBase);
+        Title = "AnyClaw 注册";
+        Width = 400;
+        Height = 420;
+        MinHeight = 380;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ResizeMode = ResizeMode.NoResize;
+        Topmost = true;
+        Background = GradBg();
+
+        var main = new Border { Margin = new Thickness(24, 24, 24, 24), Padding = new Thickness(32, 28, 32, 28), Background = Brushes.White, CornerRadius = new CornerRadius(20), Effect = CardShadow(), BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)), BorderThickness = new Thickness(1, 1, 1, 1) };
+
+        var stack = new StackPanel();
+        stack.Children.Add(new TextBlock { Text = "注册", FontSize = 22, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)), Margin = new Thickness(0, 0, 0, 24) });
+
+        stack.Children.Add(new TextBlock { Text = "邮箱", FontSize = 13, FontWeight = FontWeights.Medium, Margin = new Thickness(0, 0, 0, 8), Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105)) });
+        _emailBox = new TextBox { Height = 44, Padding = new Thickness(14, 10, 14, 10), FontSize = 14 };
+        _emailBox.BorderBrush = new SolidColorBrush(Color.FromRgb(203, 213, 225));
+        _emailBox.BorderThickness = new Thickness(1, 1, 1, 1);
+        _emailBox.Margin = new Thickness(0, 0, 0, 20);
+        stack.Children.Add(_emailBox);
+
+        if (_verificationRequired)
+        {
+            _codePanel = new StackPanel { Margin = new Thickness(0, 0, 0, 20), Visibility = Visibility.Collapsed };
+            _codePanel.Children.Add(new TextBlock { Text = "验证码", FontSize = 13, FontWeight = FontWeights.Medium, Margin = new Thickness(0, 0, 0, 8), Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105)) });
+            _codeBox = new TextBox { Height = 44, Padding = new Thickness(14, 10, 14, 10), FontSize = 14, MaxLength = 6 };
+            _codeBox.BorderBrush = new SolidColorBrush(Color.FromRgb(203, 213, 225));
+            _codeBox.BorderThickness = new Thickness(1, 1, 1, 1);
+            _codeBox.PreviewTextInput += (s, e) => { e.Handled = !Regex.IsMatch(e.Text, @"^\d*$"); };
+            _codePanel.Children.Add(_codeBox);
+            stack.Children.Add(_codePanel);
+        }
+
+        _pwdPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 16) };
+        _pwdPanel.Children.Add(new TextBlock { Text = "密码（至少 6 位）", FontSize = 13, FontWeight = FontWeights.Medium, Margin = new Thickness(0, 0, 0, 8), Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105)) });
+        _pwdBox = new PasswordBox { Height = 44, Padding = new Thickness(14, 10, 14, 10), FontSize = 14 };
+        _pwdBox.BorderBrush = new SolidColorBrush(Color.FromRgb(203, 213, 225));
+        _pwdBox.BorderThickness = new Thickness(1, 1, 1, 1);
+        _pwdPanel.Children.Add(_pwdBox);
+        stack.Children.Add(_pwdPanel);
+        if (_verificationRequired) _pwdPanel.Visibility = Visibility.Collapsed;
+
+        _errorText = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(239, 68, 68)), FontSize = 12, Margin = new Thickness(0, 0, 0, 16), TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
+        stack.Children.Add(_errorText);
+
+        _primaryBtn = new Button { Content = _verificationRequired ? "发送验证码" : "注册", Height = 48, Foreground = Brushes.White, BorderThickness = new Thickness(0, 0, 0, 0) };
+        _primaryBtn.Background = new SolidColorBrush(Color.FromRgb(30, 41, 59));
+        _primaryBtn.Effect = SoftShadow();
+        _primaryBtn.FontSize = 15;
+        _primaryBtn.Click += OnPrimaryClick;
+        stack.Children.Add(_primaryBtn);
+
+        var loginRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 20, 0, 0), HorizontalAlignment = HorizontalAlignment.Center };
+        loginRow.Children.Add(new TextBlock { Text = "已有账号？ ", FontSize = 13, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), VerticalAlignment = VerticalAlignment.Center });
+        var loginBtn = new Button { Content = "登录", Background = Brushes.Transparent, Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)), BorderThickness = new Thickness(0, 0, 0, 0), FontWeight = FontWeights.Medium, FontSize = 13, Padding = new Thickness(4, 2, 4, 2), Cursor = Cursors.Hand };
+        loginBtn.Click += (s, e) => { DialogResult = false; Close(); };
+        loginRow.Children.Add(loginBtn);
+        stack.Children.Add(loginRow);
+
+        main.Child = stack;
+        Content = main;
+    }
+
+    void OnPrimaryClick(object s, RoutedEventArgs e)
+    {
+        var email = _emailBox.Text?.Trim();
+        if (string.IsNullOrEmpty(email)) { ShowError("请输入邮箱"); return; }
+
+        if (_verificationRequired && _step == 1)
+        {
+            _errorText.Visibility = Visibility.Collapsed;
+            _primaryBtn.IsEnabled = false;
+            Task.Run(() =>
+            {
+                try
+                {
+                    SendVerificationCode(_apiBase, email);
+                    Dispatcher.Invoke(() =>
+                    {
+                        _step = 2;
+                        _emailBox.IsEnabled = false;
+                        _codePanel.Visibility = Visibility.Visible;
+                        _pwdPanel.Visibility = Visibility.Visible;
+                        _primaryBtn.Content = "注册";
+                        _primaryBtn.IsEnabled = true;
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Dispatcher.Invoke(() => { ShowError(ex.Message); _primaryBtn.IsEnabled = true; });
+                }
+            });
+            return;
+        }
+
+        var password = _pwdBox.Password;
+        if (string.IsNullOrEmpty(password)) { ShowError("请输入密码"); return; }
+        if (password.Length < 6) { ShowError("密码至少 6 位"); return; }
+        if (_verificationRequired)
+        {
+            var code = _codeBox?.Text?.Trim() ?? "";
+            if (string.IsNullOrEmpty(code)) { ShowError("请输入验证码"); return; }
+        }
+
+        _errorText.Visibility = Visibility.Collapsed;
+        _primaryBtn.IsEnabled = false;
+        var api = _apiBase;
+        var codeVal = _verificationRequired ? _codeBox.Text?.Trim() : null;
+        Task.Run(() =>
+        {
+            try
+            {
+                var t = DoRegister(api, email, password, codeVal);
+                Dispatcher.Invoke(() =>
+                {
+                    Token = t;
+                    DialogResult = true;
+                    Close();
+                });
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    ShowError(ex.Message);
+                    _primaryBtn.IsEnabled = true;
+                });
+            }
+        });
+    }
+
+    void ShowError(string msg)
+    {
+        _errorText.Text = msg;
+        _errorText.Visibility = Visibility.Visible;
     }
 }
 
@@ -280,6 +450,72 @@ static string DoLogin(string apiBase, string email, string password)
     throw new Exception("登录响应无 access_token");
 }
 
+static bool GetAuthConfigVerificationRequired(string apiBase)
+{
+    var (ver, _) = GetAuthConfig(apiBase);
+    return ver;
+}
+static (bool VerificationRequired, int AdoptCost) GetAuthConfig(string apiBase)
+{
+    try
+    {
+        var api = apiBase.TrimEnd('/');
+        using var client = CreateHttpClient();
+        var resp = client.GetAsync(api + "/auth/config").GetAwaiter().GetResult();
+        var text = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+        if (!resp.IsSuccessStatusCode) return (true, 100);
+        var verMatch = Regex.Match(text, @"""email_verification_required""\s*:\s*(true|false)");
+        var verificationRequired = !verMatch.Success || verMatch.Groups[1].Value == "true";
+        var costMatch = Regex.Match(text, @"""adopt_cost""\s*:\s*(\d+)");
+        var adoptCost = costMatch.Success && int.TryParse(costMatch.Groups[1].Value, out var c) && c > 0 ? c : 0;
+        if (adoptCost <= 0)
+        {
+            var er = client.GetAsync(api + "/energy/config").GetAwaiter().GetResult();
+            if (er.IsSuccessStatusCode)
+            {
+                var et = er.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                var em = Regex.Match(et, @"""adopt_cost""\s*:\s*(\d+)");
+                if (em.Success && int.TryParse(em.Groups[1].Value, out var ec) && ec > 0) adoptCost = ec;
+            }
+        }
+        if (adoptCost <= 0) adoptCost = 100;
+        return (verificationRequired, adoptCost);
+    }
+    catch { return (true, 100); }
+}
+
+static void SendVerificationCode(string apiBase, string email)
+{
+    using var client = CreateHttpClient();
+    var body = "{\"email\":\"" + JsonEscape(email) + "\"}";
+    var resp = client.PostAsync(apiBase.TrimEnd('/') + "/auth/send-code", new StringContent(body, Encoding.UTF8, "application/json")).GetAwaiter().GetResult();
+    var text = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+    if (!resp.IsSuccessStatusCode)
+    {
+        var m = Regex.Match(text, @"""error""\s*:\s*""([^""]*)""");
+        throw new Exception(m.Success ? m.Groups[1].Value : text);
+    }
+}
+
+static string DoRegister(string apiBase, string email, string password, string code = null)
+{
+    using var client = CreateHttpClient();
+    var sb = new StringBuilder();
+    sb.Append("{\"email\":\"").Append(JsonEscape(email)).Append("\",\"password\":\"").Append(JsonEscape(password)).Append("\"");
+    if (!string.IsNullOrEmpty(code)) sb.Append(",\"code\":\"").Append(JsonEscape(code)).Append("\"");
+    sb.Append("}");
+    var resp = client.PostAsync(apiBase.TrimEnd('/') + "/auth/register", new StringContent(sb.ToString(), Encoding.UTF8, "application/json")).GetAwaiter().GetResult();
+    var text = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+    if (!resp.IsSuccessStatusCode)
+    {
+        var m = Regex.Match(text, @"""error""\s*:\s*""([^""]*)""");
+        throw new Exception(m.Success ? m.Groups[1].Value : text);
+    }
+    var tokMatch = Regex.Match(text, @"""access_token""\s*:\s*""([^""]+)""");
+    if (tokMatch.Success) return tokMatch.Groups[1].Value;
+    throw new Exception("注册响应无 access_token");
+}
+
 static UserInfo GetMe(string apiBase, string token)
 {
     using var client = CreateHttpClient();
@@ -289,7 +525,9 @@ static UserInfo GetMe(string apiBase, string token)
     if (!resp.IsSuccessStatusCode) throw new Exception("获取用户信息失败");
     var energyMatch = Regex.Match(text, @"""energy""\s*:\s*(\d+)");
     var emailMatch = Regex.Match(text, @"""email""\s*:\s*""([^""]*)""");
-    return new UserInfo { Energy = energyMatch.Success ? int.Parse(energyMatch.Groups[1].Value) : 0, Email = emailMatch.Success ? emailMatch.Groups[1].Value : "" };
+    var adoptMatch = Regex.Match(text, @"""adopt_cost""\s*:\s*(\d+)");
+    var adoptCost = adoptMatch.Success && int.TryParse(adoptMatch.Groups[1].Value, out var ac) && ac > 0 ? ac : 0;
+    return new UserInfo { Energy = energyMatch.Success ? int.Parse(energyMatch.Groups[1].Value) : 0, Email = emailMatch.Success ? emailMatch.Groups[1].Value : "", AdoptCost = adoptCost };
 }
 
 static List<InstanceItem> GetInstances(string apiBase, string token)
@@ -346,26 +584,18 @@ static List<(string Id, string Content, bool IsUser)> GetMessages(string httpBas
         var text = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
         if (!resp.IsSuccessStatusCode) return new List<(string, string, bool)>();
         var list = new List<(string Id, string Content, bool IsUser)>();
-        // 提取 messages 数组内容，逐条解析（避免长 content 导致单次正则失败）
-        var arrMatch = Regex.Match(text, "\"messages\"\\s*:\\s*\\[([\\s\\S]*)\\]");
-        if (!arrMatch.Success) return list;
-        var arrBody = arrMatch.Groups[1].Value;
-        // 按 },{ 分割每个消息对象（保留完整结构）
-        var parts = Regex.Split(arrBody, "\\}\\s*,\\s*\\{");
-        for (var i = 0; i < parts.Length; i++)
+        // 用正则逐条匹配消息对象，保持 API 返回顺序（id DESC），避免 },{ 分割破坏 content
+        var objRegex = new Regex(@"\{\s*""id""\s*:\s*(\d+)[^}]*""role""\s*:\s*""([^""]*)""[^}]*""content""\s*:\s*""((?:[^""\\]|\\.)*)""", RegexOptions.Singleline);
+        foreach (Match m in objRegex.Matches(text))
         {
-            var raw = parts[i];
-            if (i > 0) raw = "{" + raw;
-            if (i < parts.Length - 1) raw = raw + "}";
-            var idM = Regex.Match(raw, "\"id\"\\s*:\\s*(\\d+)");
-            var roleM = Regex.Match(raw, "\"role\"\\s*:\\s*\"([^\"]*)\"");
-            var contentM = Regex.Match(raw, "\"content\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\\\\\.)*)\"");
-            if (!idM.Success || !contentM.Success) continue;
-            var content = UnescapeJsonString(contentM.Groups[1].Value ?? "");
+            var id = m.Groups[1].Value;
+            var role = m.Groups[2].Value;
+            var content = UnescapeJsonString(m.Groups[3].Value ?? "");
             if (string.IsNullOrEmpty(content) || content.StartsWith("Thinking")) continue;
-            var role = roleM.Success ? (roleM.Groups[1].Value ?? "") : "assistant";
-            list.Add((idM.Groups[1].Value, content, role == "user"));
+            if (string.IsNullOrEmpty(role)) role = "assistant";
+            list.Add((id, content, role == "user"));
         }
+        // 按 id 升序排成 一问一答 顺序（旧→新）
         list.Sort((a, b) =>
         {
             if (long.TryParse(a.Id, out var ia) && long.TryParse(b.Id, out var ib))
@@ -383,42 +613,27 @@ static string UnescapeJsonString(string s)
     return s.Replace("\\\"", "\"").Replace("\\\\", "\\").Replace("\\n", "\n").Replace("\\r", "\r");
 }
 
-// 解析 WebSocket 消息，优先用 JSON 解析（支持复杂 content 如错误信息），失败时回退到正则
+// 解析 WebSocket 消息（正则，兼容 Quicker Roslyn 无 System.Text.Json）
 static (string type, string content, string role, string messageId) ParseWsMessage(string json)
 {
     if (string.IsNullOrEmpty(json)) return ("", "", "", "");
-    try
+    var typeMatch = Regex.Match(json, "\"type\"\\s*:\\s*\"([^\"]+)\"");
+    var msgIdMatch = Regex.Match(json, "\"message_id\"\\s*:\\s*\"?([\\d\\w-]*)\"?");
+    var roleMatch = Regex.Match(json, "\"role\"\\s*:\\s*\"([^\"]+)\"");
+    var content = "";
+    var contentMatch = Regex.Match(json, "\"content\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\\\\\.)*)\"");
+    if (contentMatch.Success) content = UnescapeJsonString(contentMatch.Groups[1].Value);
+    else
     {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-        var type = root.TryGetProperty("type", out var t) ? t.GetString() ?? "" : "";
-        var messageId = "";
-        var content = "";
-        var role = "";
-        if (root.TryGetProperty("payload", out var payload))
-        {
-            if (payload.TryGetProperty("message_id", out var mid))
-                messageId = mid.ValueKind == JsonValueKind.Number ? mid.GetInt64().ToString() : mid.GetString() ?? "";
-            if (payload.TryGetProperty("content", out var c))
-                content = c.GetString() ?? "";
-            if (payload.TryGetProperty("role", out var r))
-                role = r.GetString() ?? "";
-        }
-        return (type ?? "", content ?? "", role ?? "", messageId ?? "");
+        var fallback = Regex.Match(json, "\"content\"\\s*:\\s*\"([^\"]*)\"");
+        if (fallback.Success) content = UnescapeJsonString(fallback.Groups[1].Value);
     }
-    catch
-    {
-        var typeMatch = Regex.Match(json, "\"type\"\\s*:\\s*\"([^\"]+)\"");
-        var msgIdMatch = Regex.Match(json, "\"message_id\"\\s*:\\s*(\\d+)");
-        var contentMatch = Regex.Match(json, "\"content\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
-        var roleMatch = Regex.Match(json, "\"role\"\\s*:\\s*\"([^\"]+)\"");
-        return (
-            typeMatch.Success ? typeMatch.Groups[1].Value : "",
-            contentMatch.Success ? UnescapeJsonString(contentMatch.Groups[1].Value) : "",
-            roleMatch.Success ? roleMatch.Groups[1].Value : "",
-            msgIdMatch.Success ? msgIdMatch.Groups[1].Value : ""
-        );
-    }
+    return (
+        typeMatch.Success ? typeMatch.Groups[1].Value : "",
+        content,
+        roleMatch.Success ? roleMatch.Groups[1].Value : "",
+        msgIdMatch.Success ? msgIdMatch.Groups[1].Value : ""
+    );
 }
 
 static string GetDesktopConfigPath(string apiBase)
@@ -502,7 +717,39 @@ static readonly ColorScheme[] ColorSchemes = {
 };
 static ColorScheme? ColorSchemeById(string id) { foreach (var s in ColorSchemes) if (s.Id == id) return s; return null; }
 
-class UserInfo { public int Energy; public string Email; }
+class UserInfo { public int Energy; public string Email; public int AdoptCost; }
+class RechargePlan { public string Id; public string Name; public string Benefits; public int Energy; public int PriceCny; }
+
+static List<RechargePlan> GetRechargePlans(string apiBase, string token)
+{
+    var list = new List<RechargePlan>();
+    try
+    {
+        using var client = CreateHttpClient();
+        client.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
+        var resp = client.GetAsync(apiBase.TrimEnd('/') + "/energy/recharge/plans").GetAwaiter().GetResult();
+        var text = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+        if (!resp.IsSuccessStatusCode) return list;
+        var parts = text.Split(new[] { "},{" }, StringSplitOptions.None);
+        foreach (var p in parts)
+        {
+            var block = p.Trim().TrimStart('[').TrimEnd(']').TrimStart('{').TrimEnd('}');
+            if (string.IsNullOrEmpty(block)) continue;
+            var idMatch = Regex.Match(block, @"""id""\s*:\s*""([^""]*)""");
+            var nameMatch = Regex.Match(block, @"""name""\s*:\s*""([^""]*)""");
+            var benefitsMatch = Regex.Match(block, @"""benefits""\s*:\s*""([^""]*)""");
+            var energyMatch = Regex.Match(block, @"""energy""\s*:\s*(\d+)");
+            var priceMatch = Regex.Match(block, @"""price_cny""\s*:\s*(\d+)");
+            if (nameMatch.Success && energyMatch.Success && int.TryParse(energyMatch.Groups[1].Value, out var energy) && priceMatch.Success && int.TryParse(priceMatch.Groups[1].Value, out var price))
+            {
+                var benefits = benefitsMatch.Success ? benefitsMatch.Groups[1].Value : (energy + " 金币");
+                list.Add(new RechargePlan { Id = idMatch.Success ? idMatch.Groups[1].Value : "", Name = nameMatch.Groups[1].Value, Benefits = benefits, Energy = energy, PriceCny = price });
+            }
+        }
+    }
+    catch { }
+    return list;
+}
 class InstanceItem { public int Id; public string Name; public string Status; }
 
 static readonly List<ClawMascotWindow> s_mascots = new List<ClawMascotWindow>();
@@ -511,6 +758,7 @@ class ClawAdminWindow : Window
 {
     readonly string _apiBase;
     readonly string _token;
+    Point _dragOffset;
     Point _dragStartScreen;
 
     public ClawAdminWindow(string apiBase, string token)
@@ -531,7 +779,7 @@ class ClawAdminWindow : Window
         Top = SystemParameters.PrimaryScreenHeight - 120;
 
         var canvas = new Canvas { Width = 56, Height = 56 };
-        var tb = new TextBlock { Text = "⚙️", FontSize = 36, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        var tb = new TextBlock { Text = "🏠", FontSize = 36, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         var vb = new Viewbox { Child = tb, Stretch = Stretch.Uniform };
         Canvas.SetLeft(vb, 8);
         Canvas.SetTop(vb, 8);
@@ -545,16 +793,16 @@ class ClawAdminWindow : Window
         exitMenu.Items.Add(exitItem);
         canvas.ContextMenu = exitMenu;
 
-        canvas.MouseLeftButtonDown += (s, e) => { _dragStartScreen = PointToScreen(e.GetPosition(this)); canvas.CaptureMouse(); };
+        canvas.MouseLeftButtonDown += (s, e) => { _dragOffset = e.GetPosition(this); _dragStartScreen = PointToScreen(_dragOffset); canvas.CaptureMouse(); };
         canvas.MouseLeftButtonUp += (s, e) =>
         {
             canvas.ReleaseMouseCapture();
             var p = PointToScreen(e.GetPosition(this));
             if (Math.Abs(p.X - _dragStartScreen.X) < 4 && Math.Abs(p.Y - _dragStartScreen.Y) < 4)
             {
-                var mgr = new LobsterManagementWindow(_apiBase, _token);
-                mgr.Owner = this;
-                mgr.ShowDialog();
+                var main = new AnyClawMainWindow(_apiBase, _token);
+                main.Owner = this;
+                main.ShowDialog();
             }
         };
         canvas.MouseMove += (s, e) =>
@@ -562,153 +810,11 @@ class ClawAdminWindow : Window
             if (e.LeftButton == MouseButtonState.Pressed)
             {
                 var p = PointToScreen(e.GetPosition(this));
-                Left += p.X - _dragStartScreen.X;
-                Top += p.Y - _dragStartScreen.Y;
-                _dragStartScreen = p;
+                Left = p.X - _dragOffset.X;
+                Top = p.Y - _dragOffset.Y;
             }
         };
         Content = canvas;
-    }
-}
-
-class LobsterManagementWindow : Window
-{
-    readonly string _apiBase;
-    readonly string _token;
-    StackPanel _listPanel;
-    readonly Dictionary<int, CheckBox> _showChecks = new Dictionary<int, CheckBox>();
-    readonly Dictionary<int, ComboBox> _schemeCombos = new Dictionary<int, ComboBox>();
-
-    public LobsterManagementWindow(string apiBase, string token)
-    {
-        _apiBase = apiBase;
-        _token = token;
-        Title = "龙虾显示管理";
-        Width = 520;
-        Height = 520;
-        MinHeight = 420;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = GradBg();
-
-        var grid = new Grid();
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-        var headerRow = new Grid { Margin = new Thickness(24, 24, 24, 0) };
-        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        headerRow.Children.Add(new TextBlock { Text = "龙虾显示管理", FontSize = 20, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)) });
-        var toMainBtn = new Button { Content = "进入宠舍", Width = 80, Height = 32, FontSize = 13 };
-        toMainBtn.Background = Brushes.White;
-        toMainBtn.Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105));
-        toMainBtn.BorderThickness = new Thickness(0);
-        toMainBtn.Effect = SoftShadow();
-        toMainBtn.Click += (s, e) => { new AnyClawMainWindow(_apiBase, _token).ShowDialog(); Refresh(); };
-        Grid.SetColumn(toMainBtn, 1);
-        headerRow.Children.Add(toMainBtn);
-        Grid.SetRow(headerRow, 0);
-        grid.Children.Add(headerRow);
-
-        var hint = new TextBlock { Text = "勾选要显示的宠物，选择配色方案，点击应用", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), Margin = new Thickness(24, 10, 24, 12) };
-        Grid.SetRow(hint, 1);
-        grid.Children.Add(hint);
-
-        _listPanel = new StackPanel();
-        var scroll = new ScrollViewer { Content = _listPanel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(24, 0, 24, 0) };
-        Grid.SetRow(scroll, 2);
-        grid.Children.Add(scroll);
-
-        var applyBtn = new Button { Content = "应用到桌面", Width = 140, Height = 42, Margin = new Thickness(24, 16, 24, 24), FontSize = 14, Foreground = Brushes.White, BorderThickness = new Thickness(0) };
-        applyBtn.Background = AccentGrad();
-        applyBtn.Effect = SoftShadow();
-        applyBtn.Click += OnApply;
-        Grid.SetRow(applyBtn, 3);
-        grid.Children.Add(applyBtn);
-
-        Content = grid;
-        Loaded += (s, e) => Refresh();
-    }
-
-    void Refresh()
-    {
-        try
-        {
-            var instances = GetInstances(_apiBase, _token);
-            var saved = LoadDesktopConfig(_apiBase);
-            var savedDict = saved.ToDictionary(x => x.Id, x => x.SchemeId);
-            _listPanel.Children.Clear();
-            _showChecks.Clear();
-            _schemeCombos.Clear();
-            foreach (var i in instances)
-            {
-                var row = new Grid();
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                var chk = new CheckBox { IsChecked = savedDict.ContainsKey(i.Id), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
-                _showChecks[i.Id] = chk;
-                var nameTb = new TextBlock { Text = i.Name + (i.Status == "running" ? " (在线)" : i.Status == "creating" ? " (创建中)" : ""), VerticalAlignment = VerticalAlignment.Center, FontSize = 14 };
-                var combo = new ComboBox { Width = 100, VerticalAlignment = VerticalAlignment.Center };
-                var savedSchemeId = savedDict.ContainsKey(i.Id) && ColorSchemeById(savedDict[i.Id]) != null ? savedDict[i.Id] : "lobster";
-                foreach (var s in ColorSchemes)
-                {
-                    var item = new ComboBoxItem { Content = s.Name, Tag = s.Id };
-                    combo.Items.Add(item);
-                    if (s.Id == savedSchemeId) combo.SelectedItem = item;
-                }
-                if (combo.SelectedItem == null && combo.Items.Count > 0) combo.SelectedIndex = 0;
-                _schemeCombos[i.Id] = combo;
-                Grid.SetColumn(chk, 0);
-                Grid.SetColumn(nameTb, 1);
-                Grid.SetColumn(combo, 2);
-                row.Children.Add(chk);
-                row.Children.Add(nameTb);
-                row.Children.Add(combo);
-                var card = new Border { Child = row, Padding = new Thickness(14, 12, 14, 12), Margin = new Thickness(0, 0, 0, 10), Background = Brushes.White, CornerRadius = new CornerRadius(10), Effect = SoftShadow() };
-                _listPanel.Children.Add(card);
-            }
-        }
-        catch (Exception ex) { MessageBox.Show("加载失败: " + ex.Message); }
-    }
-
-    void OnApply(object s, RoutedEventArgs e)
-    {
-        try
-        {
-            var instances = GetInstances(_apiBase, _token);
-            var saved = LoadDesktopConfig(_apiBase);
-            var posDict = saved.ToDictionary(x => x.Id, x => (x.X, x.Y));
-            var items = instances.Select(i =>
-            {
-                _showChecks.TryGetValue(i.Id, out var chk);
-                _schemeCombos.TryGetValue(i.Id, out var combo);
-                var show = chk?.IsChecked == true;
-                var schemeId = (combo?.SelectedItem as ComboBoxItem)?.Tag as string ?? "lobster";
-                if (ColorSchemeById(schemeId) == null) schemeId = "lobster";
-                var (sx, sy) = posDict.ContainsKey(i.Id) ? posDict[i.Id] : (double.NaN, double.NaN);
-                return (i.Id, Show: show, SchemeId: schemeId, X: sx, Y: sy);
-            }).ToList();
-            SaveDesktopConfig(_apiBase, items.Select(x => (x.Id, x.Show, x.SchemeId, x.X, x.Y)).ToList());
-            lock (s_mascots)
-            {
-                foreach (var m in s_mascots.ToList()) m.Close();
-                s_mascots.Clear();
-                var idx = 0;
-                foreach (var (id, show, schemeId, x, y) in items.Where(x => x.Show))
-                {
-                    var inst = instances.FirstOrDefault(x => x.Id == id);
-                    if (inst != null && inst.Status == "running")
-                    {
-                        var mascot = new ClawMascotWindow(_apiBase, _token, id, inst.Name, schemeId, idx++, x, y);
-                        mascot.Show();
-                    }
-                }
-            }
-            Close();
-        }
-        catch (Exception ex) { MessageBox.Show("应用失败: " + ex.Message); }
     }
 }
 
@@ -718,6 +824,7 @@ class ClawMascotWindow : Window
     readonly string _token;
     readonly int _instanceId;
     readonly string _instanceName;
+    Point _dragOffset;
     Point _dragStartScreen;
     ClientWebSocket _ws;
     CancellationTokenSource _cts;
@@ -733,7 +840,6 @@ class ClawMascotWindow : Window
     TextBlock _badgeText;
     Window _quickReplyWindow;
     TextBox _quickReplyBox;
-    TextBlock _quickReplyPreview;
 
     public ClawMascotWindow(string apiBase, string token, int instanceId, string instanceName, string schemeId, int positionIndex = 0, double savedX = double.NaN, double savedY = double.NaN)
     {
@@ -793,7 +899,7 @@ class ClawMascotWindow : Window
             CornerRadius = new CornerRadius(10),
             Background = new SolidColorBrush(Color.FromRgb(239, 68, 68)),
             Visibility = Visibility.Collapsed,
-            BorderThickness = new Thickness(2),
+            BorderThickness = new Thickness(2, 2, 2, 2),
             BorderBrush = Brushes.White
         };
         _badgeText = new TextBlock
@@ -822,16 +928,15 @@ class ClawMascotWindow : Window
         _canvas.ContextMenu = menu;
 
         // 鼠标事件
-        _canvas.MouseLeftButtonDown += (s, e) => { _dragStartScreen = PointToScreen(e.GetPosition(this)); _canvas.CaptureMouse(); };
+        _canvas.MouseLeftButtonDown += (s, e) => { _dragOffset = e.GetPosition(this); _dragStartScreen = PointToScreen(_dragOffset); _canvas.CaptureMouse(); };
         _canvas.MouseLeftButtonUp += OnMouseLeftButtonUp;
         _canvas.MouseMove += (s, e) =>
         {
             if (e.LeftButton == MouseButtonState.Pressed)
             {
                 var p = PointToScreen(e.GetPosition(this));
-                Left += p.X - _dragStartScreen.X;
-                Top += p.Y - _dragStartScreen.Y;
-                _dragStartScreen = p;
+                Left = p.X - _dragOffset.X;
+                Top = p.Y - _dragOffset.Y;
             }
         };
 
@@ -870,7 +975,16 @@ class ClawMascotWindow : Window
 
     void UpdateBadge()
     {
-        _notificationBadge.Visibility = _hasUnread ? Visibility.Visible : Visibility.Collapsed;
+        if (_hasUnread)
+        {
+            _notificationBadge.Background = new SolidColorBrush(Color.FromRgb(239, 68, 68));
+            _badgeText.Text = "1";
+            _notificationBadge.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            _notificationBadge.Visibility = Visibility.Collapsed;
+        }
     }
 
     void ShowQuickReply()
@@ -881,7 +995,6 @@ class ClawMascotWindow : Window
             _quickReplyWindow.Close();
         }
 
-        // 判断是否有消息预览
         bool hasMessage = !string.IsNullOrEmpty(_lastMessageContent);
         int windowHeight = hasMessage ? 200 : 90;
 
@@ -920,7 +1033,6 @@ class ClawMascotWindow : Window
             var headerRow = new Grid();
             headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
             var title = new TextBlock
             {
                 Text = "💬 最新消息",
@@ -930,7 +1042,6 @@ class ClawMascotWindow : Window
                 Margin = new Thickness(0, 0, 0, 6)
             };
             headerRow.Children.Add(title);
-
             var closeIcon = new TextBlock
             {
                 Text = "✕",
@@ -941,7 +1052,6 @@ class ClawMascotWindow : Window
             closeIcon.MouseLeftButtonDown += (s, e) => _quickReplyWindow?.Close();
             Grid.SetColumn(closeIcon, 1);
             headerRow.Children.Add(closeIcon);
-
             sp.Children.Add(headerRow);
 
             var scrollViewer = new ScrollViewer
@@ -950,8 +1060,6 @@ class ClawMascotWindow : Window
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 Margin = new Thickness(0, 0, 0, 10)
             };
-
-            // 使用 Markdown 渲染，显示完整内容
             var mdTextBlock = CreateMarkdownTextBlock(_lastMessageContent, false);
             mdTextBlock.FontSize = 13;
             mdTextBlock.MaxWidth = 290;
@@ -960,7 +1068,6 @@ class ClawMascotWindow : Window
         }
         else
         {
-            // 首次打开，显示欢迎提示
             var tipRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
             var icon = new TextBlock { Text = "👋", FontSize = 16, Margin = new Thickness(0, 0, 6, 0) };
             var tip = new TextBlock
@@ -984,7 +1091,7 @@ class ClawMascotWindow : Window
             FontSize = 13,
             VerticalContentAlignment = VerticalAlignment.Center,
             BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
-            BorderThickness = new Thickness(1)
+            BorderThickness = new Thickness(1, 1, 1, 1)
         };
         _quickReplyBox.KeyDown += (s, ev) =>
         {
@@ -1004,7 +1111,7 @@ class ClawMascotWindow : Window
             FontSize = 13,
             Foreground = Brushes.White,
             Background = AccentGrad(),
-            BorderThickness = new Thickness(0)
+            BorderThickness = new Thickness(0, 0, 0, 0)
         };
         sendBtn.Click += (s, e) => SendQuickReply();
 
@@ -1015,8 +1122,7 @@ class ClawMascotWindow : Window
         border.Child = sp;
         _quickReplyWindow.Content = border;
 
-        // 点击外部或失去焦点时关闭
-        _quickReplyWindow.Deactivated += (s, e) => _quickReplyWindow.Close();
+        _quickReplyWindow.Deactivated += (s, e) => _quickReplyWindow?.Close();
 
         _quickReplyBox.Text = "";
         _quickReplyWindow.Show();
@@ -1028,7 +1134,6 @@ class ClawMascotWindow : Window
         var text = _quickReplyBox.Text?.Trim();
         if (string.IsNullOrEmpty(text)) return;
 
-        // 直接尝试发送，不检查 _connected 标志
         if (_ws?.State == WebSocketState.Open)
         {
             try
@@ -1096,44 +1201,15 @@ class ClawMascotWindow : Window
     async Task ReceiveLoop()
     {
         var buf = new byte[16384];
-        int msgCount = 0;
         while (_ws != null && _ws.State == WebSocketState.Open && !_cts.Token.IsCancellationRequested)
         {
             try
             {
-                // 调试：进入循环，显示绿色点
-                if (msgCount == 0)
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        _notificationBadge.Background = new SolidColorBrush(Color.FromRgb(34, 197, 94));
-                        _notificationBadge.Visibility = Visibility.Visible;
-                        _badgeText.Text = "✓";
-                    });
-                }
-
                 var sb = new StringBuilder();
                 WebSocketReceiveResult result = null;
-                bool firstReceive = true;
                 do
                 {
                     result = await _ws.ReceiveAsync(new ArraySegment<byte>(buf), _cts.Token);
-                    
-                    if (firstReceive)
-                    {
-                        firstReceive = false;
-                        msgCount++;
-                        // 收到第一条数据，显示黄色点
-                        if (msgCount <= 3)
-                        {
-                            Dispatcher.Invoke(() =>
-                            {
-                                _notificationBadge.Background = new SolidColorBrush(Color.FromRgb(250, 204, 21));
-                                _notificationBadge.Visibility = Visibility.Visible;
-                                _badgeText.Text = msgCount.ToString();
-                            });
-                        }
-                    }
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
@@ -1150,23 +1226,7 @@ class ClawMascotWindow : Window
                 var json = sb.ToString();
                 if (string.IsNullOrEmpty(json)) continue;
 
-                // 调试：收到完整消息显示蓝色点
-                Dispatcher.Invoke(() =>
-                {
-                    _notificationBadge.Background = new SolidColorBrush(Color.FromRgb(59, 130, 246));
-                    _notificationBadge.Visibility = Visibility.Visible;
-                    _badgeText.Text = "●";
-                });
-
                 var (type, content, role, msgIdStr) = ParseWsMessage(json);
-
-                // 调试：显示收到的消息类型和角色
-                Dispatcher.Invoke(() =>
-                {
-                    _notificationBadge.Background = new SolidColorBrush(Color.FromRgb(139, 92, 246));
-                    _notificationBadge.Visibility = Visibility.Visible;
-                    _badgeText.Text = type == "message.create" ? "C" : (type == "message.update" ? "U" : (type.Length > 0 ? type.Substring(0, 1) : "?"));
-                });
 
                 // 处理助手消息 (role 可以是 assistant, model, 或为空；含错误信息也显示)
                 bool isAssistantMessage = role != "user" && !string.IsNullOrEmpty(content);
@@ -1205,7 +1265,7 @@ class ClawMascotWindow : Window
                 }
             }
             catch (OperationCanceledException) { return; }
-            catch { return; }
+            catch { /* 单条消息异常不退出，继续接收 */ }
         }
     }
 
@@ -1352,6 +1412,111 @@ class ClawMascotWindow : Window
     }
 }
 
+class RechargeWindow : Window
+{
+    readonly string _apiBase;
+    readonly string _token;
+
+    public RechargeWindow(string apiBase, string token, string currentEnergy)
+    {
+        _apiBase = apiBase;
+        _token = token;
+        Title = "充值金币";
+        Width = 420;
+        Height = 580;
+        MinHeight = 450;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        Background = GradBg();
+
+        var main = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(0, 0, 0, 0) };
+        var stack = new StackPanel { Margin = new Thickness(20, 20, 20, 24) };
+
+        var headerCard = new Border { Padding = new Thickness(20, 16, 20, 16), Margin = new Thickness(0, 0, 0, 16), CornerRadius = new CornerRadius(16), Effect = CardShadow() };
+        headerCard.Background = new LinearGradientBrush(Color.FromRgb(255, 251, 235), Color.FromRgb(254, 243, 199), new Point(0, 0), new Point(1, 1));
+        headerCard.BorderBrush = new SolidColorBrush(Color.FromRgb(253, 230, 138));
+        headerCard.BorderThickness = new Thickness(2, 2, 2, 2);
+        var headerStack = new StackPanel();
+        var titleRow = new StackPanel { Orientation = Orientation.Horizontal };
+        var coinIcon = new Viewbox { Width = 28, Height = 28, Margin = new Thickness(0, 0, 8, 0) };
+        var coinCanvas = new Canvas { Width = 24, Height = 24 };
+        var coin = new Ellipse { Width = 20, Height = 20, Fill = new SolidColorBrush(Color.FromRgb(251, 191, 36)), Stroke = new SolidColorBrush(Color.FromRgb(217, 119, 6)), StrokeThickness = 1.5 };
+        Canvas.SetLeft(coin, 2);
+        Canvas.SetTop(coin, 2);
+        coinCanvas.Children.Add(coin);
+        coinIcon.Child = coinCanvas;
+        titleRow.Children.Add(coinIcon);
+        titleRow.Children.Add(new TextBlock { Text = "充值金币", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)), VerticalAlignment = VerticalAlignment.Center });
+        headerStack.Children.Add(titleRow);
+        headerStack.Children.Add(new TextBlock { Text = "当前余额：", FontSize = 14, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), Margin = new Thickness(0, 4, 0, 0) });
+        headerStack.Children.Add(new TextBlock { Text = (currentEnergy ?? "0") + " 金币", FontSize = 18, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(217, 119, 6)), Margin = new Thickness(0, 2, 0, 0) });
+        headerCard.Child = headerStack;
+        stack.Children.Add(headerCard);
+
+        var qrCard = new Border { Background = Brushes.White, Padding = new Thickness(20, 16, 20, 16), Margin = new Thickness(0, 0, 0, 16), CornerRadius = new CornerRadius(12), Effect = SoftShadow(), BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)), BorderThickness = new Thickness(1, 1, 1, 1) };
+        var qrStack = new StackPanel();
+        qrStack.Children.Add(new TextBlock { Text = "推荐使用微信支付", FontSize = 14, FontWeight = FontWeights.Medium, Foreground = new SolidColorBrush(Color.FromRgb(51, 65, 85)), Margin = new Thickness(0, 0, 0, 12) });
+        var imgContainer = new Border { Width = 240, Height = 240, Background = new SolidColorBrush(Color.FromRgb(248, 250, 252)), CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 0, 0, 12) };
+        try
+        {
+            var uri = new Uri(_apiBase.TrimEnd('/') + "/pay_compressed.png");
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.UriSource = uri;
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.EndInit();
+            imgContainer.Child = new Image { Source = bmp, Stretch = Stretch.Uniform };
+        }
+        catch { imgContainer.Child = new TextBlock { Text = "二维码加载失败", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)) }; }
+        qrStack.Children.Add(imgContainer);
+        var saveBtn = new Button { Content = "保存图片", Width = 120, Height = 40, FontSize = 13 };
+        saveBtn.Background = new SolidColorBrush(Color.FromRgb(5, 150, 105));
+        saveBtn.Foreground = Brushes.White;
+        saveBtn.BorderThickness = new Thickness(0, 0, 0, 0);
+        saveBtn.Click += (s, e) =>
+        {
+            try
+            {
+                using var client = CreateHttpClient();
+                var bytes = client.GetByteArrayAsync(_apiBase.TrimEnd('/') + "/pay_compressed.png").GetAwaiter().GetResult();
+                var path = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "微信支付二维码.png");
+                File.WriteAllBytes(path, bytes);
+                MessageBox.Show("已保存到桌面：微信支付二维码.png");
+            }
+            catch (Exception ex) { MessageBox.Show("保存失败: " + ex.Message); }
+        };
+        qrStack.Children.Add(saveBtn);
+        qrStack.Children.Add(new TextBlock { Text = "扫码付款，请务必在备注中填写您的注册邮箱，人工审核成功后金币自动到账", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), Margin = new Thickness(0, 12, 0, 0), TextWrapping = TextWrapping.Wrap });
+        qrCard.Child = qrStack;
+        stack.Children.Add(qrCard);
+
+        var plans = GetRechargePlans(_apiBase, _token);
+        if (plans.Count > 0)
+        {
+            stack.Children.Add(new TextBlock { Text = "充值档位参考", FontSize = 14, FontWeight = FontWeights.Medium, Foreground = new SolidColorBrush(Color.FromRgb(51, 65, 85)), Margin = new Thickness(0, 0, 0, 8) });
+            foreach (var p in plans)
+            {
+                var planCard = new Border { Padding = new Thickness(16, 12, 16, 12), Margin = new Thickness(0, 0, 0, 8), Background = Brushes.White, CornerRadius = new CornerRadius(10), Effect = SoftShadow(), BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)), BorderThickness = new Thickness(1, 1, 1, 1) };
+                var planStack = new StackPanel();
+                planStack.Children.Add(new TextBlock { Text = p.Name, FontSize = 15, FontWeight = FontWeights.Medium, Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)) });
+                planStack.Children.Add(new TextBlock { Text = p.Benefits ?? (p.Energy + " 金币"), FontSize = 13, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), Margin = new Thickness(0, 2, 0, 0) });
+                planStack.Children.Add(new TextBlock { Text = "¥" + (p.PriceCny / 100.0).ToString("F2"), FontSize = 14, FontWeight = FontWeights.Medium, Foreground = new SolidColorBrush(Color.FromRgb(217, 119, 6)), Margin = new Thickness(0, 4, 0, 0) });
+                planCard.Child = planStack;
+                stack.Children.Add(planCard);
+            }
+        }
+
+        var customCard = new Border { Padding = new Thickness(16, 14, 16, 14), Margin = new Thickness(0, 8, 0, 0), Background = new SolidColorBrush(Color.FromRgb(248, 250, 252)), CornerRadius = new CornerRadius(10), BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)), BorderThickness = new Thickness(1, 1, 1, 1) };
+        var customStack = new StackPanel();
+        customStack.Children.Add(new TextBlock { Text = "任意金额充值", FontSize = 14, FontWeight = FontWeights.Medium, Foreground = new SolidColorBrush(Color.FromRgb(51, 65, 85)) });
+        customStack.Children.Add(new TextBlock { Text = "支持任意金额充值（≥10 元），付款时请在备注中填写您的注册邮箱，管理员审核通过后金币将自动到账。", FontSize = 13, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap });
+        customCard.Child = customStack;
+        stack.Children.Add(customCard);
+
+        main.Content = stack;
+        Content = main;
+    }
+}
+
 class AnyClawMainWindow : Window
 {
     readonly string _apiBase;
@@ -1361,6 +1526,8 @@ class AnyClawMainWindow : Window
     TextBlock _energyText;
     TextBox _newNameBox;
     Button _adoptBtn;
+    readonly Dictionary<int, CheckBox> _showChecks = new Dictionary<int, CheckBox>();
+    readonly Dictionary<int, ComboBox> _schemeCombos = new Dictionary<int, ComboBox>();
 
     public AnyClawMainWindow(string apiBase, string token)
     {
@@ -1369,10 +1536,17 @@ class AnyClawMainWindow : Window
         Title = "OpenClaw 宠舍";
         Width = 440;
         Height = 560;
+        MinHeight = 480;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Background = GradBg();
 
-        var main = new StackPanel { Margin = new Thickness(20, 20, 20, 20) };
+        var grid = new Grid { Margin = new Thickness(20, 20, 20, 20) };
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         var header = new Grid();
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -1397,11 +1571,15 @@ class AnyClawMainWindow : Window
         header.Children.Add(title);
         header.Children.Add(refreshBtn);
         header.Children.Add(logoutBtn);
-        main.Children.Add(header);
+        Grid.SetRow(header, 0);
+        grid.Children.Add(header);
 
         var energyPanel = new Border { Padding = new Thickness(20, 14, 20, 14), Margin = new Thickness(0, 20, 0, 0), CornerRadius = new CornerRadius(16), Effect = CardShadow() };
         energyPanel.Background = GoldGrad();
-        var energyRow = new StackPanel { Orientation = Orientation.Horizontal };
+        var energyRow = new Grid();
+        energyRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        energyRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var energyLeft = new StackPanel { Orientation = Orientation.Horizontal };
         var coinIcon = new Viewbox { Width = 24, Height = 24, Margin = new Thickness(0, 0, 10, 0) };
         var coinCanvas = new Canvas { Width = 24, Height = 24 };
         var coin = new Ellipse { Width = 20, Height = 20, Fill = new SolidColorBrush(Color.FromRgb(251, 191, 36)), Stroke = new SolidColorBrush(Color.FromRgb(217, 119, 6)), StrokeThickness = 1.5 };
@@ -1409,12 +1587,28 @@ class AnyClawMainWindow : Window
         Canvas.SetTop(coin, 2);
         coinCanvas.Children.Add(coin);
         coinIcon.Child = coinCanvas;
-        energyRow.Children.Add(coinIcon);
-        energyRow.Children.Add(new TextBlock { Text = "我的金币 ", VerticalAlignment = VerticalAlignment.Center, FontSize = 15, Foreground = new SolidColorBrush(Color.FromRgb(120, 53, 15)) });
+        energyLeft.Children.Add(coinIcon);
+        energyLeft.Children.Add(new TextBlock { Text = "我的金币 ", VerticalAlignment = VerticalAlignment.Center, FontSize = 15, Foreground = new SolidColorBrush(Color.FromRgb(120, 53, 15)) });
         _energyText = new TextBlock { Text = "0", FontWeight = FontWeights.Bold, FontSize = 22, Foreground = new SolidColorBrush(Color.FromRgb(120, 53, 15)), VerticalAlignment = VerticalAlignment.Center };
-        energyRow.Children.Add(_energyText);
+        energyLeft.Children.Add(_energyText);
+        Grid.SetColumn(energyLeft, 0);
+        energyRow.Children.Add(energyLeft);
+        var rechargeBtn = new Button { Content = "充值", Width = 70, Height = 32, FontSize = 13 };
+        rechargeBtn.Background = new SolidColorBrush(Color.FromRgb(217, 119, 6));
+        rechargeBtn.Foreground = Brushes.White;
+        rechargeBtn.BorderThickness = new Thickness(0, 0, 0, 0);
+        rechargeBtn.Click += (s, e) =>
+        {
+            var win = new RechargeWindow(_apiBase, _token, _energyText.Text ?? "0");
+            win.Owner = this;
+            win.Closed += (s2, e2) => Refresh();
+            win.ShowDialog();
+        };
+        Grid.SetColumn(rechargeBtn, 1);
+        energyRow.Children.Add(rechargeBtn);
         energyPanel.Child = energyRow;
-        main.Children.Add(energyPanel);
+        Grid.SetRow(energyPanel, 1);
+        grid.Children.Add(energyPanel);
 
         var adoptCard = new Border { Background = Brushes.White, Padding = new Thickness(20, 16, 20, 16), Margin = new Thickness(0, 16, 0, 0), CornerRadius = new CornerRadius(16), Effect = CardShadow() };
         var adoptPanel = new StackPanel();
@@ -1424,7 +1618,7 @@ class AnyClawMainWindow : Window
         _newNameBox = new TextBox { Width = 170, Height = 40, Padding = new Thickness(14, 10, 14, 10), VerticalContentAlignment = VerticalAlignment.Center, FontSize = 14 };
         _newNameBox.BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240));
         _newNameBox.BorderThickness = new Thickness(1, 1, 1, 1);
-        _adoptBtn = new Button { Content = "领养 · 100 金币", Width = 140, Height = 40, Margin = new Thickness(14, 0, 0, 0), FontSize = 14, Foreground = Brushes.White, BorderThickness = new Thickness(0, 0, 0, 0) };
+        _adoptBtn = new Button { Content = "领养", Width = 140, Height = 40, Margin = new Thickness(14, 0, 0, 0), FontSize = 14, Foreground = Brushes.White, BorderThickness = new Thickness(0, 0, 0, 0) };
         _adoptBtn.Background = AccentGrad();
         _adoptBtn.Effect = SoftShadow();
         _adoptBtn.Click += OnAdopt;
@@ -1432,14 +1626,62 @@ class AnyClawMainWindow : Window
         adoptRow.Children.Add(_adoptBtn);
         adoptPanel.Children.Add(adoptRow);
         adoptCard.Child = adoptPanel;
-        main.Children.Add(adoptCard);
+        Grid.SetRow(adoptCard, 2);
+        grid.Children.Add(adoptCard);
 
-        main.Children.Add(new TextBlock { Text = "我的宠舍", FontSize = 16, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)), Margin = new Thickness(0, 24, 0, 12) });
+        var petHeader = new StackPanel { Margin = new Thickness(0, 24, 0, 0) };
+        petHeader.Children.Add(new TextBlock { Text = "我的宠舍", FontSize = 16, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)) });
+        petHeader.Children.Add(new TextBlock { Text = "勾选要显示的宠物、选择配色，点击「应用到桌面」。右键可弃养，双击可打开对话。", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap });
+        Grid.SetRow(petHeader, 3);
+        grid.Children.Add(petHeader);
+
         _instancePanel = new StackPanel();
-        _instanceScroll = new ScrollViewer { Content = _instancePanel, Height = 200, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(2) };
-        main.Children.Add(_instanceScroll);
+        _instanceScroll = new ScrollViewer { Content = _instancePanel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(2), Margin = new Thickness(0, 8, 0, 0) };
+        Grid.SetRow(_instanceScroll, 4);
+        grid.Children.Add(_instanceScroll);
 
-        Content = main;
+        var applyBtn = new Button { Content = "应用到桌面", Width = 140, Height = 42, Margin = new Thickness(0, 12, 0, 0), FontSize = 14, Foreground = Brushes.White, BorderThickness = new Thickness(0, 0, 0, 0) };
+        applyBtn.Background = AccentGrad();
+        applyBtn.Effect = SoftShadow();
+        applyBtn.Click += OnApply;
+        var qqLink = new TextBlock { Text = "加入 OpenClaw 探索群", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), Cursor = Cursors.Hand, Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Center };
+        qqLink.MouseDown += (s, e) =>
+        {
+            var win = new Window { Title = "加入 OpenClaw 探索群", Width = 320, Height = 420, WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this };
+            win.Background = Brushes.White;
+            var sp = new StackPanel { Margin = new Thickness(24, 24, 24, 24) };
+            sp.Children.Add(new TextBlock { Text = "OpenClaw 探索群 群号: 1049101776", FontSize = 14, FontWeight = FontWeights.Medium, Foreground = new SolidColorBrush(Color.FromRgb(51, 65, 85)), Margin = new Thickness(0, 0, 0, 12) });
+            var qqImgBorder = new Border { Width = 200, Height = 200, Background = Brushes.White, CornerRadius = new CornerRadius(8), Effect = SoftShadow() };
+            try
+            {
+                using var client = CreateHttpClient();
+                var bytes = client.GetByteArrayAsync(_apiBase.TrimEnd('/') + "/qqgroup.jpg").GetAwaiter().GetResult();
+                if (bytes != null && bytes.Length > 0)
+                {
+                    using var ms = new MemoryStream(bytes);
+                    var qqBmp = new BitmapImage();
+                    qqBmp.BeginInit();
+                    qqBmp.StreamSource = ms;
+                    qqBmp.CacheOption = BitmapCacheOption.OnLoad;
+                    qqBmp.EndInit();
+                    qqBmp.Freeze();
+                    qqImgBorder.Child = new Image { Source = qqBmp, Stretch = Stretch.Uniform };
+                }
+                else throw new Exception("empty");
+            }
+            catch { qqImgBorder.Child = new TextBlock { Text = "群号\n1049101776\n\n(图片加载失败，请确保 API 已部署最新 Web)", FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, TextAlignment = TextAlignment.Center, Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)), TextWrapping = TextWrapping.Wrap }; }
+            sp.Children.Add(qqImgBorder);
+            sp.Children.Add(new TextBlock { Text = "扫一扫加入群聊", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), Margin = new Thickness(0, 12, 0, 0), HorizontalAlignment = HorizontalAlignment.Center });
+            win.Content = sp;
+            win.ShowDialog();
+        };
+        var row5 = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+        row5.Children.Add(applyBtn);
+        row5.Children.Add(qqLink);
+        Grid.SetRow(row5, 5);
+        grid.Children.Add(row5);
+
+        Content = grid;
         Loaded += (s, e) => Refresh();
     }
 
@@ -1448,31 +1690,46 @@ class AnyClawMainWindow : Window
         try
         {
             var user = GetMe(_apiBase, _token);
+            var adoptCost = user.AdoptCost > 0 ? user.AdoptCost : 0;
+            if (adoptCost <= 0) { var (_, c) = GetAuthConfig(_apiBase); adoptCost = c > 0 ? c : 100; }
+            if (adoptCost <= 0) adoptCost = 100;
+            _adoptBtn.Content = "领养 · " + adoptCost + " 金币";
             _energyText.Text = user.Energy.ToString();
             var instances = GetInstances(_apiBase, _token);
+            var saved = LoadDesktopConfig(_apiBase);
+            var savedDict = saved.ToDictionary(x => x.Id, x => x.SchemeId);
             _instancePanel.Children.Clear();
+            _showChecks.Clear();
+            _schemeCombos.Clear();
             foreach (var i in instances)
             {
+                var row = new Grid();
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var chk = new CheckBox { IsChecked = savedDict.ContainsKey(i.Id), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
+                _showChecks[i.Id] = chk;
                 var statusText = i.Status == "running" ? "在线" : i.Status == "creating" ? "创建中" : i.Status == "error" ? "异常" : i.Status;
                 var statusColor = i.Status == "running" ? Color.FromRgb(34, 197, 94) : i.Status == "creating" ? Color.FromRgb(245, 158, 11) : Color.FromRgb(239, 68, 68);
-                var cardBorder = new Border
+                var nameTb = new TextBlock { Text = i.Name + (i.Status == "running" ? " (在线)" : i.Status == "creating" ? " (创建中)" : ""), VerticalAlignment = VerticalAlignment.Center, FontSize = 14 };
+                var combo = new ComboBox { Width = 100, VerticalAlignment = VerticalAlignment.Center };
+                var savedSchemeId = savedDict.ContainsKey(i.Id) && ColorSchemeById(savedDict[i.Id]) != null ? savedDict[i.Id] : "lobster";
+                foreach (var s in ColorSchemes)
                 {
-                    Background = Brushes.White,
-                    Padding = new Thickness(16, 14, 16, 14),
-                    CornerRadius = new CornerRadius(12),
-                    Effect = SoftShadow(),
-                    Cursor = Cursors.Hand
-                };
-                var cardGrid = new Grid();
-                cardGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                cardGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                var nameTb = new TextBlock { Text = i.Name, FontSize = 15, FontWeight = FontWeights.Medium, Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)), VerticalAlignment = VerticalAlignment.Center };
-                var statusTb = new TextBlock { Text = statusText, FontSize = 12, Foreground = new SolidColorBrush(statusColor), VerticalAlignment = VerticalAlignment.Center };
-                Grid.SetColumn(statusTb, 1);
-                cardGrid.Children.Add(nameTb);
-                cardGrid.Children.Add(statusTb);
-                cardBorder.Child = cardGrid;
-                var card = new ContentControl { Content = cardBorder, Margin = new Thickness(0, 0, 0, 10), Cursor = Cursors.Hand };
+                    var item = new ComboBoxItem { Content = s.Name, Tag = s.Id };
+                    combo.Items.Add(item);
+                    if (s.Id == savedSchemeId) combo.SelectedItem = item;
+                }
+                if (combo.SelectedItem == null && combo.Items.Count > 0) combo.SelectedIndex = 0;
+                _schemeCombos[i.Id] = combo;
+                Grid.SetColumn(chk, 0);
+                Grid.SetColumn(nameTb, 1);
+                Grid.SetColumn(combo, 2);
+                row.Children.Add(chk);
+                row.Children.Add(nameTb);
+                row.Children.Add(combo);
+                var cardBorder = new Border { Child = row, Padding = new Thickness(14, 12, 14, 12), Margin = new Thickness(0, 0, 0, 10), Background = Brushes.White, CornerRadius = new CornerRadius(10), Effect = SoftShadow(), Cursor = Cursors.Hand };
+                var card = new ContentControl { Content = cardBorder, Margin = new Thickness(0, 0, 0, 0), Cursor = Cursors.Hand };
                 var inst = i;
                 card.MouseDoubleClick += (s, e) =>
                 {
@@ -1496,12 +1753,50 @@ class AnyClawMainWindow : Window
                 card.ContextMenu = abandonMenu;
                 _instancePanel.Children.Add(card);
             }
-            _adoptBtn.IsEnabled = user.Energy >= 100;
+            _adoptBtn.IsEnabled = user.Energy >= adoptCost;
         }
         catch (Exception ex)
         {
             MessageBox.Show("刷新失败: " + ex.Message);
         }
+    }
+
+    void OnApply(object s, RoutedEventArgs e)
+    {
+        try
+        {
+            var instances = GetInstances(_apiBase, _token);
+            var saved = LoadDesktopConfig(_apiBase);
+            var posDict = saved.ToDictionary(x => x.Id, x => (x.X, x.Y));
+            var items = instances.Select(i =>
+            {
+                _showChecks.TryGetValue(i.Id, out var chk);
+                _schemeCombos.TryGetValue(i.Id, out var combo);
+                var show = chk?.IsChecked == true;
+                var schemeId = (combo?.SelectedItem as ComboBoxItem)?.Tag as string ?? "lobster";
+                if (ColorSchemeById(schemeId) == null) schemeId = "lobster";
+                var (sx, sy) = posDict.ContainsKey(i.Id) ? posDict[i.Id] : (double.NaN, double.NaN);
+                return (i.Id, Show: show, SchemeId: schemeId, X: sx, Y: sy);
+            }).ToList();
+            SaveDesktopConfig(_apiBase, items.Select(x => (x.Id, x.Show, x.SchemeId, x.X, x.Y)).ToList());
+            lock (s_mascots)
+            {
+                foreach (var m in s_mascots.ToList()) m.Close();
+                s_mascots.Clear();
+                var idx = 0;
+                foreach (var (id, show, schemeId, x, y) in items.Where(x => x.Show))
+                {
+                    var inst = instances.FirstOrDefault(x => x.Id == id);
+                    if (inst != null && inst.Status == "running")
+                    {
+                        var mascot = new ClawMascotWindow(_apiBase, _token, id, inst.Name, schemeId, idx++, x, y);
+                        mascot.Show();
+                    }
+                }
+            }
+            MessageBox.Show("已应用到桌面");
+        }
+        catch (Exception ex) { MessageBox.Show("应用失败: " + ex.Message); }
     }
 
     void OnAdopt(object s, RoutedEventArgs e)
@@ -1590,7 +1885,7 @@ class AnyClawChatWindow : Window
         var msgStack = new StackPanel();
         msgStack.Children.Add(_msgPanel);
         msgStack.Children.Add(_typingText);
-        _scrollViewer = new ScrollViewer { Content = msgStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(0) };
+        _scrollViewer = new ScrollViewer { Content = msgStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(0, 0, 0, 0) };
         _scrollViewer.Loaded += (s, e) => _scrollViewer.ScrollToEnd();
         Grid.SetRow(_scrollViewer, 1);
         main.Children.Add(_scrollViewer);
@@ -2086,7 +2381,7 @@ class AnyClawChatWindow : Window
             Height = 32,
             FontSize = 14,
             Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
+            BorderThickness = new Thickness(0, 0, 0, 0),
             Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139))
         };
         closeBtn.Click += (s, e) => expandWindow.Close();

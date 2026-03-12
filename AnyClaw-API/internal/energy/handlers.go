@@ -26,6 +26,14 @@ func New(db *db.DB, configPath string, auth PasswordHasher) *Handler {
 	return &Handler{db: db, configPath: configPath, auth: auth}
 }
 
+// GetPublicConfig 公开的金币配置（领养价格等），无需登录
+func (h *Handler) GetPublicConfig(w http.ResponseWriter, r *http.Request) {
+	cfg, _ := config.Load(h.configPath)
+	ec := config.GetEnergyConfig(cfg)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"adopt_cost": ec.AdoptCost})
+}
+
 func (h *Handler) Recharge(w http.ResponseWriter, r *http.Request) {
 	claims := request.FromContext(r.Context())
 	if claims == nil {

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import type { User } from './api'
 import { SafeLink } from './components/SafeLink'
@@ -9,6 +10,7 @@ interface LayoutProps {
 }
 
 export default function Layout({ user, onLogout, children }: LayoutProps) {
+  const [showQqModal, setShowQqModal] = useState(false)
   const loc = useLocation()
   const isHome = loc.pathname === '/'
   const isRecharge = loc.pathname === '/recharge'
@@ -60,6 +62,34 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
       <main className="flex-1 p-4 sm:p-6">
         {children}
       </main>
+      {/* 交流群链接 */}
+      {!isChat && (
+        <footer className="py-2 pb-16 sm:pb-2 text-center">
+          <button
+            type="button"
+            onClick={() => setShowQqModal(true)}
+            className="text-sm text-slate-500 hover:text-slate-700 active:opacity-70"
+          >
+            加入 OpenClaw 探索群
+          </button>
+        </footer>
+      )}
+      {showQqModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowQqModal(false)}>
+          <div className="bg-white rounded-xl p-6 shadow-xl max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
+            <p className="text-base font-medium text-slate-800 mb-3">OpenClaw 探索群 群号: 1049101776</p>
+            <img src="/qqgroup.jpg" alt="OpenClaw探索群" className="w-48 h-48 mx-auto rounded-lg" />
+            <p className="text-sm text-slate-500 mt-3">扫一扫加入群聊</p>
+            <button
+              type="button"
+              onClick={() => setShowQqModal(false)}
+              className="mt-4 w-full py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50"
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+      )}
       {/* 移动端底部导航 - 仅手机端，聊天页隐藏，极简 */}
       <nav className={`fixed bottom-0 left-0 right-0 sm:hidden bg-white/95 backdrop-blur border-t border-slate-200 flex justify-around items-center z-20 pb-safe ${isChat ? 'hidden' : ''}`}>
         <SafeLink to="/" className={`flex-1 flex flex-col items-center py-2 px-1 active:bg-slate-50 ${isHome ? 'text-slate-800 font-medium' : 'text-slate-500'}`}>

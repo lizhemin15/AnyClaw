@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getInstances, createInstance, deleteInstance, type Instance, type User } from '../api'
-
-const ADOPT_COST = 100
+import { getInstances, createInstance, deleteInstance, getAuthConfig, getEnergyConfig, type Instance, type User } from '../api'
 
 export default function Home({ user, onRefresh }: { user: User | null; onRefresh?: () => void }) {
   const [instances, setInstances] = useState<Instance[]>([])
@@ -11,8 +9,27 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [deleting, setDeleting] = useState<number | null>(null)
+  const [adoptCost, setAdoptCost] = useState(100)
 
   const navigate = useNavigate()
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const c = await getAuthConfig()
+        const cost = c.adopt_cost ?? 0
+        if (cost > 0) {
+          setAdoptCost(cost)
+          return
+        }
+      } catch {}
+      try {
+        const e = await getEnergyConfig()
+        if ((e.adopt_cost ?? 0) > 0) setAdoptCost(e.adopt_cost!)
+      } catch {}
+    }
+    load()
+  }, [])
 
   const loadInstances = () => {
     setLoading(true)
@@ -35,8 +52,8 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
     if (creating) return
     const name = newName.trim() || '小爪'
     if (!user) return
-    if (user.energy < ADOPT_COST) {
-      setError(`金币不足，领养需要 ${ADOPT_COST} 金币`)
+    if (user.energy < adoptCost) {
+      setError(`金币不足，领养需要 ${adoptCost} 金币`)
       return
     }
     setCreating(true)
@@ -115,10 +132,10 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
             disabled={creating || (user?.energy ?? 0) < ADOPT_COST}
             className="px-6 py-3 bg-slate-800 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {creating ? '领养中，请稍候（约 1–2 分钟）...' : `领养 (${ADOPT_COST} 金币)`}
+            {creating ? '领养中，请稍候（约 1–2 分钟）...' : `领养 (${adoptCost} 金币)`}
           </button>
         </form>
-        {(user?.energy ?? 0) < ADOPT_COST && (
+        {(user?.energy ?? 0) < adoptCost && (
           <p className="mt-2 text-sm text-amber-600">金币不足，可通过充值获取</p>
         )}
       </div>
