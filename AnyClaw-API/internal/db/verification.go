@@ -17,7 +17,7 @@ func (d *DB) SaveVerificationCode(email, code string, expiresAt time.Time) error
 func (d *DB) VerifyAndConsumeCode(email, code string) (bool, error) {
 	var n int
 	err := d.QueryRow(
-		"SELECT 1 FROM verification_codes WHERE email = ? AND code = ? AND expires_at > NOW() LIMIT 1",
+		"SELECT 1 FROM verification_codes WHERE email = ? AND code = ? AND expires_at > UTC_TIMESTAMP() LIMIT 1",
 		email, code,
 	).Scan(&n)
 	if err == sql.ErrNoRows {

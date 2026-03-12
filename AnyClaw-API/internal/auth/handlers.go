@@ -186,7 +186,7 @@ func (a *Auth) HandleSendCode(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	code := genCode()
-	expiresAt := time.Now().Add(5 * time.Minute)
+	expiresAt := time.Now().UTC().Add(5 * time.Minute)
 	if err := a.db.SaveVerificationCode(email, code, expiresAt); err != nil {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
