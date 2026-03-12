@@ -39,6 +39,7 @@ func (d *DB) ListUserUsage(userID int64, limit, offset int) ([]*UsageLogEntry, e
 		limit = 200
 	}
 	uid := fmt.Sprintf("%d", userID)
+	// 优先尝试带 JOIN 的查询（含宠物名称）；失败时回退到简单查询，避免 MySQL 版本/CAST 兼容性问题
 	rows, err := d.Query(
 		`SELECT u.id, u.instance_id, COALESCE(i.name, ''), u.model, u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at
 		 FROM usage_log u LEFT JOIN instances i ON u.instance_id = CAST(i.id AS CHAR(64)) AND i.user_id = ?
@@ -46,7 +47,15 @@ func (d *DB) ListUserUsage(userID int64, limit, offset int) ([]*UsageLogEntry, e
 		userID, uid, limit, offset,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list user usage: %w", err)
+		// 回退：无 JOIN 的简单查询，仅按 user_id 筛选
+		rows, err = d.Query(
+			`SELECT id, instance_id, '' as instance_name, model, prompt_tokens, completion_tokens, COALESCE(coins_cost,0), created_at
+			 FROM usage_log WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+			uid, limit, offset,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("list user usage: %w", err)
+		}
 	}
 	defer rows.Close()
 	var list []*UsageLogEntry
@@ -76,7 +85,15 @@ func (d *DB) ListAdminUsage(limit, offset int) ([]*UsageLogEntryAdmin, error) {
 		limit, offset,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list admin usage: %w", err)
+		// 回退：无 JOIN 的简单查询
+		rows, err = d.Query(
+			`SELECT id, instance_id, '' as instance_name, model, prompt_tokens, completion_tokens, COALESCE(coins_cost,0), created_at, user_id as user_email
+			 FROM usage_log ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+			limit, offset,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("list admin usage: %w", err)
+		}
 	}
 	defer rows.Close()
 	var list []*UsageLogEntryAdmin
