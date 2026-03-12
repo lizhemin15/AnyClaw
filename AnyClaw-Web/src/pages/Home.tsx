@@ -129,7 +129,7 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
           />
           <button
             type="submit"
-            disabled={creating || (user?.energy ?? 0) < ADOPT_COST}
+            disabled={creating || (user?.energy ?? 0) < adoptCost}
             className="px-6 py-3 bg-slate-800 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {creating ? '领养中，请稍候（约 1–2 分钟）...' : `领养 (${adoptCost} 金币)`}
