@@ -14,6 +14,7 @@ type Handler struct {
 }
 
 // parseContainerMsg 解析容器消息，兼容多种 payload 格式（Pico、网页、飞书等）
+// 对 message.create/update 的 assistant 消息，content 可为空（占位符或流式首 chunk）
 func parseContainerMsg(data []byte) (msgType, content, role string, ok bool) {
 	var base struct {
 		Type    string          `json:"type"`
@@ -24,6 +25,10 @@ func parseContainerMsg(data []byte) (msgType, content, role string, ok bool) {
 	}
 	msgType = base.Type
 	if base.Payload == nil {
+		return msgType, "", "", false
+	}
+	// 只处理需要存储的类型
+	if msgType != "message.create" && msgType != "message.update" {
 		return msgType, "", "", false
 	}
 	// 标准格式：payload.content, payload.role
@@ -38,7 +43,8 @@ func parseContainerMsg(data []byte) (msgType, content, role string, ok bool) {
 		if role == "" {
 			role = "assistant"
 		}
-		return msgType, content, role, content != ""
+		// assistant 的 create/update 都尝试存储，content 空也存（占位符）
+		return msgType, content, role, role == "assistant"
 	}
 	// 兜底：尝试从 map 提取
 	var m map[string]any
@@ -51,7 +57,7 @@ func parseContainerMsg(data []byte) (msgType, content, role string, ok bool) {
 		} else {
 			role = "assistant"
 		}
-		return msgType, content, role, content != ""
+		return msgType, content, role, role == "assistant"
 	}
 	return msgType, "", "", false
 }
@@ -68,9 +74,11 @@ func NewHandler(db *db.DB, hub *Hub) *Handler {
 		if role != "assistant" {
 			return
 		}
-		if strings.HasPrefix(content, "Thinking") {
+		// 空内容不存（占位符 Thinking... 有内容会存）
+		if content == "" {
 			return
 		}
+		// 流式回复：首条 message.create 常为 "Thinking..."，也存为占位符，后续 message.update 会覆盖
 		stored := false
 		if msgType == "message.create" {
 			_, err := h.db.InsertMessage(instanceID, role, content)
