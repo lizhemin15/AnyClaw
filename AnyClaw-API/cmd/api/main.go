@@ -18,7 +18,6 @@ import (
 	"github.com/anyclaw/anyclaw-api/internal/instances"
 	"github.com/anyclaw/anyclaw-api/internal/llm"
 	"github.com/anyclaw/anyclaw-api/internal/messages"
-	"github.com/anyclaw/anyclaw-api/internal/payment"
 	"github.com/anyclaw/anyclaw-api/internal/usage"
 	"github.com/anyclaw/anyclaw-api/internal/scheduler"
 	"github.com/anyclaw/anyclaw-api/internal/setup"
@@ -105,8 +104,6 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	msgHandler := messages.New(database)
 	usageHandler := usage.New(database)
 	energyHandler := energy.New(database, configPath)
-	paymentHandler := payment.New(configPath, database, apiURL)
-
 	proxy := llm.New(configPath, database, database)
 	proxy.StartKeepAlive(5 * time.Minute)
 
@@ -160,15 +157,8 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Use(authSvc.Middleware)
 		r.Post("/invite", energyHandler.InviteCode)
 		r.Post("/invite/use", energyHandler.UseInviteCode)
+		r.Post("/redeem-code", energyHandler.RedeemCode)
 	})
-	r.Get("/api/payment/plans", paymentHandler.GetPlans)
-	r.Route("/api/payment", func(r chi.Router) {
-		r.Use(authSvc.Middleware)
-		r.Get("/orders", paymentHandler.ListOrders)
-		r.Post("/order", paymentHandler.CreateOrder)
-	})
-	r.Post("/api/payment/notify/alipay", paymentHandler.NotifyAlipay)
-	r.Post("/api/payment/notify/wechat", paymentHandler.NotifyWechat)
 	r.Route("/admin", func(r chi.Router) {
 		r.Use(authSvc.AdminMiddleware)
 		r.Get("/config", adminConfigHandler.GetConfig)
@@ -192,6 +182,10 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Post("/energy/recharge", energyHandler.Recharge)
 		r.Post("/energy/daily", energyHandler.RunDaily)
 		r.Post("/energy/users/{id}/recharge", energyHandler.AdminRechargeUser)
+		r.Post("/activation-codes", energyHandler.AdminGenerateActivationCodes)
+		r.Get("/activation-codes", energyHandler.AdminListActivationCodes)
+		r.Post("/activation-codes/verify", energyHandler.AdminVerifyActivationCode)
+		r.Post("/activation-codes/redeem", energyHandler.AdminRedeemActivationCode)
 	})
 	r.Route("/admin/hosts", func(r chi.Router) {
 		r.Use(authSvc.AdminMiddleware)

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getAdminConfig, putAdminConfig, testChannelConfig, testSMTPConfig, adminReconnectInstances, type AdminConfig, type Channel, type SMTPConfig, type PaymentConfig, type PaymentPlan, type YungouosChannel, type EnergyConfig, type ContainerConfig } from '../api'
+import { getAdminConfig, putAdminConfig, testChannelConfig, testSMTPConfig, adminReconnectInstances, type AdminConfig, type Channel, type SMTPConfig, type PaymentConfig, type PaymentPlan, type EnergyConfig, type ContainerConfig } from '../api'
 import { useUnsavedConfig } from '../contexts/UnsavedConfigContext'
 
 function genId() {
@@ -266,47 +266,6 @@ export default function AdminConfig() {
     })
   }
 
-  const updatePayment = (upd: Partial<PaymentConfig>) => {
-    if (!form) return
-    const prev = form.payment || { plans: [] }
-    setForm({
-      ...form,
-      payment: { ...prev, ...upd, plans: upd.plans ?? prev.plans },
-    })
-  }
-
-  const updateYungouosWechat = (upd: Partial<YungouosChannel>) => {
-    if (!form) return
-    const yg = form.payment?.yungouos || { wechat: { enabled: false, mch_id: '', key: '' }, alipay: { enabled: false, mch_id: '', key: '' } }
-    const prev = yg.wechat || { enabled: false, mch_id: '', key: '' }
-    updatePayment({ yungouos: { ...yg, wechat: { ...prev, ...upd } } })
-  }
-
-  const updateYungouosAlipay = (upd: Partial<YungouosChannel>) => {
-    if (!form) return
-    const yg = form.payment?.yungouos || { wechat: { enabled: false, mch_id: '', key: '' }, alipay: { enabled: false, mch_id: '', key: '' } }
-    const prev = yg.alipay || { enabled: false, mch_id: '', key: '' }
-    updatePayment({ yungouos: { ...yg, alipay: { ...prev, ...upd } } })
-  }
-
-  const FIXED_PLAN_IDS = ['plan-1', 'plan-2', 'plan-3'] as const
-  const defaultPlans: PaymentPlan[] = [
-    { id: 'plan-1', name: '入门', energy: 100, price_cny: 100, sort: 0 },
-    { id: 'plan-2', name: '进阶', energy: 500, price_cny: 450, sort: 1 },
-    { id: 'plan-3', name: '尊享', energy: 2000, price_cny: 1600, sort: 2 },
-  ]
-
-  const updatePlan = (id: string, upd: Partial<PaymentPlan>) => {
-    if (!form?.payment) return
-    const prev = form.payment.plans || []
-    const byId = new Map(prev.map((p) => [p.id, p]))
-    const def = defaultPlans.find((d) => d.id === id) || { id, name: '', energy: 0, price_cny: 0, sort: 0 }
-    const existing = byId.get(id) || def
-    byId.set(id, { ...existing, ...upd })
-    const plans = FIXED_PLAN_IDS.map((pid) => byId.get(pid) || defaultPlans.find((d) => d.id === pid)!)
-    updatePayment({ plans })
-  }
-
   const updateContainer = (upd: Partial<ContainerConfig>) => {
     if (!form) return
     setForm({
@@ -496,7 +455,7 @@ export default function AdminConfig() {
                 <p className="text-xs text-slate-500 mt-0.5">金币</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">充值返利比例</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">邀请返利比例</label>
                 <input
                   type="number"
                   min={0}
@@ -505,7 +464,7 @@ export default function AdminConfig() {
                   onChange={(e) => updateEnergy({ invite_commission_rate: parseInt(e.target.value, 10) })}
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
                 />
-                <p className="text-xs text-slate-500 mt-0.5">受邀用户充值时邀请人获得 %</p>
+                <p className="text-xs text-slate-500 mt-0.5">受邀用户使用邀请码时邀请人获得 %</p>
               </div>
             </div>
           </div>
@@ -843,105 +802,6 @@ export default function AdminConfig() {
                 {smtpTestResult.message}
               </div>
             )}
-          </div>
-        </div>
-
-        {/* 支付配置 */}
-        <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-200">
-            <h2 className="font-semibold text-slate-800">支付渠道（金币充值）</h2>
-            <p className="text-sm text-slate-500 mt-1">配置支付宝、微信商家支付，用户可购买金币</p>
-          </div>
-          <div className="px-5 py-4 space-y-6">
-            {/* 充值档位（固定三档） */}
-            <div>
-              <h3 className="text-sm font-medium text-slate-700 mb-2">充值档位（固定三档）</h3>
-              <div className="space-y-2">
-                {(() => {
-                  const plans = form?.payment?.plans || []
-                  const fixed = [
-                    { id: 'plan-1', name: '入门', energy: 100, price_cny: 100 },
-                    { id: 'plan-2', name: '进阶', energy: 500, price_cny: 450 },
-                    { id: 'plan-3', name: '尊享', energy: 2000, price_cny: 1600 },
-                  ]
-                  return fixed.map((def, i) => {
-                    const p = plans[i] || def
-                    return (
-                      <div key={def.id} className="flex gap-2 items-center flex-wrap">
-                        <input
-                          type="text"
-                          value={p.name}
-                          onChange={(e) => updatePlan(def.id, { name: e.target.value })}
-                          placeholder="名称"
-                          className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-28"
-                        />
-                        <input
-                          type="number"
-                          value={p.energy}
-                          onChange={(e) => updatePlan(def.id, { energy: parseInt(e.target.value, 10) || 0 })}
-                          placeholder="金币"
-                          className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-20"
-                        />
-                        <span className="text-slate-500 text-sm">金币</span>
-                        <input
-                          type="number"
-                          value={p.price_cny}
-                          onChange={(e) => updatePlan(def.id, { price_cny: parseInt(e.target.value, 10) || 0 })}
-                          placeholder="价格(分)"
-                          className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-24"
-                        />
-                        <span className="text-slate-500 text-sm">分 (¥{(p.price_cny / 100).toFixed(2)})</span>
-                      </div>
-                    )
-                  })
-                })()}
-              </div>
-            </div>
-            {/* YunGouOS 云购OS（微信/支付宝扫码，个人可开通） */}
-            <div>
-              <h3 className="text-sm font-medium text-slate-700 mb-2">支付渠道（YunGouOS）</h3>
-              <p className="text-xs text-slate-500 mb-3">个人可开通，支持微信/支付宝扫码。登录 <a href="https://www.yungouos.com" target="_blank" rel="noreferrer" className="underline">yungouos.com</a> 注册并获取商户号、支付密钥。</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <h4 className="text-xs font-medium text-slate-600 mb-2">微信</h4>
-                  <div className="flex items-center gap-2 mb-2">
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={form?.payment?.yungouos?.wechat?.enabled ?? false}
-                      onClick={() => updateYungouosWechat({ enabled: !(form?.payment?.yungouos?.wechat?.enabled ?? false) })}
-                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${form?.payment?.yungouos?.wechat?.enabled ? 'bg-indigo-600' : 'bg-slate-200'}`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${form?.payment?.yungouos?.wechat?.enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                    </button>
-                    <span className="text-sm">{form?.payment?.yungouos?.wechat?.enabled ? '已启用' : '未启用'}</span>
-                  </div>
-                  <div className="space-y-2">
-                    <input type="text" value={form?.payment?.yungouos?.wechat?.mch_id ?? ''} onChange={(e) => updateYungouosWechat({ mch_id: e.target.value })} placeholder="商户号" className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full" />
-                    <input type="password" value={form?.payment?.yungouos?.wechat?.key ?? ''} onChange={(e) => updateYungouosWechat({ key: e.target.value })} placeholder="支付密钥" className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full font-mono" />
-                  </div>
-                </div>
-                <div>
-                  <h4 className="text-xs font-medium text-slate-600 mb-2">支付宝</h4>
-                  <div className="flex items-center gap-2 mb-2">
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={form?.payment?.yungouos?.alipay?.enabled ?? false}
-                      onClick={() => updateYungouosAlipay({ enabled: !(form?.payment?.yungouos?.alipay?.enabled ?? false) })}
-                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${form?.payment?.yungouos?.alipay?.enabled ? 'bg-indigo-600' : 'bg-slate-200'}`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${form?.payment?.yungouos?.alipay?.enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                    </button>
-                    <span className="text-sm">{form?.payment?.yungouos?.alipay?.enabled ? '已启用' : '未启用'}</span>
-                  </div>
-                  <div className="space-y-2">
-                    <input type="text" value={form?.payment?.yungouos?.alipay?.mch_id ?? ''} onChange={(e) => updateYungouosAlipay({ mch_id: e.target.value })} placeholder="商户号" className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full" />
-                    <input type="password" value={form?.payment?.yungouos?.alipay?.key ?? ''} onChange={(e) => updateYungouosAlipay({ key: e.target.value })} placeholder="支付密钥" className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full font-mono" />
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 

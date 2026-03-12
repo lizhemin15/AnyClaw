@@ -13,7 +13,6 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
   const isHome = loc.pathname === '/'
   const isRecharge = loc.pathname === '/recharge'
   const isUsage = loc.pathname === '/usage'
-  const isOrders = loc.pathname === '/orders'
   const isHosts = loc.pathname.startsWith('/admin/hosts')
   const isEnergy = loc.pathname.startsWith('/admin/energy')
   const isConfig = loc.pathname.startsWith('/admin/config')
@@ -30,9 +29,8 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
         {user && (
           <div className="hidden sm:flex items-center gap-2">
             <SafeLink to="/usage" className="px-2.5 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-sm">消耗</SafeLink>
-            <SafeLink to="/orders" className="px-2.5 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-sm">订单</SafeLink>
             <SafeLink to="/recharge" className="px-3 py-1.5 rounded-lg bg-amber-100 text-amber-800 font-medium hover:bg-amber-200 active:bg-amber-300 text-sm">
-              🪙 {user.energy ?? 0} · 充值
+              🪙 {user.energy ?? 0} · 兑换
             </SafeLink>
           </div>
         )}
@@ -74,13 +72,9 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
               <span className="text-base">📊</span>
               <span className="text-[10px] mt-0.5">消耗</span>
             </SafeLink>
-            <SafeLink to="/orders" className={`flex-1 flex flex-col items-center py-2 px-1 active:bg-slate-50 ${isOrders ? 'text-slate-800 font-medium' : 'text-slate-500'}`}>
-              <span className="text-base">📋</span>
-              <span className="text-[10px] mt-0.5">订单</span>
-            </SafeLink>
             <SafeLink to="/recharge" className={`flex-1 flex flex-col items-center py-2 px-1 active:bg-slate-50 ${isRecharge ? 'text-amber-600 font-medium' : 'text-slate-500'}`}>
               <span className="text-base">🪙</span>
-              <span className="text-[10px] mt-0.5">充值</span>
+              <span className="text-[10px] mt-0.5">兑换</span>
             </SafeLink>
           </>
         )}

@@ -194,6 +194,13 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	w.Write(respBody)
 
 	if resp.StatusCode == http.StatusOK {
+		// 对话成功说明实例在运行，若 DB 误标为 error 则纠正
+		if p.db != nil && instanceID != "" {
+			instID, _ := strconv.ParseInt(instanceID, 10, 64)
+			if inst, err := p.db.GetInstanceByID(instID); err == nil && inst != nil && inst.Status == "error" {
+				_ = p.db.UpdateInstanceStatus(instID, "running")
+			}
+		}
 		promptTokens, completionTokens := parseUsageFromResponse(respBody)
 		cost := 0
 		if p.db != nil && userID != "" {

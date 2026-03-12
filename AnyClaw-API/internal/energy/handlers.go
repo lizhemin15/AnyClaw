@@ -138,6 +138,33 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(out)
 }
 
+func (h *Handler) RedeemCode(w http.ResponseWriter, r *http.Request) {
+	claims := request.FromContext(r.Context())
+	if claims == nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	code := strings.TrimSpace(strings.ToUpper(req.Code))
+	if code == "" {
+		http.Error(w, `{"error":"code required"}`, http.StatusBadRequest)
+		return
+	}
+	energy, err := h.db.RedeemActivationCode(code, claims.UserID)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "energy": energy, "message": "兑换成功"})
+}
+
 func (h *Handler) AdminRechargeUser(w http.ResponseWriter, r *http.Request) {
 	claims := request.FromContext(r.Context())
 	if claims == nil || claims.Role != "admin" {
@@ -158,6 +185,137 @@ func (h *Handler) AdminRechargeUser(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+}
+
+func (h *Handler) AdminGenerateActivationCodes(w http.ResponseWriter, r *http.Request) {
+	claims := request.FromContext(r.Context())
+	if claims == nil || claims.Role != "admin" {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	var req struct {
+		Count int    `json:"count"`
+		Energy int   `json:"energy"`
+		Memo   string `json:"memo"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Count <= 0 || req.Count > 100 {
+		http.Error(w, `{"error":"count must be 1-100"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Energy <= 0 {
+		http.Error(w, `{"error":"energy must be positive"}`, http.StatusBadRequest)
+		return
+	}
+	codes, err := h.db.CreateActivationCodes(req.Energy, req.Count, claims.UserID, strings.TrimSpace(req.Memo))
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"codes": codes, "count": len(codes), "energy": req.Energy})
+}
+
+func (h *Handler) AdminListActivationCodes(w http.ResponseWriter, r *http.Request) {
+	claims := request.FromContext(r.Context())
+	if claims == nil || claims.Role != "admin" {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	status := r.URL.Query().Get("status")
+	if status == "" {
+		status = "all"
+	}
+	limit := 50
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 200 {
+			limit = n
+		}
+	}
+	offset := 0
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if n, err := strconv.Atoi(o); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+	list, err := h.db.ListActivationCodes(status, limit, offset)
+	if err != nil {
+		http.Error(w, `{"error":"failed"}`, http.StatusInternalServerError)
+		return
+	}
+	if list == nil {
+		list = []*db.ActivationCode{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"items": list})
+}
+
+func (h *Handler) AdminVerifyActivationCode(w http.ResponseWriter, r *http.Request) {
+	claims := request.FromContext(r.Context())
+	if claims == nil || claims.Role != "admin" {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	code := strings.TrimSpace(strings.ToUpper(req.Code))
+	if code == "" {
+		http.Error(w, `{"error":"code required"}`, http.StatusBadRequest)
+		return
+	}
+	ac, err := h.db.GetActivationCode(code)
+	if err != nil {
+		http.Error(w, `{"error":"failed"}`, http.StatusInternalServerError)
+		return
+	}
+	if ac == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"valid": false, "message": "激活码不存在"})
+		return
+	}
+	if ac.UsedBy != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"valid": false, "message": "激活码已使用", "used_by": *ac.UsedBy})
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"valid": true, "energy": ac.Energy, "memo": ac.Memo})
+}
+
+func (h *Handler) AdminRedeemActivationCode(w http.ResponseWriter, r *http.Request) {
+	claims := request.FromContext(r.Context())
+	if claims == nil || claims.Role != "admin" {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	var req struct {
+		Code   string `json:"code"`
+		UserID int64  `json:"user_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	code := strings.TrimSpace(strings.ToUpper(req.Code))
+	if code == "" || req.UserID <= 0 {
+		http.Error(w, `{"error":"code and user_id required"}`, http.StatusBadRequest)
+		return
+	}
+	energy, err := h.db.RedeemActivationCode(code, req.UserID)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "energy": energy, "user_id": req.UserID})
 }
 
 func generateCode(n int) string {

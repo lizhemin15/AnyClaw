@@ -496,36 +496,51 @@ export async function useInviteCode(code: string): Promise<{ status: string; rew
   });
 }
 
-export async function getPaymentPlans(): Promise<PaymentPlan[]> {
-  const res = await fetch(`${API_BASE}/api/payment/plans`);
-  const data = await res.json();
-  return Array.isArray(data) ? data : [];
-}
-
-export async function createPaymentOrder(planId: string, channel: 'alipay' | 'wechat'): Promise<{ out_trade_no: string; pay_url?: string; code_url?: string }> {
-  return fetchApi<{ out_trade_no: string; pay_url?: string; code_url?: string }>('/api/payment/order', {
+export async function redeemCode(code: string): Promise<{ status: string; energy: number; message: string }> {
+  return fetchApi<{ status: string; energy: number; message: string }>('/energy/redeem-code', {
     method: 'POST',
-    body: JSON.stringify({ plan_id: planId, channel }),
+    body: JSON.stringify({ code }),
   });
 }
 
-export interface Order {
-  id: number;
-  user_id: number;
-  plan_id: string;
-  energy: number;
-  price_cny: number;
-  channel: string;
-  status: string;
-  out_trade_no: string;
-  external_id?: string;
-  paid_at?: string;
-  created_at: string;
-  user_email?: string;
+export async function adminGenerateActivationCodes(count: number, energy: number, memo?: string): Promise<{ codes: string[]; count: number; energy: number }> {
+  return fetchApi<{ codes: string[]; count: number; energy: number }>('/admin/activation-codes', {
+    method: 'POST',
+    body: JSON.stringify({ count, energy, memo: memo || '' }),
+  });
 }
 
-export async function getOrders(): Promise<Order[]> {
-  return fetchApi<Order[]>('/api/payment/orders');
+export async function adminListActivationCodes(status?: 'unused' | 'used' | 'all', limit?: number, offset?: number): Promise<{ items: ActivationCode[] }> {
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  if (limit) params.set('limit', String(limit));
+  if (offset) params.set('offset', String(offset));
+  const q = params.toString();
+  return fetchApi<{ items: ActivationCode[] }>(`/admin/activation-codes${q ? '?' + q : ''}`);
+}
+
+export interface ActivationCode {
+  code: string;
+  energy: number;
+  used_by?: number;
+  used_at?: string;
+  created_at: string;
+  created_by?: number;
+  memo?: string;
+}
+
+export async function adminVerifyActivationCode(code: string): Promise<{ valid: boolean; energy?: number; memo?: string; message?: string; used_by?: number }> {
+  return fetchApi<{ valid: boolean; energy?: number; memo?: string; message?: string; used_by?: number }>('/admin/activation-codes/verify', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
+}
+
+export async function adminRedeemActivationCode(code: string, userId: number): Promise<{ status: string; energy: number; user_id: number }> {
+  return fetchApi<{ status: string; energy: number; user_id: number }>('/admin/activation-codes/redeem', {
+    method: 'POST',
+    body: JSON.stringify({ code, user_id: userId }),
+  });
 }
 
 export async function getSetupStatus(): Promise<{ configured: boolean }> {

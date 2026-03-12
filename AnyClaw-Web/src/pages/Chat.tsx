@@ -178,6 +178,30 @@ export default function Chat() {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [instanceId, loadMessages])
 
+  // 等待回答时轮询拉取，兜底 WebSocket 漏传（如飞书绑定后容器重启导致消息未实时推送）
+  useEffect(() => {
+    if (!typing || isNaN(instanceId)) return
+    const timer = setInterval(() => {
+      loadMessages().then((list) => {
+        const arr = Array.isArray(list) ? list : []
+        if (arr.length === 0) return
+        const reversed = [...arr].reverse()
+        setMessages((prev) => {
+          const prevIds = new Set(prev.map((m) => m.id))
+          const merged = [...prev]
+          for (const m of reversed) {
+            if (!prevIds.has(m.id)) {
+              merged.push({ id: m.id, content: m.content ?? '', role: m.role ?? 'assistant' })
+              prevIds.add(m.id)
+            }
+          }
+          return merged.length > prev.length ? merged : prev
+        })
+      })
+    }, 3000)
+    return () => clearInterval(timer)
+  }, [typing, instanceId, loadMessages])
+
   useEffect(() => {
     if (isNaN(instanceId)) return
     const token = getToken()
@@ -231,6 +255,24 @@ export default function Chat() {
             break
           case 'typing.stop':
             setTyping(false)
+            // typing 结束时拉取一次，兜底 WebSocket 漏传的末尾消息
+            loadMessages().then((list) => {
+              const arr = Array.isArray(list) ? list : []
+              if (arr.length > 0) {
+                setMessages((prev) => {
+                  const prevIds = new Set(prev.map((m) => m.id))
+                  const reversed = [...arr].reverse()
+                  let merged = [...prev]
+                  for (const m of reversed) {
+                    if (!prevIds.has(m.id)) {
+                      merged = [...merged, { id: m.id, content: m.content ?? '', role: m.role ?? 'assistant' }]
+                      prevIds.add(m.id)
+                    }
+                  }
+                  return merged
+                })
+              }
+            })
             break
         }
       } catch {
@@ -255,7 +297,7 @@ export default function Chat() {
       wsRef.current = null
       if (markReadTimeoutRef.current) clearTimeout(markReadTimeoutRef.current)
     }
-  }, [instanceId, scheduleMarkRead])
+  }, [instanceId, scheduleMarkRead, loadMessages])
 
   useEffect(() => {
     listRef.current?.scrollTo(0, listRef.current?.scrollHeight ?? 0)

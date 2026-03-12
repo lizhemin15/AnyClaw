@@ -34,6 +34,10 @@ func (h *Handler) HandleContainerConnect(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "invalid token", http.StatusUnauthorized)
 		return
 	}
+	// 容器连接成功说明实例在运行，若 DB 误标为 error/creating 则纠正
+	if inst.Status != "running" {
+		_ = h.db.UpdateInstanceStatus(instanceID, "running")
+	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return

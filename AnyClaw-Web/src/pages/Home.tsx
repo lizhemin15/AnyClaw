@@ -27,6 +27,10 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
 
   useEffect(() => {
     loadInstances()
+    // 从 Chat 等页面返回时刷新，以显示 LLM/WS 纠正后的状态
+    const onFocus = () => loadInstances()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
   }, [])
 
   const handleAdopt = async (e: React.FormEvent) => {
@@ -110,7 +114,7 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
             to="/recharge"
             className="px-3 py-1.5 sm:px-4 sm:py-2 text-sm font-medium bg-amber-500 text-amber-950 rounded-lg hover:bg-amber-400 active:bg-amber-600"
           >
-            充值
+            兑换
           </Link>
           <button
             onClick={handleGetMyCode}
@@ -122,14 +126,14 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
             onClick={() => setShowInvite(!showInvite)}
             className="px-3 py-1.5 sm:px-4 sm:py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50"
           >
-            兑换
+            邀请码
           </button>
         </div>
       </div>
 
       {showInvite && (
         <div className="mb-4 p-3 sm:p-4 bg-amber-50 rounded-xl border border-amber-200 space-y-3 sm:space-y-4">
-          <p className="text-sm text-slate-700">邀请好友注册，双方各得金币；好友充值时你可获 5% 返利</p>
+          <p className="text-sm text-slate-700">邀请好友注册，双方各得金币</p>
           {myCode && (
             <>
               <div>
