@@ -1,0 +1,73 @@
+﻿{
+  "ActionId": "9a6f351c-79cb-4da9-abc5-5fd80df1adc9",
+  "SharedActionId": "00000000-0000-0000-0000-000000000000",
+  "Title": "AnyClaw",
+  "Description": "与 AnyClaw-Web 对等的 Quicker 前端，含桌面小龙虾与完整宠舍",
+  "Keywords": "AnyClaw,OpenClaw,AI,聊天,小龙虾,Claw,宠舍",
+  "ChangeLog": "v2.2.0 聊天气泡、流式更新、界面美化",
+  "ShareUrl": "",
+  "Icon": "https://files.getquicker.net/_icons/69D1BEF0644269946A16D90D8A6C6055575D8FEE.png",
+  "Variables": [
+    {
+      "Type": 0,
+      "Key": "api_base",
+      "DefaultValue": "https://htwkumkjgrnz.sealosbja.site",
+      "IsInput": true,
+      "Desc": "API 地址（默认 sealos 部署）"
+    },
+    {
+      "Type": 0,
+      "Key": "email",
+      "DefaultValue": "",
+      "IsInput": true,
+      "Desc": "登录邮箱"
+    },
+    {
+      "Type": 0,
+      "Key": "password",
+      "DefaultValue": "",
+      "IsInput": true,
+      "Desc": "登录密码"
+    },
+    {
+      "Type": 0,
+      "Key": "mode",
+      "DefaultValue": "desktop",
+      "IsInput": true,
+      "Desc": "desktop=桌面小龙虾, main=直接主界面"
+    },
+    {
+      "Type": 0,
+      "Desc": "结果文本(自动)",
+      "IsOutput": false,
+      "Key": "text"
+    },
+    {
+      "Type": 0,
+      "Desc": "返回值(自动)",
+      "IsOutput": false,
+      "Key": "rtn"
+    },
+    {
+      "Type": 0,
+      "Desc": "错误信息(自动)",
+      "IsOutput": false,
+      "Key": "errMessage"
+    },
+    {
+      "Type": 0,
+      "Desc": "菜单参数(自动)",
+      "IsOutput": false,
+      "Key": "menuKey"
+    },
+    {
+      "Type": 2,
+      "Desc": "静默启动",
+      "DefaultValue": "true",
+      "IsInput": false,
+      "Key": "silent"
+    }
+  ],
+  "Menus": {},
+  "References": []
+}
