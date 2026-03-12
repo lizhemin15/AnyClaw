@@ -18,7 +18,6 @@ export default function Usage() {
   return (
     <div className="max-w-2xl mx-auto">
       <h1 className="text-lg font-semibold text-slate-800 mb-4">消耗记录</h1>
-      <p className="text-sm text-slate-500 mb-4">对话按 token 消耗金币，每 1000 token 约 1 金币</p>
       {error && <p className="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</p>}
       {loading ? (
         <p className="text-slate-500 py-8">加载中...</p>

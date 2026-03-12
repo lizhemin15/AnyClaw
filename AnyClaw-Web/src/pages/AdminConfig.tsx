@@ -129,7 +129,7 @@ export default function AdminConfig() {
         const payment: PaymentConfig = c.payment
           ? { ...c.payment, plans, yungouos: { wechat: yg?.wechat ? { ...yg.wechat } : defYg.wechat, alipay: yg?.alipay ? { ...yg.alipay } : defYg.alipay } }
           : { plans: defPlans, yungouos: defYg }
-        const defaultEnergy: EnergyConfig = { tokens_per_energy: 1000, adopt_cost: 100, daily_consume: 10, min_energy_for_task: 5, zero_days_to_delete: 3, invite_reward: 50, new_user_energy: 0, daily_login_bonus: 10, invite_commission_rate: 5 }
+        const defaultEnergy: EnergyConfig = { tokens_per_energy: 1000, adopt_cost: 100, daily_consume: 0, min_energy_for_task: 5, zero_days_to_delete: 0, invite_reward: 50, new_user_energy: 0, daily_login_bonus: 10, invite_commission_rate: 5 }
         const energy: EnergyConfig = c.energy ? { ...defaultEnergy, ...c.energy } : defaultEnergy
         const container: ContainerConfig = c.container ? { ...c.container } : { workspace_size_gb: 0 }
         const api_url = (c as { api_url?: string }).api_url ?? ''
@@ -389,17 +389,6 @@ export default function AdminConfig() {
                 <p className="text-xs text-slate-500 mt-0.5">金币</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">每日消耗</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={form?.energy?.daily_consume ?? 10}
-                  onChange={(e) => updateEnergy({ daily_consume: parseInt(e.target.value, 10) || 0 })}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
-                />
-                <p className="text-xs text-slate-500 mt-0.5">每只宠物/天</p>
-              </div>
-              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">对话门槛</label>
                 <input
                   type="number"
@@ -409,17 +398,6 @@ export default function AdminConfig() {
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
                 />
                 <p className="text-xs text-slate-500 mt-0.5">低于此活力无法对话</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">无活力删除</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={form?.energy?.zero_days_to_delete ?? 3}
-                  onChange={(e) => updateEnergy({ zero_days_to_delete: parseInt(e.target.value, 10) || 3 })}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
-                />
-                <p className="text-xs text-slate-500 mt-0.5">连续无活力天数后永久消失</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">新用户初始</label>
