@@ -47,11 +47,13 @@ func (d *DB) ListUserUsage(userID int64, limit, offset int) ([]*UsageLogEntry, e
 		userID, uid, limit, offset,
 	)
 	if err != nil {
-		// 回退：无 JOIN 的简单查询，仅按 user_id 筛选
+		// 回退：用子查询获取宠物名称，避免 JOIN 的 CAST 兼容性问题
 		rows, err = d.Query(
-			`SELECT id, instance_id, '' as instance_name, model, prompt_tokens, completion_tokens, COALESCE(coins_cost,0), created_at
-			 FROM usage_log WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-			uid, limit, offset,
+			`SELECT u.id, u.instance_id,
+			 COALESCE((SELECT i.name FROM instances i WHERE CONVERT(i.id, CHAR(64)) = u.instance_id AND i.user_id = ? LIMIT 1), '') as instance_name,
+			 u.model, u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at
+			 FROM usage_log u WHERE u.user_id = ? ORDER BY u.created_at DESC LIMIT ? OFFSET ?`,
+			userID, uid, limit, offset,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("list user usage: %w", err)
@@ -85,10 +87,13 @@ func (d *DB) ListAdminUsage(limit, offset int) ([]*UsageLogEntryAdmin, error) {
 		limit, offset,
 	)
 	if err != nil {
-		// 回退：无 JOIN 的简单查询
+		// 回退：用子查询获取宠物名称和用户邮箱，便于管理员查看「哪个用户下的实例消耗」
 		rows, err = d.Query(
-			`SELECT id, instance_id, '' as instance_name, model, prompt_tokens, completion_tokens, COALESCE(coins_cost,0), created_at, user_id as user_email
-			 FROM usage_log ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+			`SELECT u.id, u.instance_id,
+			 COALESCE((SELECT i.name FROM instances i WHERE CONVERT(i.id, CHAR(64)) = u.instance_id LIMIT 1), '') as instance_name,
+			 u.model, u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at,
+			 COALESCE((SELECT us.email FROM users us WHERE CONVERT(us.id, CHAR(64)) = u.user_id LIMIT 1), u.user_id) as user_email
+			 FROM usage_log u ORDER BY u.created_at DESC LIMIT ? OFFSET ?`,
 			limit, offset,
 		)
 		if err != nil {
