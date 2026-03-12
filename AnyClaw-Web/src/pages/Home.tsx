@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getInstances, createInstance, deleteInstance, getInviteCode, useInviteCode, type Instance, type User } from '../api'
+import { getInstances, createInstance, deleteInstance, type Instance, type User } from '../api'
 
 const ADOPT_COST = 100
 
@@ -10,9 +10,6 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
-  const [inviteCode, setInviteCode] = useState('')
-  const [myCode, setMyCode] = useState('')
-  const [showInvite, setShowInvite] = useState(false)
   const [deleting, setDeleting] = useState<number | null>(null)
 
   const navigate = useNavigate()
@@ -57,19 +54,6 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
     }
   }
 
-  const handleUseInvite = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!inviteCode.trim()) return
-    try {
-      await useInviteCode(inviteCode.trim())
-      setInviteCode('')
-      setError('')
-      window.location.reload()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '邀请码无效或已使用')
-    }
-  }
-
   const handleAbandon = async (e: React.MouseEvent, inst: Instance) => {
     e.stopPropagation()
     if (!confirm(`确定弃养「${inst.name}」？弃养后无法恢复，系统将删除该宠物的所有聊天记录。`)) return
@@ -85,19 +69,9 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
     }
   }
 
-  const handleGetMyCode = async () => {
-    try {
-      const { code } = await getInviteCode()
-      setMyCode(code)
-      setShowInvite(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '获取失败')
-    }
-  }
-
   return (
     <div className="max-w-2xl mx-auto">
-      {/* 金币与邀请 - 移动端极简 */}
+      {/* 金币与充值 */}
       <div className="mb-4 p-3 sm:p-4 bg-white rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
         <div className="flex items-center gap-2 sm:gap-3">
           <span className="text-sm text-slate-600 hidden sm:inline">我的金币</span>
@@ -114,75 +88,10 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
             to="/recharge"
             className="px-3 py-1.5 sm:px-4 sm:py-2 text-sm font-medium bg-amber-500 text-amber-950 rounded-lg hover:bg-amber-400 active:bg-amber-600"
           >
-            兑换
+            充值
           </Link>
-          <button
-            onClick={handleGetMyCode}
-            className="px-3 py-1.5 sm:px-4 sm:py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50"
-          >
-            邀请
-          </button>
-          <button
-            onClick={() => setShowInvite(!showInvite)}
-            className="px-3 py-1.5 sm:px-4 sm:py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50"
-          >
-            邀请码
-          </button>
         </div>
       </div>
-
-      {showInvite && (
-        <div className="mb-4 p-3 sm:p-4 bg-amber-50 rounded-xl border border-amber-200 space-y-3 sm:space-y-4">
-          <p className="text-sm text-slate-700">邀请好友注册，双方各得金币</p>
-          {myCode && (
-            <>
-              <div>
-                <p className="text-xs text-slate-500 mb-1">邀请链接</p>
-                <div className="flex gap-2">
-                  <input
-                    readOnly
-                    value={`${typeof window !== 'undefined' ? window.location.origin : ''}/register?invite=${myCode}`}
-                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white min-w-0"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const url = `${window.location.origin}/register?invite=${myCode}`
-                      navigator.clipboard?.writeText(url).then(() => alert('已复制'))
-                    }}
-                    className="px-3 py-2 text-sm bg-slate-800 text-white rounded-lg flex-shrink-0"
-                  >
-                    复制
-                  </button>
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row items-center gap-4">
-                <div className="bg-white p-2 rounded-lg">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`${window.location.origin}/register?invite=${myCode}`)}`}
-                    alt="邀请二维码"
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-slate-500 mb-1">邀请码</p>
-                  <p className="font-mono text-base font-medium break-all">{myCode}</p>
-                </div>
-              </div>
-            </>
-          )}
-          <form onSubmit={handleUseInvite} className="flex gap-2">
-            <input
-              value={inviteCode}
-              onChange={(e) => setInviteCode(e.target.value)}
-              placeholder="邀请码"
-              className="flex-1 px-3 py-2 border rounded-lg text-base min-w-0"
-            />
-            <button type="submit" className="px-4 py-2 bg-slate-800 text-white rounded-lg flex-shrink-0">
-              兑换
-            </button>
-          </form>
-        </div>
-      )}
 
       {/* 领养新宠物 */}
       <div className="mb-6">
@@ -210,7 +119,7 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
           </button>
         </form>
         {(user?.energy ?? 0) < ADOPT_COST && (
-          <p className="mt-2 text-sm text-amber-600">金币不足，可通过邀请好友获取</p>
+          <p className="mt-2 text-sm text-amber-600">金币不足，可通过充值获取</p>
         )}
       </div>
 

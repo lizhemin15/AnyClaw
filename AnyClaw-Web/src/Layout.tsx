@@ -30,7 +30,7 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
           <div className="hidden sm:flex items-center gap-2">
             <SafeLink to="/usage" className="px-2.5 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-sm">消耗</SafeLink>
             <SafeLink to="/recharge" className="px-3 py-1.5 rounded-lg bg-amber-100 text-amber-800 font-medium hover:bg-amber-200 active:bg-amber-300 text-sm">
-              🪙 {user.energy ?? 0} · 兑换
+              🪙 {user.energy ?? 0} · 充值
             </SafeLink>
           </div>
         )}
@@ -74,7 +74,7 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
             </SafeLink>
             <SafeLink to="/recharge" className={`flex-1 flex flex-col items-center py-2 px-1 active:bg-slate-50 ${isRecharge ? 'text-amber-600 font-medium' : 'text-slate-500'}`}>
               <span className="text-base">🪙</span>
-              <span className="text-[10px] mt-0.5">兑换</span>
+              <span className="text-[10px] mt-0.5">充值</span>
             </SafeLink>
           </>
         )}

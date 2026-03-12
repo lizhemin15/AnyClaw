@@ -126,8 +126,9 @@ type YungouosChannel struct {
 // PaymentPlan 充值档位
 type PaymentPlan struct {
 	ID       string `json:"id"`
-	Name     string `json:"name"`    // 如 "100 金币"
-	Energy   int    `json:"energy"`   // 金币数量
+	Name     string `json:"name"`     // 档位名称
+	Benefits string `json:"benefits"`  // 权益介绍
+	Energy   int    `json:"energy"`    // 金币数量
 	PriceCny int    `json:"price_cny"` // 价格（分）
 	Sort     int    `json:"sort"`
 }

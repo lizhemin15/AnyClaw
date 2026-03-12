@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { register, sendVerificationCode, getAuthConfig, setToken, type User } from '../api'
 
 interface RegisterProps {
@@ -10,19 +10,12 @@ export default function Register({ onRegister }: RegisterProps) {
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [password, setPassword] = useState('')
-  const [inviteCode, setInviteCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [sendCodeLoading, setSendCodeLoading] = useState(false)
   const [sendCodeCooldown, setSendCodeCooldown] = useState(0)
   const [verificationRequired, setVerificationRequired] = useState<boolean | null>(null)
   const [step, setStep] = useState(1)
-  const [searchParams] = useSearchParams()
-
-  useEffect(() => {
-    const invite = searchParams.get('invite') || searchParams.get('ref')
-    if (invite) setInviteCode(invite)
-  }, [searchParams])
 
   useEffect(() => {
     getAuthConfig()
@@ -59,7 +52,6 @@ export default function Register({ onRegister }: RegisterProps) {
     try {
       const res = await register(email.trim(), password, {
         code: verificationRequired ? code : undefined,
-        inviteCode: inviteCode.trim() || undefined,
       })
       setToken(res.access_token)
       onRegister(res.user)
@@ -152,19 +144,6 @@ export default function Register({ onRegister }: RegisterProps) {
                 />
               </div>
             )}
-            <div>
-              <label htmlFor="invite" className="block text-sm font-medium text-slate-700 mb-2">
-                邀请码（可选，注册得奖励，受邀充值你可获返利）
-              </label>
-              <input
-                id="invite"
-                type="text"
-                value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value)}
-                className="w-full px-4 py-3 border border-slate-300 rounded-xl"
-                placeholder="邀请码"
-              />
-            </div>
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-2">
                 密码（至少 6 位）

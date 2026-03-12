@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { getMe, getSetupStatus, clearToken, isAuthenticated, type User } from './api'
 
@@ -18,7 +18,7 @@ import Home from './pages/Home'
 import Chat from './pages/Chat'
 import Hosts from './pages/Hosts'
 import Energy from './pages/Energy'
-import Redeem from './pages/Redeem'
+import Recharge from './pages/Recharge'
 import Usage from './pages/Usage'
 import AdminConfig from './pages/AdminConfig'
 import AdminStats from './pages/AdminStats'
@@ -36,11 +36,6 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/" replace />;
   }
   return <>{children}</>;
-}
-
-function InviteRedirect() {
-  const { code } = useParams<{ code: string }>()
-  return <Navigate to={`/register?invite=${encodeURIComponent(code || '')}`} replace />
 }
 
 function AdminRoute({ children, user }: { children: React.ReactNode; user: User | null }) {
@@ -124,7 +119,6 @@ export default function App() {
             <Register onRegister={handleLogin} />
           </PublicRoute>
         } />
-        <Route path="/invite/:code" element={<InviteRedirect />} />
         <Route path="/" element={
           <ProtectedRoute>
             <Layout user={user} onLogout={handleLogout}>
@@ -170,7 +164,7 @@ export default function App() {
         <Route path="/recharge" element={
           <ProtectedRoute>
             <Layout user={user} onLogout={handleLogout}>
-              <Redeem user={user} onRedeem={() => refreshUser(setUser)} />
+              <Recharge user={user} onRecharge={() => refreshUser(setUser)} />
             </Layout>
           </ProtectedRoute>
         } />

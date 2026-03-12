@@ -118,9 +118,9 @@ export default function AdminConfig() {
         })
         const smtp = c.smtp ? { ...c.smtp } : undefined
         const defPlans: PaymentPlan[] = [
-          { id: 'plan-1', name: '入门', energy: 100, price_cny: 100, sort: 0 },
-          { id: 'plan-2', name: '进阶', energy: 500, price_cny: 450, sort: 1 },
-          { id: 'plan-3', name: '尊享', energy: 2000, price_cny: 1600, sort: 2 },
+          { id: 'plan-1', name: '入门', benefits: '100 金币', energy: 100, price_cny: 100, sort: 0 },
+          { id: 'plan-2', name: '进阶', benefits: '500 金币', energy: 500, price_cny: 450, sort: 1 },
+          { id: 'plan-3', name: '尊享', benefits: '2000 金币', energy: 2000, price_cny: 1600, sort: 2 },
         ]
         const rawPlans = c.payment?.plans || []
         const plans = [0, 1, 2].map((i) => rawPlans[i] || defPlans[i])
@@ -422,17 +422,6 @@ export default function AdminConfig() {
                 <p className="text-xs text-slate-500 mt-0.5">连续无活力天数后永久消失</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">邀请奖励</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={form?.energy?.invite_reward ?? 50}
-                  onChange={(e) => updateEnergy({ invite_reward: parseInt(e.target.value, 10) || 0 })}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
-                />
-                <p className="text-xs text-slate-500 mt-0.5">双方各得</p>
-              </div>
-              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">新用户初始</label>
                 <input
                   type="number"
@@ -454,18 +443,90 @@ export default function AdminConfig() {
                 />
                 <p className="text-xs text-slate-500 mt-0.5">金币</p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">邀请返利比例</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={form?.energy?.invite_commission_rate ?? 5}
-                  onChange={(e) => updateEnergy({ invite_commission_rate: parseInt(e.target.value, 10) })}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
-                />
-                <p className="text-xs text-slate-500 mt-0.5">受邀用户使用邀请码时邀请人获得 %</p>
-              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 充值档位配置 */}
+        <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200">
+            <h2 className="font-semibold text-slate-800">充值档位</h2>
+            <p className="text-sm text-slate-500 mt-1">三档充值方案，名称与权益介绍将展示在用户充值页</p>
+          </div>
+          <div className="px-5 py-4">
+            <div className="space-y-4">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="p-4 bg-slate-50 rounded-lg space-y-3">
+                  <p className="text-sm font-medium text-slate-600">档位 {i + 1}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-0.5">名称</label>
+                      <input
+                        type="text"
+                        value={form?.payment?.plans?.[i]?.name ?? ''}
+                        onChange={(e) => {
+                          if (!form) return
+                          const plans = [...(form.payment?.plans || [])]
+                          while (plans.length <= i) plans.push({ id: `plan-${i + 1}`, name: '', benefits: '', energy: 0, price_cny: 0, sort: i })
+                          plans[i] = { ...plans[i], name: e.target.value }
+                          setForm({ ...form, payment: { ...form.payment, plans } })
+                        }}
+                        placeholder="如：入门"
+                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-0.5">权益介绍</label>
+                      <input
+                        type="text"
+                        value={form?.payment?.plans?.[i]?.benefits ?? ''}
+                        onChange={(e) => {
+                          if (!form) return
+                          const plans = [...(form.payment?.plans || [])]
+                          while (plans.length <= i) plans.push({ id: `plan-${i + 1}`, name: '', benefits: '', energy: 0, price_cny: 0, sort: i })
+                          plans[i] = { ...plans[i], benefits: e.target.value }
+                          setForm({ ...form, payment: { ...form.payment, plans } })
+                        }}
+                        placeholder="如：100 金币"
+                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-0.5">金币</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={form?.payment?.plans?.[i]?.energy ?? ''}
+                        onChange={(e) => {
+                          if (!form) return
+                          const plans = [...(form.payment?.plans || [])]
+                          while (plans.length <= i) plans.push({ id: `plan-${i + 1}`, name: '', benefits: '', energy: 0, price_cny: 0, sort: i })
+                          plans[i] = { ...plans[i], energy: parseInt(e.target.value, 10) || 0 }
+                          setForm({ ...form, payment: { ...form.payment, plans } })
+                        }}
+                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-0.5">价格（元）</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={form?.payment?.plans?.[i]?.price_cny ? (form.payment.plans[i].price_cny / 100).toString() : ''}
+                        onChange={(e) => {
+                          if (!form) return
+                          const plans = [...(form.payment?.plans || [])]
+                          while (plans.length <= i) plans.push({ id: `plan-${i + 1}`, name: '', benefits: '', energy: 0, price_cny: 0, sort: i })
+                          plans[i] = { ...plans[i], price_cny: Math.round((parseFloat(e.target.value) || 0) * 100) }
+                          setForm({ ...form, payment: { ...form.payment, plans } })
+                        }}
+                        placeholder="元"
+                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

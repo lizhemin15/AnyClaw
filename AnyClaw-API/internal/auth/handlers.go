@@ -279,13 +279,6 @@ func (a *Auth) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": msg})
 		return
 	}
-	if req.InviteCode != "" {
-		if inviterID, err := a.db.UseInvitation(strings.TrimSpace(req.InviteCode), user.ID); err == nil {
-			reward := config.GetEnergyConfig(cfg).InviteReward
-			_ = a.db.AddUserEnergy(user.ID, reward)
-			_ = a.db.AddUserEnergy(inviterID, reward)
-		}
-	}
 	token, err := a.CreateToken(user)
 	if err != nil {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)

@@ -155,9 +155,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 
 	r.Route("/energy", func(r chi.Router) {
 		r.Use(authSvc.Middleware)
-		r.Post("/invite", energyHandler.InviteCode)
-		r.Post("/invite/use", energyHandler.UseInviteCode)
-		r.Post("/redeem-code", energyHandler.RedeemCode)
+		r.Get("/recharge/plans", energyHandler.GetRechargePlans)
 	})
 	r.Route("/admin", func(r chi.Router) {
 		r.Use(authSvc.AdminMiddleware)
@@ -195,10 +193,6 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Post("/energy/recharge", energyHandler.Recharge)
 		r.Post("/energy/daily", energyHandler.RunDaily)
 		r.Post("/energy/users/{id}/recharge", energyHandler.AdminRechargeUser)
-		r.Post("/activation-codes", energyHandler.AdminGenerateActivationCodes)
-		r.Get("/activation-codes", energyHandler.AdminListActivationCodes)
-		r.Post("/activation-codes/verify", energyHandler.AdminVerifyActivationCode)
-		r.Post("/activation-codes/redeem", energyHandler.AdminRedeemActivationCode)
 	})
 	r.Route("/admin/hosts", func(r chi.Router) {
 		r.Use(authSvc.AdminMiddleware)

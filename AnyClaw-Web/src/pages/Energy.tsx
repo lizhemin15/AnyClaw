@@ -5,12 +5,8 @@ import {
   adminCreateUser,
   adminUpdateUser,
   getMe,
-  adminGenerateActivationCodes,
-  adminListActivationCodes,
-  adminVerifyActivationCode,
   type User,
   type UserWithInstances,
-  type ActivationCode,
 } from '../api'
 
 export default function Energy() {
@@ -20,16 +16,6 @@ export default function Energy() {
   const [error, setError] = useState('')
   const [recharging, setRecharging] = useState<number | null>(null)
   const [amount, setAmount] = useState<Record<number, string>>({})
-  const [tab, setTab] = useState<'users' | 'codes'>('users')
-  const [codes, setCodes] = useState<ActivationCode[]>([])
-  const [codesLoading, setCodesLoading] = useState(false)
-  const [genCount, setGenCount] = useState('10')
-  const [genEnergy, setGenEnergy] = useState('500')
-  const [genMemo, setGenMemo] = useState('')
-  const [generating, setGenerating] = useState(false)
-  const [newCodes, setNewCodes] = useState<string[]>([])
-  const [verifyCode, setVerifyCode] = useState('')
-  const [verifyResult, setVerifyResult] = useState<{ valid: boolean; energy?: number; message?: string } | null>(null)
   const [showAddUser, setShowAddUser] = useState(false)
   const [addEmail, setAddEmail] = useState('')
   const [addPassword, setAddPassword] = useState('')
@@ -51,21 +37,9 @@ export default function Energy() {
       .finally(() => setLoading(false))
   }
 
-  const loadCodes = (status: 'unused' | 'used' | 'all' = 'all') => {
-    setCodesLoading(true)
-    adminListActivationCodes(status, 100, 0)
-      .then((r) => setCodes(r.items || []))
-      .catch(() => setCodes([]))
-      .finally(() => setCodesLoading(false))
-  }
-
   useEffect(() => {
     load()
   }, [])
-
-  useEffect(() => {
-    if (tab === 'codes') loadCodes('all')
-  }, [tab])
 
   const handleRecharge = async (u: UserWithInstances) => {
     const val = amount[u.id]?.trim()
@@ -84,38 +58,6 @@ export default function Energy() {
       setError(err instanceof Error ? err.message : '充值失败')
     } finally {
       setRecharging(null)
-    }
-  }
-
-  const handleGenerate = async () => {
-    const c = parseInt(genCount, 10)
-    const e = parseInt(genEnergy, 10)
-    if (!c || c < 1 || c > 100 || !e || e < 1) {
-      setError('数量 1-100，金币数需为正整数')
-      return
-    }
-    setGenerating(true)
-    setError('')
-    setNewCodes([])
-    try {
-      const res = await adminGenerateActivationCodes(c, e, genMemo.trim() || undefined)
-      setNewCodes(res.codes || [])
-      loadCodes()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '生成失败')
-    } finally {
-      setGenerating(false)
-    }
-  }
-
-  const handleVerify = async () => {
-    if (!verifyCode.trim()) return
-    setVerifyResult(null)
-    try {
-      const res = await adminVerifyActivationCode(verifyCode.trim().toUpperCase())
-      setVerifyResult(res)
-    } catch {
-      setVerifyResult({ valid: false, message: '验证失败' })
     }
   }
 
@@ -168,108 +110,18 @@ export default function Energy() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="flex gap-2 mb-4">
-        <button
-          type="button"
-          onClick={() => setTab('users')}
-          className={`px-4 py-2 text-sm rounded-lg ${tab === 'users' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}
-        >
-          用户管理
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('codes')}
-          className={`px-4 py-2 text-sm rounded-lg ${tab === 'codes' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}
-        >
-          激活码
-        </button>
-      </div>
-
-      <h1 className="text-xl font-semibold text-slate-800 mb-4">{tab === 'users' ? '用户管理' : '激活码管理'}</h1>
+      <h1 className="text-xl font-semibold text-slate-800 mb-4">用户管理</h1>
       <p className="text-sm text-slate-500 mb-4">
-        {tab === 'users' ? '添加用户、设置权限（普通用户/管理员）、充值金币' : '生成激活码供用户兑换，支持外部平台自动发货核销。API: POST /admin/activation-codes（生成）、POST /admin/activation-codes/verify（核销前校验）、POST /admin/activation-codes/redeem（代用户兑换）'}
+        添加用户、设置权限（普通用户/管理员）、充值金币。用户扫码付款并备注邮箱后，在此根据付款记录人工审核并充值。
       </p>
 
       {error && (
         <p className="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded-xl">{error}</p>
       )}
 
-      {tab === 'codes' && (
-        <div className="mb-6 p-4 bg-white border border-slate-200 rounded-xl space-y-4">
-          <h2 className="font-medium text-slate-800">生成激活码</h2>
-          <div className="flex flex-wrap gap-3 items-end">
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">数量</label>
-              <input type="number" min={1} max={100} value={genCount} onChange={(e) => setGenCount(e.target.value)} className="w-20 px-3 py-2 border rounded-lg text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">金币/个</label>
-              <input type="number" min={1} value={genEnergy} onChange={(e) => setGenEnergy(e.target.value)} className="w-24 px-3 py-2 border rounded-lg text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">备注</label>
-              <input type="text" value={genMemo} onChange={(e) => setGenMemo(e.target.value)} placeholder="可选" className="w-32 px-3 py-2 border rounded-lg text-sm" />
-            </div>
-            <button onClick={handleGenerate} disabled={generating} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50">
-              {generating ? '生成中...' : '生成'}
-            </button>
-          </div>
-          {newCodes.length > 0 && (
-            <div className="mt-4 p-3 bg-slate-50 rounded-lg">
-              <p className="text-sm font-medium text-slate-700 mb-2">已生成 {newCodes.length} 个，请妥善保存：</p>
-              <textarea readOnly value={newCodes.join('\n')} rows={6} className="w-full px-3 py-2 border rounded-lg text-sm font-mono" />
-            </div>
-          )}
-          <div className="pt-4 border-t">
-            <h3 className="text-sm font-medium text-slate-700 mb-2">核销前校验（API 对接用）</h3>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={verifyCode}
-                onChange={(e) => { setVerifyCode(e.target.value.toUpperCase()); setVerifyResult(null) }}
-                placeholder="输入激活码"
-                className="flex-1 px-3 py-2 border rounded-lg text-sm font-mono uppercase"
-              />
-              <button onClick={handleVerify} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm">校验</button>
-            </div>
-            {verifyResult && (
-              <p className={`mt-2 text-sm ${verifyResult.valid ? 'text-emerald-600' : 'text-red-600'}`}>
-                {verifyResult.valid ? `有效，可兑换 ${verifyResult.energy} 金币` : (verifyResult.message || '无效')}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {tab === 'codes' && (
-        <div className="mb-6">
-          <div className="flex gap-2 mb-2">
-            {(['all', 'unused', 'used'] as const).map((s) => (
-              <button key={s} onClick={() => loadCodes(s)} className="px-3 py-1.5 text-sm rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200">
-                {s === 'all' ? '全部' : s === 'unused' ? '未使用' : '已使用'}
-              </button>
-            ))}
-          </div>
-          {codesLoading ? (
-            <p className="text-slate-500 py-4">加载中...</p>
-          ) : (
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {codes.map((c) => (
-                <div key={c.code} className="flex items-center justify-between py-2 px-3 bg-white border rounded-lg text-sm">
-                  <span className="font-mono">{c.code}</span>
-                  <span>{c.energy} 金币</span>
-                  {c.used_by ? <span className="text-slate-500">已用</span> : <span className="text-emerald-600">未用</span>}
-                </div>
-              ))}
-              {codes.length === 0 && <p className="text-slate-500 py-4">暂无激活码</p>}
-            </div>
-          )}
-        </div>
-      )}
-
-      {tab === 'users' && loading ? (
+      {loading ? (
         <p className="text-slate-500 py-8">加载中...</p>
-      ) : tab === 'users' ? (
+      ) : (
         <div className="space-y-3">
           <div className="flex justify-between items-center">
             <h2 className="font-medium text-slate-800">用户列表</h2>
@@ -359,7 +211,7 @@ export default function Energy() {
             </div>
           ))}
         </div>
-      ) : null}
+      )}
     </div>
   )
 }

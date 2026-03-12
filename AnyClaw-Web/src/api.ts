@@ -97,9 +97,9 @@ export async function login(email: string, password: string): Promise<LoginRespo
 export async function register(
   email: string,
   password: string,
-  options?: { code?: string; inviteCode?: string }
+  options?: { code?: string }
 ): Promise<LoginResponse> {
-  const body: Record<string, string> = { email, password, invite_code: options?.inviteCode || '' };
+  const body: Record<string, string> = { email, password };
   if (options?.code) body.code = options.code;
   return fetchApi<LoginResponse>('/auth/register', {
     method: 'POST',
@@ -378,6 +378,7 @@ export interface SMTPConfig {
 export interface PaymentPlan {
   id: string;
   name: string;
+  benefits?: string;
   energy: number;
   price_cny: number;
   sort: number;
@@ -507,62 +508,9 @@ export async function adminRechargeUser(userId: number, amount: number): Promise
   });
 }
 
-export async function getInviteCode(): Promise<{ code: string }> {
-  return fetchApi<{ code: string }>('/energy/invite', { method: 'POST' });
-}
-
-export async function useInviteCode(code: string): Promise<{ status: string; reward: number }> {
-  return fetchApi<{ status: string; reward: number }>('/energy/invite/use', {
-    method: 'POST',
-    body: JSON.stringify({ code }),
-  });
-}
-
-export async function redeemCode(code: string): Promise<{ status: string; energy: number; message: string }> {
-  return fetchApi<{ status: string; energy: number; message: string }>('/energy/redeem-code', {
-    method: 'POST',
-    body: JSON.stringify({ code }),
-  });
-}
-
-export async function adminGenerateActivationCodes(count: number, energy: number, memo?: string): Promise<{ codes: string[]; count: number; energy: number }> {
-  return fetchApi<{ codes: string[]; count: number; energy: number }>('/admin/activation-codes', {
-    method: 'POST',
-    body: JSON.stringify({ count, energy, memo: memo || '' }),
-  });
-}
-
-export async function adminListActivationCodes(status?: 'unused' | 'used' | 'all', limit?: number, offset?: number): Promise<{ items: ActivationCode[] }> {
-  const params = new URLSearchParams();
-  if (status) params.set('status', status);
-  if (limit) params.set('limit', String(limit));
-  if (offset) params.set('offset', String(offset));
-  const q = params.toString();
-  return fetchApi<{ items: ActivationCode[] }>(`/admin/activation-codes${q ? '?' + q : ''}`);
-}
-
-export interface ActivationCode {
-  code: string;
-  energy: number;
-  used_by?: number;
-  used_at?: string;
-  created_at: string;
-  created_by?: number;
-  memo?: string;
-}
-
-export async function adminVerifyActivationCode(code: string): Promise<{ valid: boolean; energy?: number; memo?: string; message?: string; used_by?: number }> {
-  return fetchApi<{ valid: boolean; energy?: number; memo?: string; message?: string; used_by?: number }>('/admin/activation-codes/verify', {
-    method: 'POST',
-    body: JSON.stringify({ code }),
-  });
-}
-
-export async function adminRedeemActivationCode(code: string, userId: number): Promise<{ status: string; energy: number; user_id: number }> {
-  return fetchApi<{ status: string; energy: number; user_id: number }>('/admin/activation-codes/redeem', {
-    method: 'POST',
-    body: JSON.stringify({ code, user_id: userId }),
-  });
+export async function getRechargePlans(): Promise<PaymentPlan[]> {
+  const list = await fetchApi<PaymentPlan[] | PaymentPlan>('/energy/recharge/plans');
+  return Array.isArray(list) ? list : [];
 }
 
 export async function getSetupStatus(): Promise<{ configured: boolean }> {
