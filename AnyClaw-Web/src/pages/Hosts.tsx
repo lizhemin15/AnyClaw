@@ -375,7 +375,7 @@ export default function Hosts() {
                     </span>
                   </div>
                   <p className="text-sm text-slate-500 mt-1">
-                    用户: {inst.user_email || '—'} · 宿主机: {inst.host_name || '—'} · 活力: {inst.energy}
+                    用户: {inst.user_email || '—'} · 宿主机: {inst.host_name || '—'}
                   </p>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
