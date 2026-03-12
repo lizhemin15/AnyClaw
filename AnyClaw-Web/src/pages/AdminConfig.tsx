@@ -237,6 +237,7 @@ export default function AdminConfig() {
 
   const handleTestChannel = async (ch: Channel) => {
     const model = (ch.models || [])[0]?.name || 'gpt-4o'
+    const apiKeyMasked = (ch.api_key?.trim() || '').startsWith('****')
     if (!ch.api_key?.trim()) {
       setTestResult({ id: ch.id, ok: false, message: '请先填写 API Key' })
       return
@@ -244,12 +245,17 @@ export default function AdminConfig() {
     setTestingChannel(ch.id)
     setTestResult(null)
     try {
-      const res = await testChannelConfig({
-        channel_id: ch.id,
-        api_base: ch.api_base?.trim() || 'https://api.openai.com/v1',
-        api_key: ch.api_key.trim(),
-        model,
-      })
+      // 脱敏时只传 channel_id+model，由后端从已保存配置取真实密钥
+      const res = await testChannelConfig(
+        apiKeyMasked
+          ? { channel_id: ch.id, model }
+          : {
+              channel_id: ch.id,
+              api_base: ch.api_base?.trim() || 'https://api.openai.com/v1',
+              api_key: ch.api_key.trim(),
+              model,
+            }
+      )
       setTestResult({ id: ch.id, ok: res.ok, message: res.message })
     } catch (err) {
       setTestResult({ id: ch.id, ok: false, message: err instanceof Error ? err.message : '测试失败' })
