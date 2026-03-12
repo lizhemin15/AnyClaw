@@ -39,18 +39,18 @@ func (d *DB) ListUserUsage(userID int64, limit, offset int) ([]*UsageLogEntry, e
 		limit = 200
 	}
 	uid := fmt.Sprintf("%d", userID)
-	// 优先尝试带 JOIN 的查询（含宠物名称）；失败时回退到简单查询，避免 MySQL 版本/CAST 兼容性问题
+	// 优先尝试带 JOIN 的查询（含宠物名称）；用 i.id = u.instance_id 隐式转换，兼容性更好
 	rows, err := d.Query(
 		`SELECT u.id, u.instance_id, COALESCE(i.name, ''), u.model, u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at
-		 FROM usage_log u LEFT JOIN instances i ON u.instance_id = CAST(i.id AS CHAR(64)) AND i.user_id = ?
+		 FROM usage_log u LEFT JOIN instances i ON i.id = u.instance_id AND i.user_id = ?
 		 WHERE u.user_id = ? ORDER BY u.created_at DESC LIMIT ? OFFSET ?`,
 		userID, uid, limit, offset,
 	)
 	if err != nil {
-		// 回退1：子查询获取宠物名称
+		// 回退1：子查询获取宠物名称（i.id = u.instance_id 隐式转换）
 		rows, err = d.Query(
 			`SELECT u.id, u.instance_id,
-			 COALESCE((SELECT i.name FROM instances i WHERE CONVERT(i.id, CHAR(64)) = u.instance_id AND i.user_id = ? LIMIT 1), '') as instance_name,
+			 COALESCE((SELECT i.name FROM instances i WHERE i.id = u.instance_id AND i.user_id = ? LIMIT 1), '') as instance_name,
 			 u.model, u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at
 			 FROM usage_log u WHERE u.user_id = ? ORDER BY u.created_at DESC LIMIT ? OFFSET ?`,
 			userID, uid, limit, offset,
@@ -89,18 +89,18 @@ func (d *DB) ListAdminUsage(limit, offset int) ([]*UsageLogEntryAdmin, error) {
 	rows, err := d.Query(
 		`SELECT u.id, u.instance_id, COALESCE(i.name, ''), u.model, u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at, COALESCE(us.email, u.user_id)
 		 FROM usage_log u
-		 LEFT JOIN instances i ON u.instance_id = CAST(i.id AS CHAR(64))
-		 LEFT JOIN users us ON u.user_id = CAST(us.id AS CHAR(64))
+		 LEFT JOIN instances i ON i.id = u.instance_id
+		 LEFT JOIN users us ON us.id = u.user_id
 		 ORDER BY u.created_at DESC LIMIT ? OFFSET ?`,
 		limit, offset,
 	)
 	if err != nil {
-		// 回退1：子查询获取宠物名称和用户邮箱
+		// 回退1：子查询获取宠物名称和用户邮箱（隐式类型转换）
 		rows, err = d.Query(
 			`SELECT u.id, u.instance_id,
-			 COALESCE((SELECT i.name FROM instances i WHERE CONVERT(i.id, CHAR(64)) = u.instance_id LIMIT 1), '') as instance_name,
+			 COALESCE((SELECT i.name FROM instances i WHERE i.id = u.instance_id LIMIT 1), '') as instance_name,
 			 u.model, u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at,
-			 COALESCE((SELECT us.email FROM users us WHERE CONVERT(us.id, CHAR(64)) = u.user_id LIMIT 1), u.user_id) as user_email
+			 COALESCE((SELECT us.email FROM users us WHERE us.id = u.user_id LIMIT 1), u.user_id) as user_email
 			 FROM usage_log u ORDER BY u.created_at DESC LIMIT ? OFFSET ?`,
 			limit, offset,
 		)
