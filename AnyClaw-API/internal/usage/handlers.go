@@ -2,8 +2,10 @@ package usage
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/anyclaw/anyclaw-api/internal/db"
 	"github.com/anyclaw/anyclaw-api/internal/request"
@@ -37,8 +39,13 @@ func (h *Handler) ListAdminUsage(w http.ResponseWriter, r *http.Request) {
 	}
 	list, err := h.db.ListAdminUsage(limit, offset)
 	if err != nil {
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-		return
+		log.Printf("[usage] ListAdminUsage: %v", err)
+		if strings.Contains(err.Error(), "doesn't exist") || strings.Contains(err.Error(), "no such table") {
+			list = []*db.UsageLogEntryAdmin{}
+		} else {
+			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+			return
+		}
 	}
 	if list == nil {
 		list = []*db.UsageLogEntryAdmin{}
@@ -67,8 +74,13 @@ func (h *Handler) ListMyUsage(w http.ResponseWriter, r *http.Request) {
 	}
 	list, err := h.db.ListUserUsage(claims.UserID, limit, offset)
 	if err != nil {
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-		return
+		log.Printf("[usage] ListUserUsage: %v", err)
+		if strings.Contains(err.Error(), "doesn't exist") || strings.Contains(err.Error(), "no such table") {
+			list = []*db.UsageLogEntry{}
+		} else {
+			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+			return
+		}
 	}
 	if list == nil {
 		list = []*db.UsageLogEntry{}

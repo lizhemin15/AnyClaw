@@ -41,7 +41,7 @@ func (d *DB) ListUserUsage(userID int64, limit, offset int) ([]*UsageLogEntry, e
 	uid := fmt.Sprintf("%d", userID)
 	rows, err := d.Query(
 		`SELECT u.id, u.instance_id, COALESCE(i.name, ''), u.model, u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at
-		 FROM usage_log u LEFT JOIN instances i ON u.instance_id = CAST(i.id AS CHAR) AND i.user_id = ?
+		 FROM usage_log u LEFT JOIN instances i ON u.instance_id = CAST(i.id AS CHAR(64)) AND i.user_id = ?
 		 WHERE u.user_id = ? ORDER BY u.created_at DESC LIMIT ? OFFSET ?`,
 		userID, uid, limit, offset,
 	)
@@ -70,8 +70,8 @@ func (d *DB) ListAdminUsage(limit, offset int) ([]*UsageLogEntryAdmin, error) {
 	rows, err := d.Query(
 		`SELECT u.id, u.instance_id, COALESCE(i.name, ''), u.model, u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at, COALESCE(us.email, u.user_id)
 		 FROM usage_log u
-		 LEFT JOIN instances i ON u.instance_id = CAST(i.id AS CHAR)
-		 LEFT JOIN users us ON u.user_id = CAST(us.id AS CHAR)
+		 LEFT JOIN instances i ON u.instance_id = CAST(i.id AS CHAR(64))
+		 LEFT JOIN users us ON u.user_id = CAST(us.id AS CHAR(64))
 		 ORDER BY u.created_at DESC LIMIT ? OFFSET ?`,
 		limit, offset,
 	)

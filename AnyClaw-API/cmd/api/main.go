@@ -165,6 +165,17 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Put("/config", adminConfigHandler.PutConfig)
 		r.Post("/config/test", adminConfigHandler.TestChannel)
 		r.Post("/config/test-smtp", adminConfigHandler.TestSMTP)
+		r.Post("/db/check-and-migrate", func(w http.ResponseWriter, r *http.Request) {
+			if err := database.CheckAndMigrate(); err != nil {
+				log.Printf("[admin] db check-and-migrate failed: %v", err)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "数据库结构已检查并修复"})
+		})
 		r.Post("/db/reset", func(w http.ResponseWriter, r *http.Request) {
 			if err := database.Reset(); err != nil {
 				log.Printf("[admin] db reset failed: %v", err)
@@ -197,6 +208,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Post("/{id}/check", hostHandler.CheckStatus)
 		r.Get("/{id}/instance-image-status", hostHandler.InstanceImageStatus)
 		r.Post("/{id}/pull-and-restart-instances", hostHandler.PullAndRestartInstances)
+		r.Post("/{id}/prune-images", hostHandler.PruneImages)
 		r.Post("/{id}/drain", hostHandler.Drain)
 	})
 	r.Route("/admin/instances", func(r chi.Router) {

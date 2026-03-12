@@ -65,3 +65,25 @@ func (d *DB) DeleteMessagesByInstance(instanceID int64) error {
 	_, err := d.Exec("DELETE FROM messages WHERE instance_id = ?", instanceID)
 	return err
 }
+
+// UpdateLastAssistantMessage updates the content of the most recent assistant message.
+// Used when receiving message.update (streaming) to avoid inserting duplicate rows.
+func (d *DB) UpdateLastAssistantMessage(instanceID int64, content string) (int64, error) {
+	var id int64
+	err := d.QueryRow(
+		"SELECT id FROM messages WHERE instance_id = ? AND role = 'assistant' ORDER BY id DESC LIMIT 1",
+		instanceID,
+	).Scan(&id)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("update last assistant message: %w", err)
+	}
+	res, err := d.Exec("UPDATE messages SET content = ? WHERE id = ?", content, id)
+	if err != nil {
+		return 0, fmt.Errorf("update last assistant message: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}

@@ -215,6 +215,12 @@ func (d *DB) migrate() error {
 	return nil
 }
 
+// CheckAndMigrate 重新执行迁移逻辑，补齐缺失的表和列，用于迭代更新后结构不一致时修复。
+// 幂等：已存在的表/列不会重复创建。
+func (d *DB) CheckAndMigrate() error {
+	return d.migrate()
+}
+
 // Reset 清空所有业务表并重新迁移，用于解决数据冲突。重置后需前往 /setup 创建管理员。
 func (d *DB) Reset() error {
 	tables := []string{

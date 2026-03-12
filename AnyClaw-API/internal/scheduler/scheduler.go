@@ -12,6 +12,12 @@ import (
 	"github.com/anyclaw/anyclaw-api/internal/db"
 )
 
+// buildDockerRunCmd 构建统一的 docker run 命令，新建、重启、迁移等操作均使用此配置，保证挂载与环境变量一致。
+func buildDockerRunCmd(containerName, wsPath, image, defaultModel, apiURL string, instanceID int64, token string) string {
+	return fmt.Sprintf("export PATH=/usr/local/bin:/usr/bin:$PATH; docker run -d --name %s --pull always -v %s:/workspace -e TZ=Asia/Shanghai -e ANYCLAW_CONFIG=/workspace/config.json -e ANYCLAW_AGENTS_DEFAULTS_WORKSPACE=/workspace -e ANYCLAW_AGENTS_DEFAULTS_MODEL_NAME='%s' -e ANYCLAW_API_URL='%s' -e ANYCLAW_INSTANCE_ID=%d -e ANYCLAW_TOKEN='%s' %s gateway 2>&1",
+		containerName, wsPath, defaultModel, apiURL, instanceID, token, image)
+}
+
 // extractContainerID 从 docker run -d 输出中提取 64 位容器 ID（避免 pull 进度等导致 Data too long）
 func extractContainerID(out string) string {
 	out = strings.TrimSpace(out)
@@ -201,8 +207,7 @@ func (s *Scheduler) runOnHost(ctx context.Context, host *db.Host, instanceID int
 	}
 	wsPath := fmt.Sprintf("/var/lib/anyclaw/ws-%d", instanceID)
 	containerName := fmt.Sprintf("anyclaw-inst-%d", instanceID)
-	cmd := fmt.Sprintf("export PATH=/usr/local/bin:/usr/bin:$PATH; docker run -d --name %s --pull always -v %s:/workspace -e TZ=Asia/Shanghai -e ANYCLAW_AGENTS_DEFAULTS_WORKSPACE=/workspace -e ANYCLAW_AGENTS_DEFAULTS_MODEL_NAME='%s' -e ANYCLAW_API_URL='%s' -e ANYCLAW_INSTANCE_ID=%d -e ANYCLAW_TOKEN='%s' %s gateway 2>&1",
-		containerName, wsPath, defaultModel, apiURL, instanceID, token, image)
+	cmd := buildDockerRunCmd(containerName, wsPath, image, defaultModel, apiURL, instanceID, token)
 	out, err := runSSH(host, cmd)
 	if err != nil {
 		log.Printf("[scheduler] ssh docker run on %s failed: %v", host.Addr, err)

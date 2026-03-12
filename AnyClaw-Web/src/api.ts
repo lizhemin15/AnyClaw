@@ -295,6 +295,10 @@ export async function pullAndRestartInstances(id: string): Promise<{ ok: boolean
   return fetchApi<{ ok: boolean; message: string; failed_ids?: number[] }>(`/admin/hosts/${id}/pull-and-restart-instances`, { method: 'POST' });
 }
 
+export async function pruneHostImages(id: string): Promise<{ ok: boolean; message: string }> {
+  return fetchApi<{ ok: boolean; message: string }>(`/admin/hosts/${id}/prune-images`, { method: 'POST' });
+}
+
 export interface AdminInstance {
   id: number;
   user_id: number;
@@ -466,6 +470,10 @@ export async function getAdminStats(days?: number): Promise<AdminStats> {
 
 export async function getAdminUsage(limit = 100, offset = 0): Promise<{ items: UsageLogEntryAdmin[] }> {
   return fetchApi<{ items: UsageLogEntryAdmin[] }>(`/admin/usage?limit=${limit}&offset=${offset}`);
+}
+
+export async function checkAndMigrateDb(): Promise<{ status: string; message?: string }> {
+  return fetchApi<{ status: string; message?: string }>('/admin/db/check-and-migrate', { method: 'POST' });
 }
 
 export async function resetAdminDb(): Promise<void> {

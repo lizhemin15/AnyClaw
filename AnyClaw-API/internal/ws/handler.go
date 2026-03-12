@@ -38,7 +38,12 @@ func NewHandler(db *db.DB, hub *Hub) *Handler {
 			_, _ = h.db.InsertMessage(instanceID, role, content)
 		}
 		if msg.Type == "message.update" {
-			_, _ = h.db.InsertMessage(instanceID, role, content)
+			// message.update is for streaming; update the last assistant message, do not insert
+			n, _ := h.db.UpdateLastAssistantMessage(instanceID, content)
+			if n == 0 {
+				// No existing assistant message (e.g. agent sent update without create), insert
+				_, _ = h.db.InsertMessage(instanceID, role, content)
+			}
 		}
 	})
 	return h

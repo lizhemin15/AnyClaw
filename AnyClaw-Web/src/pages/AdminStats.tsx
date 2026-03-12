@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAdminStats, getAdminUsage, resetAdminDb, clearToken, type AdminStats, type UsageLogEntryAdmin } from '../api'
+import { getAdminStats, getAdminUsage, checkAndMigrateDb, resetAdminDb, clearToken, type AdminStats, type UsageLogEntryAdmin } from '../api'
 
 const CHART_COLORS = ['#4318FF', '#00B5D8', '#6C63FF', '#05CD99', '#FFB547', '#FF5E7D', '#41B883', '#7983FF']
 
@@ -11,6 +11,7 @@ export default function AdminStats() {
   const [days, setDays] = useState(7)
   const [resetting, setResetting] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [migrating, setMigrating] = useState(false)
 
   const load = () => {
     setLoading(true)
@@ -56,6 +57,36 @@ export default function AdminStats() {
       {error && (
         <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-100 text-red-700 text-sm">{error}</div>
       )}
+
+      {/* 数据库维护 - 始终可见，便于结构不一致时修复 */}
+      <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200">
+          <h2 className="font-semibold text-slate-800">数据库维护</h2>
+          <p className="text-sm text-slate-500 mt-0.5">迭代更新服务后若 MySQL 结构未同步，可一键检查并补齐缺失的表和列</p>
+        </div>
+        <div className="p-5 flex gap-3">
+          <button
+            type="button"
+            onClick={async () => {
+              setMigrating(true)
+              setError('')
+              try {
+                const res = await checkAndMigrateDb()
+                alert(res.message || '数据库结构已检查并修复')
+                load()
+              } catch (e) {
+                setError(e instanceof Error ? e.message : '检查修复失败')
+              } finally {
+                setMigrating(false)
+              }
+            }}
+            disabled={migrating}
+            className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50"
+          >
+            {migrating ? '执行中...' : '检查修复数据库'}
+          </button>
+        </div>
+      </div>
 
       {loading ? (
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-8">

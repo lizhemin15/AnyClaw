@@ -256,8 +256,8 @@ func (h *Handler) InstanceImageStatus(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	// Docker Hub digest 通过宿主机 SSH 获取（宿主机网络可访问 Docker Hub）
-	hubDigest, err := getDockerHubDigestViaHost(h.checker, host, image)
+	// Docker Hub digests 通过宿主机 SSH 获取（含 manifest list 各平台 digest，与本地 RepoDigests 可比）
+	hubDigests, err := getDockerHubDigestsViaHost(h.checker, host, image)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(InstanceImageStatusResponse{
@@ -269,17 +269,65 @@ func (h *Handler) InstanceImageStatus(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	// 任一本地 digest 与 hub 一致即视为已最新（多架构 manifest list / 单架构 digest 可能不同）
-	updateAvailable := localDigest == "" || !localDigests[hubDigest]
+	hubDigestSet := make(map[string]bool)
+	for _, d := range hubDigests {
+		hubDigestSet[d] = true
+	}
+	// 任一本地 digest 在 hub digests 中即视为已最新（多架构时本地存平台 digest，hub 需解析 list 获取全部）
+	hasMatch := false
+	for d := range localDigests {
+		if hubDigestSet[d] {
+			hasMatch = true
+			break
+		}
+	}
+	updateAvailable := localDigest == "" || !hasMatch
+	hubDigestForResp := ""
+	if len(hubDigests) > 0 {
+		hubDigestForResp = hubDigests[0]
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(InstanceImageStatusResponse{
 		UpdateAvailable: updateAvailable,
 		Image:           image,
 		CurrentDigest:   localDigest,
-		LatestDigest:    hubDigest,
+		LatestDigest:    hubDigestForResp,
 		InstanceCount:   len(instances),
 		InstanceIDs:     ids,
 	})
+}
+
+// pruneImagesOnHost 在宿主机上执行 docker image prune -f 清理悬空镜像
+func pruneImagesOnHost(checker StatusChecker, host *db.Host) {
+	if checker == nil {
+		return
+	}
+	out, err := checker.RunCommand(host, "export PATH=/usr/local/bin:/usr/bin:$PATH; docker image prune -f")
+	if err != nil {
+		log.Printf("[hosts] prune images on %s failed: %v", host.Addr, err)
+		return
+	}
+	if strings.TrimSpace(out) != "" {
+		log.Printf("[hosts] prune on %s: %s", host.Addr, strings.TrimSpace(out))
+	}
+}
+
+// PruneImages 在指定宿主机上清理悬空镜像（<none> 的旧版本）
+func (h *Handler) PruneImages(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	host, err := h.db.GetHost(id)
+	if err != nil || host == nil {
+		http.Error(w, `{"error":"host not found"}`, http.StatusNotFound)
+		return
+	}
+	if h.checker == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "message": "SSH 未配置"})
+		return
+	}
+	pruneImagesOnHost(h.checker, host)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "message": "已清理悬空镜像"})
 }
 
 // Drain 排空宿主机：将该主机上所有运行中实例迁移到其他主机
@@ -331,6 +379,9 @@ func (h *Handler) Drain(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		migrated++
+	}
+	if h.checker != nil && migrated > 0 {
+		pruneImagesOnHost(h.checker, host)
 	}
 	msg := "排空完成"
 	if failed > 0 {
@@ -390,7 +441,7 @@ func (h *Handler) PullAndRestartInstances(w http.ResponseWriter, r *http.Request
 		_ = h.db.UpdateInstanceContainer(inst.ID, cid, host.ID)
 	}
 	// 3. 清理悬空镜像（<none> 的旧版本）
-	_, _ = h.checker.RunCommand(host, "docker image prune -f")
+	pruneImagesOnHost(h.checker, host)
 	msg := "已完成"
 	if len(failed) > 0 {
 		msg = "部分实例重启失败"

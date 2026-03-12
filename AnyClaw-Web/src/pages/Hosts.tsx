@@ -8,6 +8,7 @@ import {
   checkHostStatus,
   getHostInstanceImageStatus,
   pullAndRestartInstances,
+  pruneHostImages,
   drainHost,
   getAdminInstances,
   adminDeleteInstance,
@@ -38,6 +39,7 @@ export default function Hosts() {
   const [checking, setChecking] = useState<string | null>(null)
   const [instanceImageStatus, setInstanceImageStatus] = useState<Record<string, { update_available: boolean; image: string; instance_count: number; message?: string }>>({})
   const [pullingInstances, setPullingInstances] = useState<string | null>(null)
+  const [pruningImages, setPruningImages] = useState<string | null>(null)
   const [draining, setDraining] = useState<string | null>(null)
   const [instances, setInstances] = useState<AdminInstance[]>([])
   const [instancesLoading, setInstancesLoading] = useState(true)
@@ -135,6 +137,23 @@ export default function Hosts() {
       setHosts((prev) => prev.map((h) => (h.id === id ? { ...h, status: 'error' } : h)))
     } finally {
       setChecking(null)
+    }
+  }
+
+  const handlePruneImages = async (h: Host) => {
+    setPruningImages(h.id)
+    setError('')
+    try {
+      const res = await pruneHostImages(h.id)
+      if (res.ok) {
+        alert(res.message)
+      } else {
+        setError(res.message || '清理失败')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '清理失败')
+    } finally {
+      setPruningImages(null)
     }
   }
 
@@ -313,6 +332,14 @@ export default function Hosts() {
                   className="flex-1 sm:flex-none px-4 py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50 disabled:opacity-50 min-h-[44px]"
                 >
                   {checking === h.id ? '检测中...' : '检测'}
+                </button>
+                <button
+                  onClick={() => handlePruneImages(h)}
+                  disabled={!!pruningImages}
+                  title="清理该主机上的悬空镜像（&lt;none&gt; 的旧版本）"
+                  className="flex-1 sm:flex-none px-4 py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50 disabled:opacity-50 min-h-[44px]"
+                >
+                  {pruningImages === h.id ? '清理中...' : '清理悬空镜像'}
                 </button>
                 <button
                   onClick={() => handleDrain(h)}
