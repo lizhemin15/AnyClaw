@@ -369,7 +369,7 @@ func (h *Handler) PullAndRestartInstances(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 	var failed []int64
 	for _, inst := range instances {
-		if err := h.sched.Stop(ctx, host.ID, inst.ContainerID, inst.ID); err != nil {
+		if err := h.sched.Stop(ctx, host.ID, inst.ContainerID, inst.ID, false); err != nil {
 			log.Printf("[hosts] stop instance %d failed: %v", inst.ID, err)
 			failed = append(failed, inst.ID)
 			continue

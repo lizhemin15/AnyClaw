@@ -214,10 +214,11 @@ func (s *Scheduler) runOnHost(ctx context.Context, host *db.Host, instanceID int
 }
 
 // Stop stops and removes a container on the given host.
-// If instanceID > 0, also unmounts and removes the workspace volume.
+// If instanceID > 0 and removeWorkspace is true, also unmounts and removes the workspace volume.
+// When removeWorkspace is false (e.g. PullAndRestart, Migrate), workspace is preserved for reuse.
 // When hostID is empty, tries ALL hosts (including disabled) until docker rm succeeds.
 // Prefer container name anyclaw-inst-{id} when instanceID known (more reliable than stored container_id).
-func (s *Scheduler) Stop(ctx context.Context, hostID, containerID string, instanceID int64) error {
+func (s *Scheduler) Stop(ctx context.Context, hostID, containerID string, instanceID int64, removeWorkspace bool) error {
 	containerName := fmt.Sprintf("anyclaw-inst-%d", instanceID)
 	rmTarget := ""
 	if instanceID > 0 {
@@ -278,8 +279,8 @@ func (s *Scheduler) Stop(ctx context.Context, hostID, containerID string, instan
 			continue
 		}
 		log.Printf("[scheduler] container %s removed on host %s", rmTarget, host.ID)
-		// Remove workspace: 先 umount 固定卷（若有），再删目录和 .img 文件
-		if instanceID > 0 {
+		// Remove workspace only when requested (e.g. Delete); preserve for PullAndRestart/Migrate
+		if instanceID > 0 && removeWorkspace {
 			cleanup := fmt.Sprintf(`export PATH=/usr/local/bin:/usr/bin:$PATH; \
 				WS="/var/lib/anyclaw/ws-%d" FILE="/var/lib/anyclaw/ws-%d.img"; \
 				(mountpoint -q "$WS" 2>/dev/null && umount "$WS") || true; \
@@ -315,8 +316,8 @@ func (s *Scheduler) MigrateWithInstance(ctx context.Context, inst *db.Instance, 
 	if targetHost.SSHKey == "" && targetHost.SSHPassword == "" {
 		return "", "", fmt.Errorf("target host has no SSH credentials")
 	}
-	// 1. 停止源主机上的容器
-	if err := s.Stop(ctx, inst.HostID, inst.ContainerID, inst.ID); err != nil {
+	// 1. 停止源主机上的容器（保留工作区，后续 tar 并显式清理）
+	if err := s.Stop(ctx, inst.HostID, inst.ContainerID, inst.ID, false); err != nil {
 		return "", "", fmt.Errorf("stop source container: %w", err)
 	}
 	// 2. 在源主机上打包工作区内容并流式传输到目标
