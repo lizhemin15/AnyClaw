@@ -177,8 +177,17 @@ export default function Hosts() {
       const res = await pullAndRestartInstances(h.id)
       if (res.ok) {
         setError('')
+        // 乐观更新：更新成功后立即标记为已最新，避免 digest 比较差异导致仍显示可更新
+        setInstanceImageStatus((prev) => ({
+          ...prev,
+          [h.id]: {
+            ...prev[h.id],
+            update_available: false,
+            image: prev[h.id]?.image ?? '',
+            instance_count: prev[h.id]?.instance_count ?? 0,
+          },
+        }))
         alert(res.message)
-        checkInstanceImageStatus(h.id)
         loadInstances()
       } else {
         setError(res.failed_ids?.length ? `${res.message}，失败 ID: ${res.failed_ids.join(', ')}` : res.message)

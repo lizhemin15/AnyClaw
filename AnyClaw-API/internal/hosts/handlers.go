@@ -244,12 +244,16 @@ func (h *Handler) InstanceImageStatus(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	// 本地 digest（宿主机 SSH）
-	out, err := h.checker.RunCommand(host, `docker inspect "`+image+`" --format '{{index .RepoDigests 0}}' 2>/dev/null || echo ''`)
-	var localDigest string
+	// 本地 digest（宿主机 SSH）：遍历所有 RepoDigests，多架构/多源镜像可能有多个
+	out, err := h.checker.RunCommand(host, `docker inspect "`+image+`" --format '{{range .RepoDigests}}{{println .}}{{end}}' 2>/dev/null || echo ''`)
+	localDigests := make(map[string]bool)
+	var localDigest string // 取第一个用于展示
 	if err == nil && out != "" {
-		if m := sha256DigestRe.FindString(out); m != "" {
-			localDigest = m
+		for _, m := range sha256DigestRe.FindAllString(out, -1) {
+			localDigests[m] = true
+			if localDigest == "" {
+				localDigest = m
+			}
 		}
 	}
 	// Docker Hub digest 通过宿主机 SSH 获取（宿主机网络可访问 Docker Hub）
@@ -265,7 +269,8 @@ func (h *Handler) InstanceImageStatus(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	updateAvailable := localDigest == "" || localDigest != hubDigest
+	// 任一本地 digest 与 hub 一致即视为已最新（多架构 manifest list / 单架构 digest 可能不同）
+	updateAvailable := localDigest == "" || !localDigests[hubDigest]
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(InstanceImageStatusResponse{
 		UpdateAvailable: updateAvailable,
@@ -384,6 +389,8 @@ func (h *Handler) PullAndRestartInstances(w http.ResponseWriter, r *http.Request
 		}
 		_ = h.db.UpdateInstanceContainer(inst.ID, cid, host.ID)
 	}
+	// 3. 清理悬空镜像（<none> 的旧版本）
+	_, _ = h.checker.RunCommand(host, "docker image prune -f")
 	msg := "已完成"
 	if len(failed) > 0 {
 		msg = "部分实例重启失败"
