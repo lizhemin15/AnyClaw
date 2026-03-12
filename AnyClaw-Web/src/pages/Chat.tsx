@@ -164,19 +164,45 @@ export default function Chat() {
     markInstanceRead(instanceId).catch(() => {})
   }, [instanceId, navigate, loadInitial])
 
-  // 页面重新可见时拉取最新消息（多标签/后台时可能漏收 WebSocket）
+  // 页面重新可见时拉取最新消息并合并（多标签/后台时可能漏收 WebSocket），不覆盖已有历史
+  const mergeMessagesFromServer = useCallback(
+    (list: ChatMessage[], setter: React.Dispatch<React.SetStateAction<ChatMessage[]>>) => {
+      const arr = Array.isArray(list) ? list : []
+      if (arr.length === 0) return
+      const reversed = [...arr].reverse()
+      setter((prev) => {
+        const prevIds = new Set(prev.map((m) => m.id))
+        let merged = [...prev]
+        for (const m of reversed) {
+          const role = m.role ?? 'assistant'
+          const content = m.content ?? ''
+          if (role === 'user') {
+            const idx = merged.findIndex((x) => x.role === 'user' && x.content === content && String(x.id).startsWith('u-'))
+            if (idx >= 0) {
+              merged[idx] = { id: m.id, content, role }
+              continue
+            }
+          }
+          if (!prevIds.has(m.id)) {
+            merged = [...merged, { id: m.id, content, role }]
+            prevIds.add(m.id)
+          }
+        }
+        return merged
+      })
+    },
+    []
+  )
+
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible' && !isNaN(instanceId)) {
-        loadMessages().then((list) => {
-          const arr = Array.isArray(list) ? list : []
-          if (arr.length > 0) setMessages([...arr].reverse())
-        })
+        loadMessages().then((list) => mergeMessagesFromServer(list, setMessages))
       }
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [instanceId, loadMessages])
+  }, [instanceId, loadMessages, mergeMessagesFromServer])
 
   // 等待回答时轮询拉取，兜底 WebSocket 漏传（如飞书绑定后容器重启导致消息未实时推送）
   useEffect(() => {
