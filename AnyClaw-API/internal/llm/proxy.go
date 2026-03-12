@@ -48,7 +48,7 @@ func New(configPath string, resolver TokenResolver, database *db.DB) *Proxy {
 		db:         database,
 		scheduler:  NewModelScheduler(),
 		client: &http.Client{
-			Timeout: 120 * time.Second,
+			Timeout: 300 * time.Second, // 5 分钟，应对慢速 LLM 或网络延迟
 		},
 	}
 }

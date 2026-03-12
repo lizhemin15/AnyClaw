@@ -330,7 +330,10 @@ func (c *BridgeChannel) Send(ctx context.Context, msg bus.OutboundMessage) error
 		sessionID = c.sessionID
 	}
 
-	outMsg := pico.NewMessage(pico.TypeMessageCreate, map[string]any{"content": msg.Content})
+	outMsg := pico.NewMessage(pico.TypeMessageCreate, map[string]any{
+		"content": msg.Content,
+		"role":    "assistant",
+	})
 	outMsg.SessionID = sessionID
 
 	return c.conn.writeJSON(outMsg)
@@ -348,6 +351,7 @@ func (c *BridgeChannel) EditMessage(ctx context.Context, chatID string, messageI
 	outMsg := pico.NewMessage(pico.TypeMessageUpdate, map[string]any{
 		"message_id": messageID,
 		"content":    content,
+		"role":       "assistant",
 	})
 	outMsg.SessionID = sessionID
 	return c.conn.writeJSON(outMsg)

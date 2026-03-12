@@ -25,10 +25,9 @@ func NewHandler(db *db.DB, hub *Hub) *Handler {
 			} `json:"payload"`
 		}
 		if json.Unmarshal(data, &msg) != nil {
-			log.Printf("[ws] instance %d: failed to parse container msg", instanceID)
+			log.Printf("[ws] instance %d: failed to parse container msg raw=%s", instanceID, string(data))
 			return
 		}
-		log.Printf("[ws] instance %d: recv type=%s role=%s contentLen=%d", instanceID, msg.Type, msg.Payload.Role, len(msg.Payload.Content))
 		content := strings.TrimSpace(msg.Payload.Content)
 		if content == "" {
 			return
@@ -37,18 +36,28 @@ func NewHandler(db *db.DB, hub *Hub) *Handler {
 		if role == "" {
 			role = "assistant"
 		}
+		// 只存储 assistant 消息，忽略 user
+		if role != "assistant" {
+			return
+		}
+		stored := false
 		if msg.Type == "message.create" && !strings.HasPrefix(content, "Thinking") {
 			_, err := h.db.InsertMessage(instanceID, role, content)
-			log.Printf("[ws] instance %d: message.create stored role=%s len=%d err=%v", instanceID, role, len(content), err)
+			log.Printf("[ws] instance %d: message.create stored len=%d err=%v", instanceID, len(content), err)
+			stored = err == nil
 		}
 		if msg.Type == "message.update" {
-			// message.update is for streaming; update the last assistant message, do not insert
 			n, _ := h.db.UpdateLastAssistantMessage(instanceID, content)
 			if n == 0 {
-				// No existing assistant message (e.g. agent sent update without create), insert
 				_, err := h.db.InsertMessage(instanceID, role, content)
-				log.Printf("[ws] instance %d: message.update->insert role=%s len=%d err=%v", instanceID, role, len(content), err)
+				log.Printf("[ws] instance %d: message.update->insert len=%d err=%v", instanceID, len(content), err)
+				stored = err == nil
+			} else {
+				stored = true
 			}
+		}
+		if !stored && msg.Type == "message.create" && !strings.HasPrefix(content, "Thinking") {
+			log.Printf("[ws] instance %d: WARNING message.create not stored contentLen=%d", instanceID, len(content))
 		}
 	})
 	return h

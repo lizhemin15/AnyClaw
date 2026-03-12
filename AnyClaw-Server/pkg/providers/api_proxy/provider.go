@@ -16,7 +16,7 @@ import (
 
 const (
 	llmPath            = "/llm/v1/chat/completions"
-	defaultReqTimeout  = 120 * time.Second
+	defaultReqTimeout  = 300 * time.Second // 5 分钟，应对慢速 LLM 或网络延迟
 )
 
 type (
