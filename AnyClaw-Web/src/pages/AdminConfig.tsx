@@ -648,25 +648,29 @@ export default function AdminConfig() {
                   placeholder="模型，如 gpt-4o"
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-32 font-mono"
                 />
-                <input
-                  type="number"
-                  min={0}
-                  value={newChannel.daily_tokens_limit ?? 0}
-                  onChange={(e) => setNewChannel((p) => ({ ...p, daily_tokens_limit: parseInt(e.target.value, 10) || 0 }))}
-                  placeholder="日 tokens 上限"
-                  title="0 表示不限制"
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-28"
-                />
-                <input
-                  type="number"
-                  min={0}
-                  step={0.1}
-                  value={newChannel.qps_limit ?? 0}
-                  onChange={(e) => setNewChannel((p) => ({ ...p, qps_limit: parseFloat(e.target.value) || 0 }))}
-                  placeholder="QPS 上限"
-                  title="0 表示不限制"
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-24"
-                />
+                <div className="flex flex-col">
+                  <label className="text-xs text-slate-500 mb-0.5">日 tokens 上限</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={newChannel.daily_tokens_limit ?? 0}
+                    onChange={(e) => setNewChannel((p) => ({ ...p, daily_tokens_limit: parseInt(e.target.value, 10) || 0 }))}
+                    placeholder="0=不限制"
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-28"
+                  />
+                </div>
+                <div className="flex flex-col">
+                  <label className="text-xs text-slate-500 mb-0.5">QPS 上限</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={newChannel.qps_limit ?? 0}
+                    onChange={(e) => setNewChannel((p) => ({ ...p, qps_limit: parseFloat(e.target.value) || 0 }))}
+                    placeholder="0=不限制"
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-24"
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={handleTestNewChannel}
@@ -750,25 +754,29 @@ export default function AdminConfig() {
                           placeholder="模型"
                           className="px-3 py-1.5 border border-slate-300 rounded text-sm font-mono w-32"
                         />
-                        <input
-                          type="number"
-                          min={0}
-                          value={ch.daily_tokens_limit ?? 0}
-                          onChange={(e) => updateChannel(ch.id, { daily_tokens_limit: parseInt(e.target.value, 10) || 0 })}
-                          placeholder="日 tokens 上限"
-                          title="日 tokens 上限，0 表示不限制"
-                          className="px-3 py-1.5 border border-slate-300 rounded text-sm w-28"
-                        />
-                        <input
-                          type="number"
-                          min={0}
-                          step={0.1}
-                          value={ch.qps_limit ?? 0}
-                          onChange={(e) => updateChannel(ch.id, { qps_limit: parseFloat(e.target.value) || 0 })}
-                          placeholder="QPS 上限"
-                          title="每秒请求数上限，0 表示不限制"
-                          className="px-3 py-1.5 border border-slate-300 rounded text-sm w-24"
-                        />
+                        <div className="flex flex-col">
+                          <label className="text-xs text-slate-500 mb-0.5">日 tokens 上限</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={ch.daily_tokens_limit ?? 0}
+                            onChange={(e) => updateChannel(ch.id, { daily_tokens_limit: parseInt(e.target.value, 10) || 0 })}
+                            placeholder="0=不限制"
+                            className="px-3 py-1.5 border border-slate-300 rounded text-sm w-28"
+                          />
+                        </div>
+                        <div className="flex flex-col">
+                          <label className="text-xs text-slate-500 mb-0.5">QPS 上限</label>
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.1}
+                            value={ch.qps_limit ?? 0}
+                            onChange={(e) => updateChannel(ch.id, { qps_limit: parseFloat(e.target.value) || 0 })}
+                            placeholder="0=不限制"
+                            className="px-3 py-1.5 border border-slate-300 rounded text-sm w-24"
+                          />
+                        </div>
                         <button type="button" onClick={() => setEditingChannel(null)} className="text-sm text-slate-600">
                           完成
                         </button>
