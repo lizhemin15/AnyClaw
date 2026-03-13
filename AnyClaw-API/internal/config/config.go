@@ -41,29 +41,31 @@ func GetWorkspaceSizeGB(cfg *Config) int {
 
 // EnergyConfig 金币经济配置，全部即时生效
 type EnergyConfig struct {
-	TokensPerEnergy      int `json:"tokens_per_energy"`      // 每 N token 消耗 1 活力，默认 1000
-	AdoptCost            int `json:"adopt_cost"`             // 领养宠物消耗金币，默认 100
-	DailyConsume         int `json:"daily_consume"`         // 每只宠物每日消耗活力，默认 10
-	MinEnergyForTask     int `json:"min_energy_for_task"`    // 低于此值无法对话，默认 5
-	ZeroDaysToDelete     int `json:"zero_days_to_delete"`    // 连续无活力天数后永久消失，默认 3
-	InviteReward         int `json:"invite_reward"`          // 邀请奖励（双方各得），默认 50
-	NewUserEnergy        int `json:"new_user_energy"`        // 新用户初始金币，默认 0
-	DailyLoginBonus      int `json:"daily_login_bonus"`      // 每天首次登录赠送金币，默认 10
-	InviteCommissionRate int `json:"invite_commission_rate"` // 受邀用户充值时的邀请人返利比例(0-100)，默认 5
+	TokensPerEnergy       int `json:"tokens_per_energy"`       // 每 N token 消耗 1 活力，默认 1000
+	AdoptCost             int `json:"adopt_cost"`              // 领养宠物消耗金币，默认 100
+	DailyConsume          int `json:"daily_consume"`            // 每只宠物每日消耗活力，默认 10
+	MinEnergyForTask      int `json:"min_energy_for_task"`     // 低于此值无法对话，默认 5
+	ZeroDaysToDelete      int `json:"zero_days_to_delete"`     // 连续无活力天数后永久消失，默认 3
+	InviteReward          int `json:"invite_reward"`           // 邀请奖励（双方各得），默认 50
+	NewUserEnergy         int `json:"new_user_energy"`          // 新用户初始金币，默认 0
+	DailyLoginBonus       int `json:"daily_login_bonus"`       // 每天首次登录赠送金币，默认 10
+	InviteCommissionRate  int `json:"invite_commission_rate"`   // 受邀用户充值时的邀请人返利比例(0-100)，默认 5
+	MonthlySubscriptionCost int `json:"monthly_subscription_cost"` // 单只宠物包月价格（金币），默认 50，0 表示禁用包月
 }
 
 // GetEnergyDefaults 返回默认值
 func GetEnergyDefaults() EnergyConfig {
 	return EnergyConfig{
-		TokensPerEnergy:      1000,
-		AdoptCost:            100,
-		DailyConsume:         10,
-		MinEnergyForTask:     5,
-		ZeroDaysToDelete:     3,
-		InviteReward:         50,
-		NewUserEnergy:        0,
-		DailyLoginBonus:      10,
-		InviteCommissionRate: 5,
+		TokensPerEnergy:        1000,
+		AdoptCost:              100,
+		DailyConsume:           10,
+		MinEnergyForTask:       5,
+		ZeroDaysToDelete:       3,
+		InviteReward:           50,
+		NewUserEnergy:          0,
+		DailyLoginBonus:        10,
+		InviteCommissionRate:   5,
+		MonthlySubscriptionCost: 50,
 	}
 }
 
@@ -100,6 +102,9 @@ func GetEnergyConfig(cfg *Config) EnergyConfig {
 	}
 	if e.InviteCommissionRate < 0 || e.InviteCommissionRate > 100 {
 		e.InviteCommissionRate = def.InviteCommissionRate
+	}
+	if e.MonthlySubscriptionCost < 0 {
+		e.MonthlySubscriptionCost = def.MonthlySubscriptionCost
 	}
 	return e
 }

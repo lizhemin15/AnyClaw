@@ -34,6 +34,7 @@ export interface Instance {
   zero_energy_since?: string;
   created_at: string;
   unread?: boolean;
+  subscribed_month?: string;
 }
 
 export interface LoginResponse {
@@ -80,8 +81,8 @@ export async function getAuthConfig(): Promise<{ email_verification_required: bo
   return fetchApi<{ email_verification_required: boolean; adopt_cost?: number }>('/auth/config');
 }
 
-export async function getEnergyConfig(): Promise<{ adopt_cost?: number }> {
-  return fetchApi<{ adopt_cost?: number }>('/energy/config');
+export async function getEnergyConfig(): Promise<{ adopt_cost?: number; monthly_subscription_cost?: number }> {
+  return fetchApi<{ adopt_cost?: number; monthly_subscription_cost?: number }>('/energy/config');
 }
 
 export async function sendVerificationCode(email: string): Promise<void> {
@@ -137,6 +138,11 @@ export async function markInstanceRead(id: number): Promise<void> {
 
 export async function deleteInstance(id: number): Promise<void> {
   await fetchApi(`/instances/${id}`, { method: 'DELETE' });
+}
+
+export async function subscribeInstance(id: number): Promise<Instance> {
+  const data = await fetchApi<{ instance: Instance }>(`/instances/${id}/subscribe`, { method: 'POST' });
+  return data.instance;
 }
 
 export interface UsageLogEntry {
@@ -414,6 +420,7 @@ export interface EnergyConfig {
   new_user_energy: number;
   daily_login_bonus: number;
   invite_commission_rate: number;
+  monthly_subscription_cost?: number;
 }
 
 export interface ContainerConfig {

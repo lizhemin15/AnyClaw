@@ -40,6 +40,7 @@ public static string Exec(IStepContext context)
             if (!string.IsNullOrEmpty(token)) SaveToken(apiBase, token);
         }
 
+        var showGuide = false;
         if (string.IsNullOrEmpty(token))
         {
             string finalToken = null;
@@ -49,7 +50,11 @@ public static string Exec(IStepContext context)
                 if (loginWin.ShowDialog() == true)
                 {
                     finalToken = loginWin.Token;
-                    if (!string.IsNullOrEmpty(finalToken)) SaveToken(apiBase, finalToken);
+                    if (!string.IsNullOrEmpty(finalToken))
+                    {
+                        SaveToken(apiBase, finalToken);
+                        showGuide = true;
+                    }
                 }
             });
             token = finalToken;
@@ -64,7 +69,7 @@ public static string Exec(IStepContext context)
         {
             if (mode == "desktop")
             {
-                var admin = new ClawAdminWindow(apiBase, token);
+                var admin = new ClawAdminWindow(apiBase, token, showGuide);
                 admin.Show();
                 var config = LoadDesktopConfig(apiBase);
                 var instances = GetInstances(apiBase, token);
@@ -81,7 +86,7 @@ public static string Exec(IStepContext context)
             }
             else
             {
-                var main = new AnyClawMainWindow(apiBase, token);
+                var main = new AnyClawMainWindow(apiBase, token, showGuide);
                 main.ShowDialog();
             }
         });
@@ -298,16 +303,17 @@ class RegisterWindow : Window
         _verificationRequired = GetAuthConfigVerificationRequired(apiBase);
         Title = "AnyClaw 注册";
         Width = 400;
-        Height = 420;
-        MinHeight = 380;
+        Height = 520;
+        MinHeight = 460;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ResizeMode = ResizeMode.NoResize;
+        ResizeMode = ResizeMode.CanResizeWithGrip;
         Topmost = true;
         Background = GradBg();
 
         var main = new Border { Margin = new Thickness(24, 24, 24, 24), Padding = new Thickness(32, 28, 32, 28), Background = Brushes.White, CornerRadius = new CornerRadius(20), Effect = CardShadow(), BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)), BorderThickness = new Thickness(1, 1, 1, 1) };
 
         var stack = new StackPanel();
+        var scroll = new ScrollViewer { Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(0, 0, 4, 0) };
         stack.Children.Add(new TextBlock { Text = "注册", FontSize = 22, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)), Margin = new Thickness(0, 0, 0, 24) });
 
         stack.Children.Add(new TextBlock { Text = "邮箱", FontSize = 13, FontWeight = FontWeights.Medium, Margin = new Thickness(0, 0, 0, 8), Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105)) });
@@ -355,7 +361,7 @@ class RegisterWindow : Window
         loginRow.Children.Add(loginBtn);
         stack.Children.Add(loginRow);
 
-        main.Child = stack;
+        main.Child = scroll;
         Content = main;
     }
 
@@ -644,6 +650,43 @@ static string GetDesktopConfigPath(string apiBase)
     return System.IO.Path.Combine(dir, "desktop_" + hash + ".txt");
 }
 
+static string GetPetHousePositionPath(string apiBase)
+{
+    var dir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AnyClaw-Quicker");
+    Directory.CreateDirectory(dir);
+    var normalized = (apiBase ?? "").Trim().TrimEnd('/');
+    if (string.IsNullOrEmpty(normalized)) normalized = "default";
+    var hash = Convert.ToBase64String(Encoding.UTF8.GetBytes(normalized)).Replace("+", "_").Replace("/", "-").Replace("=", "");
+    return System.IO.Path.Combine(dir, "pethouse_" + hash + ".txt");
+}
+
+static (double Left, double Top)? LoadPetHousePosition(string apiBase)
+{
+    try
+    {
+        var path = GetPetHousePositionPath(apiBase);
+        if (!File.Exists(path)) return null;
+        var line = File.ReadAllText(path)?.Trim();
+        if (string.IsNullOrEmpty(line)) return null;
+        var parts = line.Split(',');
+        if (parts.Length >= 2 && double.TryParse(parts[0], out var left) && double.TryParse(parts[1], out var top))
+        {
+            if (left >= -10000 && left <= 10000 && top >= -10000 && top <= 10000) return (left, top);
+        }
+    }
+    catch { }
+    return null;
+}
+
+static void SavePetHousePosition(string apiBase, double left, double top)
+{
+    try
+    {
+        File.WriteAllText(GetPetHousePositionPath(apiBase), left.ToString("F0") + "," + top.ToString("F0"));
+    }
+    catch { }
+}
+
 static List<(int Id, string SchemeId, double X, double Y)> LoadDesktopConfig(string apiBase)
 {
     var list = new List<(int, string, double, double)>();
@@ -758,13 +801,15 @@ class ClawAdminWindow : Window
 {
     readonly string _apiBase;
     readonly string _token;
+    readonly bool _showGuide;
     Point _dragOffset;
     Point _dragStartScreen;
 
-    public ClawAdminWindow(string apiBase, string token)
+    public ClawAdminWindow(string apiBase, string token, bool showGuide = false)
     {
         _apiBase = apiBase;
         _token = token;
+        _showGuide = showGuide;
         Title = "OpenClaw 管理";
         Width = 56;
         Height = 56;
@@ -779,6 +824,10 @@ class ClawAdminWindow : Window
         Top = SystemParameters.PrimaryScreenHeight - 120;
 
         var canvas = new Canvas { Width = 56, Height = 56 };
+        var hitArea = new Rectangle { Width = 56, Height = 56, Fill = Brushes.Transparent };
+        Canvas.SetLeft(hitArea, 0);
+        Canvas.SetTop(hitArea, 0);
+        canvas.Children.Add(hitArea);
         var tb = new TextBlock { Text = "🏠", FontSize = 36, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         var vb = new Viewbox { Child = tb, Stretch = Stretch.Uniform };
         Canvas.SetLeft(vb, 8);
@@ -800,7 +849,7 @@ class ClawAdminWindow : Window
             var p = PointToScreen(e.GetPosition(this));
             if (Math.Abs(p.X - _dragStartScreen.X) < 4 && Math.Abs(p.Y - _dragStartScreen.Y) < 4)
             {
-                var main = new AnyClawMainWindow(_apiBase, _token);
+                var main = new AnyClawMainWindow(_apiBase, _token, _showGuide);
                 main.Owner = this;
                 main.ShowDialog();
             }
@@ -815,6 +864,54 @@ class ClawAdminWindow : Window
             }
         };
         Content = canvas;
+        Loaded += (s, e) => Dispatcher.BeginInvoke(new Action(ShowTipBubble), System.Windows.Threading.DispatcherPriority.ApplicationIdle, new object[] { });
+    }
+
+    void ShowTipBubble()
+    {
+        var tipWin = new Window
+        {
+            Width = 260,
+            Height = 90,
+            WindowStyle = WindowStyle.None,
+            AllowsTransparency = true,
+            Background = Brushes.Transparent,
+            ShowInTaskbar = false,
+            Topmost = true,
+            ResizeMode = ResizeMode.NoResize,
+            Owner = this
+        };
+        var screenX = Left + (Width - 260) / 2;
+        var screenY = Top - 95;
+        if (screenY < 0) screenY = Top + Height + 8;
+        tipWin.Left = screenX;
+        tipWin.Top = screenY;
+        var border = new Border
+        {
+            Background = Brushes.White,
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(14, 12, 14, 12),
+            Effect = CardShadow(),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+            BorderThickness = new Thickness(1, 1, 1, 1),
+            Cursor = Cursors.Hand
+        };
+        var sp = new StackPanel();
+        sp.Children.Add(new TextBlock { Text = "👋 点击我打开宠舍", FontSize = 14, FontWeight = FontWeights.Medium, Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)) });
+        sp.Children.Add(new TextBlock { Text = "领养宠物、管理宠物，选好后应用到桌面", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap });
+        border.Child = sp;
+        border.MouseLeftButtonDown += (s, e) =>
+        {
+            tipWin.Close();
+            var main = new AnyClawMainWindow(_apiBase, _token, _showGuide);
+            main.Owner = this;
+            main.ShowDialog();
+        };
+        tipWin.Content = border;
+        tipWin.Show();
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(8) };
+        timer.Tick += (s, ev) => { timer.Stop(); tipWin.Close(); };
+        timer.Start();
     }
 }
 
@@ -1529,7 +1626,7 @@ class AnyClawMainWindow : Window
     readonly Dictionary<int, CheckBox> _showChecks = new Dictionary<int, CheckBox>();
     readonly Dictionary<int, ComboBox> _schemeCombos = new Dictionary<int, ComboBox>();
 
-    public AnyClawMainWindow(string apiBase, string token)
+    public AnyClawMainWindow(string apiBase, string token, bool showGuide = false)
     {
         _apiBase = apiBase;
         _token = token;
@@ -1537,8 +1634,21 @@ class AnyClawMainWindow : Window
         Width = 440;
         Height = 560;
         MinHeight = 480;
-        WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        var apiNorm = (apiBase ?? "").Trim().TrimEnd('/');
+        var saved = LoadPetHousePosition(apiNorm);
+        if (saved.HasValue)
+        {
+            Left = saved.Value.Left;
+            Top = saved.Value.Top;
+        }
+        else
+        {
+            Left = (SystemParameters.PrimaryScreenWidth - 440) / 2;
+            Top = (SystemParameters.PrimaryScreenHeight - 560) / 2;
+        }
         Background = GradBg();
+        Closing += (s, e) => SavePetHousePosition(apiNorm, Left, Top);
 
         var grid = new Grid { Margin = new Thickness(20, 20, 20, 20) };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -1681,7 +1791,71 @@ class AnyClawMainWindow : Window
         Grid.SetRow(row5, 5);
         grid.Children.Add(row5);
 
-        Content = grid;
+        var rootGrid = new Grid();
+        rootGrid.Children.Add(grid);
+        if (showGuide)
+        {
+            var overlay = new Grid { Background = new SolidColorBrush(Color.FromArgb(180, 0, 0, 0)), Visibility = Visibility.Collapsed };
+            var step1 = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(16, 12, 16, 12),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 120, 0, 0),
+                Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 20, ShadowDepth = 0, Opacity = 0.5 }
+            };
+            var step1Content = new StackPanel();
+            step1Content.Children.Add(new TextBlock { Text = "👋 欢迎！", FontSize = 18, FontWeight = FontWeights.Bold, Foreground = Brushes.White });
+            step1Content.Children.Add(new TextBlock { Text = "在这里领养你的第一只宠物，输入名字后点击领养", FontSize = 14, Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)), Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 });
+            var next1 = new Button { Content = "下一步", Margin = new Thickness(0, 12, 0, 0), Padding = new Thickness(20, 8, 20, 8), Background = Brushes.White, Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)) };
+            step1Content.Children.Add(next1);
+            step1.Child = step1Content;
+            overlay.Children.Add(step1);
+            var step2 = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(16, 12, 16, 12),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 0),
+                Visibility = Visibility.Collapsed,
+                Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 20, ShadowDepth = 0, Opacity = 0.5 }
+            };
+            var step2Content = new StackPanel();
+            step2Content.Children.Add(new TextBlock { Text = "📋 我的宠舍", FontSize = 18, FontWeight = FontWeights.Bold, Foreground = Brushes.White });
+            step2Content.Children.Add(new TextBlock { Text = "领养的宠物会显示在这里，勾选要显示的、选配色", FontSize = 14, Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)), Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 });
+            var next2 = new Button { Content = "下一步", Margin = new Thickness(0, 12, 0, 0), Padding = new Thickness(20, 8, 20, 8), Background = Brushes.White, Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)) };
+            step2Content.Children.Add(next2);
+            step2.Child = step2Content;
+            overlay.Children.Add(step2);
+            var step3 = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(16, 12, 16, 12),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(0, 0, 0, 100),
+                Visibility = Visibility.Collapsed,
+                Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 20, ShadowDepth = 0, Opacity = 0.5 }
+            };
+            var step3Content = new StackPanel();
+            step3Content.Children.Add(new TextBlock { Text = "🖥 应用到桌面", FontSize = 18, FontWeight = FontWeights.Bold, Foreground = Brushes.White });
+            step3Content.Children.Add(new TextBlock { Text = "点击这里，宠物会出现在桌面右下角，双击可对话", FontSize = 14, Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)), Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 });
+            var doneBtn = new Button { Content = "知道了", Margin = new Thickness(0, 12, 0, 0), Padding = new Thickness(20, 8, 20, 8), Background = new SolidColorBrush(Color.FromRgb(34, 197, 94)), Foreground = Brushes.White };
+            step3Content.Children.Add(doneBtn);
+            step3.Child = step3Content;
+            overlay.Children.Add(step3);
+            next1.Click += (s, e) => { step1.Visibility = Visibility.Collapsed; step2.Visibility = Visibility.Visible; };
+            next2.Click += (s, e) => { step2.Visibility = Visibility.Collapsed; step3.Visibility = Visibility.Visible; };
+            doneBtn.Click += (s, e) => overlay.Visibility = Visibility.Collapsed;
+            rootGrid.Children.Add(overlay);
+            Loaded += (s, e) => { overlay.Visibility = Visibility.Visible; };
+        }
+        Content = rootGrid;
         Loaded += (s, e) => Refresh();
     }
 

@@ -1,8 +1,9 @@
 ﻿{
   "ActionId": "9a6f351c-79cb-4da9-abc5-5fd80df1adc9",
   "SharedActionId": "00000000-0000-0000-0000-000000000000",
+  "AutoUpdate": true,
   "Title": "AnyClaw",
-  "Description": "与 AnyClaw-Web 对等的 Quicker 前端，含桌面小龙虾与完整宠舍",
+  "Description": "绝对安全的OpenClaw的桌宠小龙虾",
   "Keywords": "AnyClaw,OpenClaw,AI,聊天,小龙虾,Claw,宠舍",
   "ChangeLog": "v2.2.0 聊天气泡、流式更新、界面美化",
   "ShareUrl": "",

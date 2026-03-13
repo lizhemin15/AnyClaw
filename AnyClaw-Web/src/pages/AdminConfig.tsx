@@ -129,7 +129,7 @@ export default function AdminConfig() {
         const payment: PaymentConfig = c.payment
           ? { ...c.payment, plans, yungouos: { wechat: yg?.wechat ? { ...yg.wechat } : defYg.wechat, alipay: yg?.alipay ? { ...yg.alipay } : defYg.alipay } }
           : { plans: defPlans, yungouos: defYg }
-        const defaultEnergy: EnergyConfig = { tokens_per_energy: 1000, adopt_cost: 100, daily_consume: 0, min_energy_for_task: 5, zero_days_to_delete: 0, invite_reward: 50, new_user_energy: 0, daily_login_bonus: 10, invite_commission_rate: 5 }
+        const defaultEnergy: EnergyConfig = { tokens_per_energy: 1000, adopt_cost: 100, daily_consume: 0, min_energy_for_task: 5, zero_days_to_delete: 0, invite_reward: 50, new_user_energy: 0, daily_login_bonus: 10, invite_commission_rate: 5, monthly_subscription_cost: 50 }
         const energy: EnergyConfig = c.energy ? { ...defaultEnergy, ...c.energy } : defaultEnergy
         const container: ContainerConfig = c.container ? { ...c.container } : { workspace_size_gb: 0 }
         const api_url = (c as { api_url?: string }).api_url ?? ''
@@ -426,6 +426,17 @@ export default function AdminConfig() {
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
                 />
                 <p className="text-xs text-slate-500 mt-0.5">金币</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">包月价格</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={form?.energy?.monthly_subscription_cost ?? 50}
+                  onChange={(e) => updateEnergy({ monthly_subscription_cost: parseInt(e.target.value, 10) || 0 })}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
+                />
+                <p className="text-xs text-slate-500 mt-0.5">金币/月，0 表示禁用包月</p>
               </div>
             </div>
           </div>

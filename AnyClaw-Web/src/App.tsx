@@ -52,6 +52,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
+  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
     getSetupStatus()
@@ -79,7 +80,7 @@ export default function App() {
       });
   }, []);
 
-  const handleLogin = (u: User) => setUser(u);
+  const handleLogin = (u: User) => { setUser(u); setShowGuide(true); };
   const handleLogout = () => {
     clearToken();
     setUser(null);
@@ -122,7 +123,7 @@ export default function App() {
         <Route path="/" element={
           <ProtectedRoute>
             <Layout user={user} onLogout={handleLogout}>
-              <Home user={user} onRefresh={() => refreshUser(setUser)} />
+              <Home user={user} onRefresh={() => refreshUser(setUser)} showGuide={showGuide} onDismissGuide={() => setShowGuide(false)} />
             </Layout>
           </ProtectedRoute>
         } />

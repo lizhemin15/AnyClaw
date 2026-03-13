@@ -31,7 +31,10 @@ func (h *Handler) GetPublicConfig(w http.ResponseWriter, r *http.Request) {
 	cfg, _ := config.Load(h.configPath)
 	ec := config.GetEnergyConfig(cfg)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"adopt_cost": ec.AdoptCost})
+	json.NewEncoder(w).Encode(map[string]any{
+		"adopt_cost":                ec.AdoptCost,
+		"monthly_subscription_cost": ec.MonthlySubscriptionCost,
+	})
 }
 
 func (h *Handler) Recharge(w http.ResponseWriter, r *http.Request) {

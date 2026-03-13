@@ -65,6 +65,17 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	if list == nil {
 		list = []*db.Instance{}
 	}
+	// 填充包月状态
+	ids := make([]int64, len(list))
+	for i, inst := range list {
+		ids[i] = inst.ID
+	}
+	subMap, _ := h.db.GetSubscribedMonthsByInstanceIDs(ids)
+	for _, inst := range list {
+		if m, ok := subMap[inst.ID]; ok {
+			inst.SubscribedMonth = m
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(list)
 }
@@ -170,8 +181,65 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
+	// 填充包月状态
+	subMap, _ := h.db.GetSubscribedMonthsByInstanceIDs([]int64{id})
+	if m, ok := subMap[id]; ok {
+		inst.SubscribedMonth = m
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(inst)
+}
+
+func (h *Handler) Subscribe(w http.ResponseWriter, r *http.Request) {
+	claims := request.FromContext(r.Context())
+	if claims == nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, `{"error":"invalid instance id"}`, http.StatusBadRequest)
+		return
+	}
+	inst, err := h.db.GetInstanceByID(id)
+	if err != nil || inst == nil {
+		http.Error(w, `{"error":"instance not found"}`, http.StatusNotFound)
+		return
+	}
+	if inst.UserID != claims.UserID {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	cfg, _ := config.Load(h.configPath)
+	ec := config.GetEnergyConfig(cfg)
+	if ec.MonthlySubscriptionCost <= 0 {
+		http.Error(w, `{"error":"包月功能未开放"}`, http.StatusBadRequest)
+		return
+	}
+	monthYear := time.Now().Format("2006-01")
+	subscribed, _ := h.db.IsInstanceSubscribed(id, monthYear)
+	if subscribed {
+		http.Error(w, `{"error":"本月已包月"}`, http.StatusBadRequest)
+		return
+	}
+	u, _ := h.db.GetUserByID(claims.UserID)
+	if u == nil || u.Energy < ec.MonthlySubscriptionCost {
+		http.Error(w, `{"error":"金币不足，包月需要 `+strconv.Itoa(ec.MonthlySubscriptionCost)+` 金币"}`, http.StatusBadRequest)
+		return
+	}
+	ok, err := h.db.DeductUserEnergy(claims.UserID, ec.MonthlySubscriptionCost)
+	if err != nil || !ok {
+		http.Error(w, `{"error":"扣费失败"}`, http.StatusInternalServerError)
+		return
+	}
+	if err := h.db.SubscribeInstance(id, claims.UserID, monthYear); err != nil {
+		h.db.AddUserEnergy(claims.UserID, ec.MonthlySubscriptionCost)
+		http.Error(w, `{"error":"包月失败"}`, http.StatusInternalServerError)
+		return
+	}
+	inst.SubscribedMonth = monthYear
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "instance": inst})
 }
 
 func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {

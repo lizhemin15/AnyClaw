@@ -212,6 +212,18 @@ func (d *DB) migrate() error {
 	)`); err != nil {
 		log.Printf("[db] create system_config: %v", err)
 	}
+	// 包月订阅：instance_id + month_year 唯一，包月期间该宠物对话不消耗金币
+	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS instance_subscriptions (
+		id BIGINT AUTO_INCREMENT PRIMARY KEY,
+		instance_id BIGINT NOT NULL,
+		month_year VARCHAR(7) NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE KEY uk_instance_month (instance_id, month_year),
+		INDEX idx_instance (instance_id),
+		INDEX idx_month (month_year)
+	)`); err != nil {
+		log.Printf("[db] create instance_subscriptions: %v", err)
+	}
 	return nil
 }
 
@@ -224,7 +236,7 @@ func (d *DB) CheckAndMigrate() error {
 // Reset 清空所有业务表并重新迁移，用于解决数据冲突。重置后需前往 /setup 创建管理员。
 func (d *DB) Reset() error {
 	tables := []string{
-		"usage_log", "activation_codes", "orders", "verification_codes", "messages", "invitations",
+		"instance_subscriptions", "usage_log", "activation_codes", "orders", "verification_codes", "messages", "invitations",
 		"instances", "hosts", "users", "system_config",
 	}
 	if _, err := d.Exec("SET FOREIGN_KEY_CHECKS = 0"); err != nil {

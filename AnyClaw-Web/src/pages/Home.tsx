@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getInstances, createInstance, deleteInstance, getAuthConfig, getEnergyConfig, type Instance, type User } from '../api'
+import { getInstances, createInstance, deleteInstance, subscribeInstance, getAuthConfig, getEnergyConfig, type Instance, type User } from '../api'
 
-export default function Home({ user, onRefresh }: { user: User | null; onRefresh?: () => void }) {
+export default function Home({ user, onRefresh, showGuide = false, onDismissGuide }: { user: User | null; onRefresh?: () => void; showGuide?: boolean; onDismissGuide?: () => void }) {
   const [instances, setInstances] = useState<Instance[]>([])
+  const [guideStep, setGuideStep] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [deleting, setDeleting] = useState<number | null>(null)
+  const [subscribing, setSubscribing] = useState<number | null>(null)
   const [adoptCost, setAdoptCost] = useState(100)
+  const [monthlyCost, setMonthlyCost] = useState(0)
 
   const navigate = useNavigate()
 
@@ -18,14 +21,12 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
       try {
         const c = await getAuthConfig()
         const cost = c.adopt_cost ?? 0
-        if (cost > 0) {
-          setAdoptCost(cost)
-          return
-        }
+        if (cost > 0) setAdoptCost(cost)
       } catch {}
       try {
         const e = await getEnergyConfig()
         if ((e.adopt_cost ?? 0) > 0) setAdoptCost(e.adopt_cost!)
+        if ((e.monthly_subscription_cost ?? 0) > 0) setMonthlyCost(e.monthly_subscription_cost!)
       } catch {}
     }
     load()
@@ -86,8 +87,56 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
     }
   }
 
+  const handleSubscribe = async (e: React.MouseEvent, inst: Instance) => {
+    e.stopPropagation()
+    if (subscribing || !user) return
+    if (user.energy < monthlyCost) {
+      setError(`金币不足，包月需要 ${monthlyCost} 金币`)
+      return
+    }
+    setSubscribing(inst.id)
+    setError('')
+    try {
+      const updated = await subscribeInstance(inst.id)
+      setInstances((prev) => prev.map((i) => (i.id === inst.id ? updated : i)))
+      onRefresh?.()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '包月失败')
+    } finally {
+      setSubscribing(null)
+    }
+  }
+
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto relative">
+      {/* 新手引导 */}
+      {showGuide && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-slate-800 text-white rounded-xl p-6 max-w-sm shadow-2xl">
+            {guideStep === 1 && (
+              <>
+                <p className="text-lg font-bold">👋 欢迎！</p>
+                <p className="text-slate-300 mt-2 text-sm">在这里领养你的第一只宠物，输入名字后点击领养</p>
+                <button type="button" onClick={() => setGuideStep(2)} className="mt-4 w-full py-2 bg-white text-slate-800 rounded-lg font-medium">下一步</button>
+              </>
+            )}
+            {guideStep === 2 && (
+              <>
+                <p className="text-lg font-bold">📋 我的宠舍</p>
+                <p className="text-slate-300 mt-2 text-sm">领养的宠物会显示在这里，点击可进入对话</p>
+                <button type="button" onClick={() => setGuideStep(3)} className="mt-4 w-full py-2 bg-white text-slate-800 rounded-lg font-medium">下一步</button>
+              </>
+            )}
+            {guideStep === 3 && (
+              <>
+                <p className="text-lg font-bold">💬 开始对话</p>
+                <p className="text-slate-300 mt-2 text-sm">点击宠物卡片即可打开对话，和你的 AI 宠物聊天</p>
+                <button type="button" onClick={() => { onDismissGuide?.(); setGuideStep(1); }} className="mt-4 w-full py-2 bg-emerald-500 text-white rounded-lg font-medium">知道了</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
       {/* 金币与充值 */}
       <div className="mb-4 p-3 sm:p-4 bg-white rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
         <div className="flex items-center gap-2 sm:gap-3">
@@ -173,6 +222,21 @@ export default function Home({ user, onRefresh }: { user: User | null; onRefresh
                   <p className="font-medium text-slate-800 truncate">{inst.name}</p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
+                  {inst.subscribed_month && (
+                    <span className="px-2.5 py-1 text-xs rounded-full bg-emerald-100 text-emerald-800" title="本月已包月，对话不消耗金币">
+                      包月
+                    </span>
+                  )}
+                  {monthlyCost > 0 && !inst.subscribed_month && (
+                    <button
+                      onClick={(e) => handleSubscribe(e, inst)}
+                      disabled={!!subscribing || (user?.energy ?? 0) < monthlyCost}
+                      className="px-2 py-1 text-xs text-emerald-600 border border-emerald-200 rounded-lg active:bg-emerald-50 disabled:opacity-50"
+                      title={`包月 ${monthlyCost} 金币，本月对话不消耗金币`}
+                    >
+                      {subscribing === inst.id ? '包月中...' : `包月(${monthlyCost})`}
+                    </button>
+                  )}
                   <span
                     className={`px-2.5 py-1 text-xs rounded-full ${
                       inst.status === 'running'

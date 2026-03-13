@@ -100,18 +100,22 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 检查用户金币（对话消耗用户金币）
+	// 检查用户金币（对话消耗用户金币；包月实例本月不消耗，可豁免）
 	if p.db != nil && userID != "" {
-		cfg, _ := config.Load(p.configPath)
-		minCoins := config.GetEnergyConfig(cfg).MinEnergyForTask
-		if minCoins < 1 {
-			minCoins = 1
-		}
-		uid, _ := strconv.ParseInt(userID, 10, 64)
-		u, err := p.db.GetUserByID(uid)
-		if err == nil && u != nil && u.Energy < minCoins {
-			http.Error(w, `{"error":{"message":"金币不足，无法完成对话（需至少 `+strconv.Itoa(minCoins)+` 金币）"}}`, http.StatusPaymentRequired)
-			return
+		instID, _ := strconv.ParseInt(instanceID, 10, 64)
+		subscribed, _ := p.db.IsInstanceSubscribed(instID, "")
+		if !subscribed {
+			cfg, _ := config.Load(p.configPath)
+			minCoins := config.GetEnergyConfig(cfg).MinEnergyForTask
+			if minCoins < 1 {
+				minCoins = 1
+			}
+			uid, _ := strconv.ParseInt(userID, 10, 64)
+			u, err := p.db.GetUserByID(uid)
+			if err == nil && u != nil && u.Energy < minCoins {
+				http.Error(w, `{"error":{"message":"金币不足，无法完成对话（需至少 `+strconv.Itoa(minCoins)+` 金币）"}}`, http.StatusPaymentRequired)
+				return
+			}
 		}
 	}
 
@@ -204,12 +208,16 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		promptTokens, completionTokens := parseUsageFromResponse(respBody)
 		cost := 0
 		if p.db != nil && userID != "" {
-			cfg, _ := config.Load(p.configPath)
-			tokensPerEnergy := config.GetEnergyConfig(cfg).TokensPerEnergy
-			cost = energyFromTokens(promptTokens, completionTokens, tokensPerEnergy)
-			uid, _ := strconv.ParseInt(userID, 10, 64)
-			if ok, _ := p.db.DeductUserEnergy(uid, cost); !ok {
-				log.Printf("[llm] deduct user %d coins %d failed (insufficient balance?)", uid, cost)
+			instID, _ := strconv.ParseInt(instanceID, 10, 64)
+			subscribed, _ := p.db.IsInstanceSubscribed(instID, "")
+			if !subscribed {
+				cfg, _ := config.Load(p.configPath)
+				tokensPerEnergy := config.GetEnergyConfig(cfg).TokensPerEnergy
+				cost = energyFromTokens(promptTokens, completionTokens, tokensPerEnergy)
+				uid, _ := strconv.ParseInt(userID, 10, 64)
+				if ok, _ := p.db.DeductUserEnergy(uid, cost); !ok {
+					log.Printf("[llm] deduct user %d coins %d failed (insufficient balance?)", uid, cost)
+				}
 			}
 		}
 		p.logUsage(instanceID, userID, model, apiBase, promptTokens, completionTokens, cost)

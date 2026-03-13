@@ -19,6 +19,7 @@ type Instance struct {
 	Token            string  `json:"-"` // never expose to client
 	CreatedAt        string  `json:"created_at"`
 	Unread           bool    `json:"unread,omitempty"` // 是否有未读的 AI 回复
+	SubscribedMonth  string  `json:"subscribed_month,omitempty"` // 已包月月份，如 "2025-03"，空表示未包月
 }
 
 func (d *DB) CreateInstance(userID int64, name, token string, initialEnergy int, dailyConsume int) (*Instance, error) {
@@ -233,6 +234,7 @@ func (d *DB) UpdateInstanceContainer(id int64, containerID, hostID string) error
 }
 
 func (d *DB) DeleteInstance(id int64) error {
+	_, _ = d.Exec("DELETE FROM instance_subscriptions WHERE instance_id = ?", id)
 	_, err := d.Exec("DELETE FROM instances WHERE id = ?", id)
 	return err
 }
