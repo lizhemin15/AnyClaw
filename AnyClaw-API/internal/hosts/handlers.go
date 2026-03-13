@@ -245,8 +245,8 @@ func (h *Handler) HostMetrics(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(resp)
 		return
 	}
-	// 使用 POSIX 格式和多种命令兼容不同发行版
-	cmd := `df -hP / 2>/dev/null || df -h / 2>/dev/null | tail -1; free -m 2>/dev/null | grep -E '^Mem:'; cat /proc/loadavg 2>/dev/null`
+	// 使用 POSIX 格式和多种命令兼容不同发行版（grep 不用 -E 以兼容 BusyBox）
+	cmd := `df -hP / 2>/dev/null || df -h / 2>/dev/null | tail -1; free -m 2>&1 | grep -F Mem:; cat /proc/loadavg 2>/dev/null`
 	out, err := h.checker.RunCommand(host, cmd)
 	if err != nil {
 		resp.Err = err.Error()
@@ -283,13 +283,16 @@ func (h *Handler) HostMetrics(w http.ResponseWriter, r *http.Request) {
 		if resp.Disk != nil {
 			continue
 		}
-		// Mem: total used free shared buff/cache available (列 1-6)
+		// Mem: total used free shared buff/cache available
 		if strings.HasPrefix(line, "Mem:") && len(fields) >= 4 {
 			total := parseInt(fields[1])
 			used := parseInt(fields[2])
-			avail := parseInt(fields[6]) // available (free 3.3+)
+			avail := 0
+			if len(fields) >= 7 {
+				avail = parseInt(fields[6]) // available (free 3.3+)
+			}
 			if avail <= 0 && len(fields) >= 4 {
-				avail = parseInt(fields[3]) // free (旧版)
+				avail = parseInt(fields[3]) // free (旧版 free)
 			}
 			if total > 0 {
 				resp.Mem = &MemMetrics{
@@ -301,8 +304,8 @@ func (h *Handler) HostMetrics(w http.ResponseWriter, r *http.Request) {
 			}
 			continue
 		}
-		// loadavg: 0.50 0.45 0.40 1/234 56789
-		if len(fields) >= 3 && !strings.HasPrefix(line, "Mem:") {
+		// loadavg: 0.50 0.45 0.40 1/234 56789（跳过设备路径等）
+		if len(fields) >= 3 && !strings.HasPrefix(line, "Mem:") && !strings.HasPrefix(fields[0], "/") {
 			if l1, e1 := parseFloat(fields[0]); e1 == nil && l1 >= 0 {
 				if l5, e5 := parseFloat(fields[1]); e5 == nil {
 					if l15, e15 := parseFloat(fields[2]); e15 == nil {
