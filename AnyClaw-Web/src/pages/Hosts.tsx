@@ -364,6 +364,28 @@ export default function Hosts() {
         <p className="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded-xl">{error}</p>
       )}
 
+      {/* 统计面板 */}
+      {hosts.length > 0 && (
+        <div className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <p className="text-sm text-slate-500">服务器总数</p>
+            <p className="text-2xl font-semibold text-slate-800 mt-1">{hosts.length}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <p className="text-sm text-slate-500">在线服务器</p>
+            <p className="text-2xl font-semibold text-emerald-600 mt-1">{hosts.filter((h) => h.status === 'online').length}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <p className="text-sm text-slate-500">实例总数</p>
+            <p className="text-2xl font-semibold text-slate-800 mt-1">{instances.length}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <p className="text-sm text-slate-500">运行中实例</p>
+            <p className="text-2xl font-semibold text-emerald-600 mt-1">{instances.filter((i) => i.status === 'running').length}</p>
+          </div>
+        </div>
+      )}
+
       {/* 资源使用看板 */}
       {hosts.length > 0 && (
         <div className="mb-6 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">

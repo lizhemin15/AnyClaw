@@ -245,8 +245,8 @@ func (h *Handler) HostMetrics(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(resp)
 		return
 	}
-	// 单次 SSH 执行多个命令，用换行分隔输出
-	cmd := `df -h / 2>/dev/null | tail -1; free -m 2>/dev/null | awk '/^Mem:/'; cat /proc/loadavg 2>/dev/null`
+	// 使用 POSIX 格式和多种命令兼容不同发行版
+	cmd := `df -hP / 2>/dev/null || df -h / 2>/dev/null | tail -1; free -m 2>/dev/null | grep -E '^Mem:'; cat /proc/loadavg 2>/dev/null`
 	out, err := h.checker.RunCommand(host, cmd)
 	if err != nil {
 		resp.Err = err.Error()
@@ -264,26 +264,32 @@ func (h *Handler) HostMetrics(w http.ResponseWriter, r *http.Request) {
 		if len(fields) < 4 {
 			continue
 		}
-		// df: [fs] size used avail use% [mount] - size/used/avail end with G/M/K
-		if len(fields) >= 5 && (strings.HasSuffix(fields[1], "G") || strings.HasSuffix(fields[1], "M") || strings.HasSuffix(fields[1], "K")) {
-			pctStr := strings.TrimSuffix(fields[4], "%")
-			if pct, e := parseFloat(pctStr); e == nil && pct >= 0 && pct <= 100 {
-				resp.Disk = &DiskMetrics{
-					Total: fields[1],
-					Used:  fields[2],
-					Avail: fields[3],
-					Pct:   pct,
+		// df: 跳过表头，找含 % 的列，其前 3 列为 size/used/avail
+		if strings.HasPrefix(line, "Filesystem") || strings.HasPrefix(line, "文件系统") {
+			continue
+		}
+		for i := 4; i < len(fields); i++ {
+			if strings.Contains(fields[i], "%") {
+				pctStr := strings.TrimSuffix(strings.TrimSuffix(fields[i], "%"), "Use%")
+				if pct, e := parseFloat(pctStr); e == nil && pct >= 0 && pct <= 100 && i >= 3 {
+					s1, s2, s3 := fields[i-3], fields[i-2], fields[i-1]
+					if isSizeLike(s1) && isSizeLike(s2) && isSizeLike(s3) {
+						resp.Disk = &DiskMetrics{Total: s1, Used: s2, Avail: s3, Pct: pct}
+					}
 				}
-				continue
+				break
 			}
 		}
-		// Mem: total used free shared buff/cache available
-		if strings.HasPrefix(line, "Mem:") && len(fields) >= 7 {
+		if resp.Disk != nil {
+			continue
+		}
+		// Mem: total used free shared buff/cache available (列 1-6)
+		if strings.HasPrefix(line, "Mem:") && len(fields) >= 4 {
 			total := parseInt(fields[1])
 			used := parseInt(fields[2])
-			avail := parseInt(fields[6]) // available (newer free)
+			avail := parseInt(fields[6]) // available (free 3.3+)
 			if avail <= 0 && len(fields) >= 4 {
-				avail = parseInt(fields[3]) // free (older free)
+				avail = parseInt(fields[3]) // free (旧版)
 			}
 			if total > 0 {
 				resp.Mem = &MemMetrics{
@@ -296,11 +302,12 @@ func (h *Handler) HostMetrics(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		// loadavg: 0.50 0.45 0.40 1/234 56789
-		if len(fields) >= 3 && !strings.HasPrefix(line, "Mem:") && !strings.HasPrefix(line, "/dev/") {
-			if l1, e1 := parseFloat(fields[0]); e1 == nil {
+		if len(fields) >= 3 && !strings.HasPrefix(line, "Mem:") {
+			if l1, e1 := parseFloat(fields[0]); e1 == nil && l1 >= 0 {
 				if l5, e5 := parseFloat(fields[1]); e5 == nil {
 					if l15, e15 := parseFloat(fields[2]); e15 == nil {
 						resp.Load = &LoadMetrics{Load1: l1, Load5: l5, Load15: l15}
+						break
 					}
 				}
 			}
@@ -317,6 +324,20 @@ func parseFloat(s string) (float64, error) {
 func parseInt(s string) int {
 	n, _ := strconv.Atoi(s)
 	return n
+}
+
+func isSizeLike(s string) bool {
+	if s == "" {
+		return false
+	}
+	s = strings.TrimSuffix(s, "G")
+	s = strings.TrimSuffix(s, "M")
+	s = strings.TrimSuffix(s, "K")
+	s = strings.TrimSuffix(s, "g")
+	s = strings.TrimSuffix(s, "m")
+	s = strings.TrimSuffix(s, "k")
+	_, err := strconv.ParseFloat(s, 64)
+	return err == nil
 }
 
 // InstanceImageStatusResponse 实例镜像版本检查结果
