@@ -34,6 +34,8 @@ func (h *Handler) GetPublicConfig(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{
 		"adopt_cost":                ec.AdoptCost,
 		"monthly_subscription_cost": ec.MonthlySubscriptionCost,
+		"tokens_per_energy":         ec.TokensPerEnergy,
+		"min_energy_for_task":       ec.MinEnergyForTask,
 	})
 }
 

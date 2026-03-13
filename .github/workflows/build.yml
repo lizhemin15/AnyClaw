@@ -106,11 +106,11 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push anyclaw-server
+      - name: Build and push anyclaw-server (full)
         uses: docker/build-push-action@v6
         with:
           context: ./AnyClaw-Server
-          file: ./AnyClaw-Server/docker/Dockerfile
+          file: ./AnyClaw-Server/docker/Dockerfile.full
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/anyclaw-server:latest

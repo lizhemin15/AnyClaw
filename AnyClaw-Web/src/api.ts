@@ -81,8 +81,13 @@ export async function getAuthConfig(): Promise<{ email_verification_required: bo
   return fetchApi<{ email_verification_required: boolean; adopt_cost?: number }>('/auth/config');
 }
 
-export async function getEnergyConfig(): Promise<{ adopt_cost?: number; monthly_subscription_cost?: number }> {
-  return fetchApi<{ adopt_cost?: number; monthly_subscription_cost?: number }>('/energy/config');
+export async function getEnergyConfig(): Promise<{
+  adopt_cost?: number;
+  monthly_subscription_cost?: number;
+  tokens_per_energy?: number;
+  min_energy_for_task?: number;
+}> {
+  return fetchApi('/energy/config');
 }
 
 export async function sendVerificationCode(email: string): Promise<void> {

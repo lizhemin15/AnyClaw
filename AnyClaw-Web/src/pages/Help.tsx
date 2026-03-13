@@ -1,6 +1,26 @@
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { getEnergyConfig } from '../api'
 
 export default function Help() {
+  const [config, setConfig] = useState<{
+    adopt_cost?: number;
+    monthly_subscription_cost?: number;
+    tokens_per_energy?: number;
+    min_energy_for_task?: number;
+  } | null>(null)
+
+  useEffect(() => {
+    getEnergyConfig()
+      .then(setConfig)
+      .catch(() => setConfig(null))
+  }, [])
+
+  const adoptCost = config?.adopt_cost ?? 100
+  const monthlyCost = config?.monthly_subscription_cost ?? 50
+  const tokensPerEnergy = config?.tokens_per_energy ?? 1000
+  const minEnergy = config?.min_energy_for_task ?? 5
+
   return (
     <div className="max-w-2xl mx-auto">
       <h1 className="text-xl font-semibold text-slate-800 mb-6">使用帮助</h1>
@@ -61,9 +81,9 @@ export default function Help() {
             <span>🪙</span> 领养与金币
           </h2>
           <ul className="space-y-2 text-sm text-slate-600">
-            <li>· <strong>领养宠物</strong>：需要消耗金币（默认 100），领养后宠物永久存在</li>
-            <li>· <strong>对话消耗</strong>：按 token 计费，约每 1000 token 消耗 1 金币</li>
-            <li>· <strong>包月</strong>：可为单只宠物包月，包月后 30 天内对话不消耗金币</li>
+            <li>· <strong>领养宠物</strong>：需要消耗 {adoptCost} 金币，领养后宠物永久存在</li>
+            <li>· <strong>对话消耗</strong>：按 token 计费，每 {tokensPerEnergy} token 约消耗 1 金币</li>
+            <li>· <strong>包月</strong>：可为单只宠物包月（{monthlyCost > 0 ? `${monthlyCost} 金币/次` : '管理员未开放'}），包月后 30 天内对话不消耗金币</li>
             <li>· <strong>充值</strong>：可通过充值页扫码或联系管理员充值</li>
           </ul>
         </section>
@@ -84,7 +104,7 @@ export default function Help() {
             </div>
             <div>
               <dt className="font-medium text-slate-700">金币不足无法对话？</dt>
-              <dd className="text-slate-600 mt-0.5">需至少 5 金币才能发起对话。可通过充值获取，或为宠物包月后 30 天内不消耗金币。</dd>
+              <dd className="text-slate-600 mt-0.5">需至少 {minEnergy} 金币才能发起对话。可通过充值获取，或为宠物包月后 30 天内不消耗金币。</dd>
             </div>
           </dl>
         </section>
