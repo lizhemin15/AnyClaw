@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   getHosts,
@@ -7,6 +7,7 @@ import {
   deleteHost,
   checkHostStatus,
   getHostInstanceImageStatus,
+  getHostMetrics,
   pullAndRestartInstances,
   pruneHostImages,
   drainHost,
@@ -16,7 +17,12 @@ import {
   type Host,
   type CreateHostRequest,
   type AdminInstance,
+  type HostMetrics,
 } from '../api'
+import SearchInput from '../components/SearchInput'
+import Pagination from '../components/Pagination'
+
+const INSTANCE_PAGE_SIZE = 15
 
 export default function Hosts() {
   const [hosts, setHosts] = useState<Host[]>([])
@@ -46,6 +52,55 @@ export default function Hosts() {
   const [deletingInst, setDeletingInst] = useState<number | null>(null)
   const [migratingInst, setMigratingInst] = useState<number | null>(null)
   const [migrateModal, setMigrateModal] = useState<AdminInstance | null>(null)
+  const [hostSearch, setHostSearch] = useState('')
+  const [instanceSearch, setInstanceSearch] = useState('')
+  const [instancePage, setInstancePage] = useState(1)
+  const [metrics, setMetrics] = useState<Record<string, HostMetrics | null>>({})
+  const [metricsLoading, setMetricsLoading] = useState(false)
+
+  const loadMetrics = useCallback(() => {
+    const enabled = hosts.filter((h) => h.enabled)
+    if (enabled.length === 0) return
+    setMetricsLoading(true)
+    Promise.all(
+      enabled.map((h) =>
+        getHostMetrics(h.id)
+          .then((m) => ({ id: h.id, m }))
+          .catch(() => ({ id: h.id, m: { error: '获取失败' } as HostMetrics }))
+      )
+    ).then((results) => {
+      const next: Record<string, HostMetrics | null> = {}
+      results.forEach(({ id, m }) => { next[id] = m })
+      setMetrics((prev) => ({ ...prev, ...next }))
+    }).finally(() => setMetricsLoading(false))
+  }, [hosts])
+
+  const filteredHosts = useMemo(() => {
+    const q = hostSearch.trim().toLowerCase()
+    if (!q) return hosts
+    return hosts.filter((h) =>
+      h.name.toLowerCase().includes(q) || h.addr.toLowerCase().includes(q)
+    )
+  }, [hosts, hostSearch])
+
+  const filteredInstances = useMemo(() => {
+    const q = instanceSearch.trim().toLowerCase()
+    if (!q) return instances
+    return instances.filter((i) =>
+      (i.name || '').toLowerCase().includes(q) ||
+      (i.user_email || '').toLowerCase().includes(q) ||
+      (i.host_name || '').toLowerCase().includes(q)
+    )
+  }, [instances, instanceSearch])
+
+  const paginatedInstances = useMemo(() => {
+    const start = (instancePage - 1) * INSTANCE_PAGE_SIZE
+    return filteredInstances.slice(start, start + INSTANCE_PAGE_SIZE)
+  }, [filteredInstances, instancePage])
+
+  useEffect(() => {
+    setInstancePage(1)
+  }, [instanceSearch])
 
   const loadHosts = () => {
     setLoading(true)
@@ -288,7 +343,11 @@ export default function Hosts() {
     <div className="max-w-4xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4">
         <h1 className="text-xl font-semibold text-slate-800">服务器</h1>
-        <button
+        <div className="flex gap-2">
+          {hosts.length > 0 && (
+            <SearchInput value={hostSearch} onChange={setHostSearch} placeholder="搜索名称或地址" className="sm:w-48" />
+          )}
+          <button
           onClick={() => {
             setModal('add')
             setEditing(null)
@@ -298,19 +357,99 @@ export default function Hosts() {
         >
           添加服务器
         </button>
+        </div>
       </div>
 
       {error && (
         <p className="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded-xl">{error}</p>
       )}
 
+      {/* 资源使用看板 */}
+      {hosts.length > 0 && (
+        <div className="mb-6 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-slate-800">资源使用</h2>
+              <p className="text-sm text-slate-500 mt-0.5">各服务器 CPU、磁盘、内存使用情况</p>
+            </div>
+            <button
+              type="button"
+              onClick={loadMetrics}
+              disabled={metricsLoading || hosts.filter((h) => h.enabled).length === 0}
+              className="px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50"
+            >
+              {metricsLoading ? '加载中...' : '刷新资源'}
+            </button>
+          </div>
+          <div className="p-5">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredHosts.filter((h) => h.enabled).map((h) => {
+                const m = metrics[h.id]
+                return (
+                  <div key={h.id} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="font-medium text-slate-800">{h.name}</span>
+                      <span className="text-xs text-slate-500">{h.addr}</span>
+                    </div>
+                    {!m ? (
+                      <p className="text-sm text-slate-500">点击「刷新资源」获取</p>
+                    ) : m.error ? (
+                      <p className="text-sm text-red-600">{m.error}</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {m.disk && (
+                          <div>
+                            <div className="flex justify-between text-xs text-slate-600 mb-1">
+                              <span>磁盘 /</span>
+                              <span>{m.disk.used} / {m.disk.total} ({m.disk.pct.toFixed(0)}%)</span>
+                            </div>
+                            <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${m.disk.pct >= 90 ? 'bg-red-500' : m.disk.pct >= 70 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                style={{ width: `${Math.min(m.disk.pct, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                        {m.mem && (
+                          <div>
+                            <div className="flex justify-between text-xs text-slate-600 mb-1">
+                              <span>内存</span>
+                              <span>{m.mem.used} / {m.mem.total} MB ({m.mem.pct}%)</span>
+                            </div>
+                            <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${m.mem.pct >= 90 ? 'bg-red-500' : m.mem.pct >= 70 ? 'bg-amber-500' : 'bg-cyan-500'}`}
+                                style={{ width: `${Math.min(m.mem.pct, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                        {m.load && (
+                          <div className="text-xs text-slate-600">
+                            <span>CPU 负载</span>
+                            <span className="ml-2 font-mono">1m {m.load.load1.toFixed(2)} · 5m {m.load.load5.toFixed(2)} · 15m {m.load.load15.toFixed(2)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <p className="text-slate-500 py-8">加载中...</p>
       ) : hosts.length === 0 ? (
         <p className="text-slate-500 py-8">暂无服务器，点击上方添加</p>
+      ) : filteredHosts.length === 0 ? (
+        <p className="text-slate-500 py-8">未找到匹配「{hostSearch}」的服务器</p>
       ) : (
         <div className="space-y-3">
-          {hosts.map((h) => (
+          {filteredHosts.map((h) => (
             <div
               key={h.id}
               className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
@@ -395,14 +534,21 @@ export default function Hosts() {
 
       {/* 实例列表 */}
       <div className="mt-10">
-        <h2 className="text-lg font-semibold text-slate-800 mb-3">实例列表（AnyClaw 容器）</h2>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+          <h2 className="text-lg font-semibold text-slate-800">实例列表（AnyClaw 容器）</h2>
+          {instances.length > 0 && (
+            <SearchInput value={instanceSearch} onChange={setInstanceSearch} placeholder="搜索实例/用户/主机" className="sm:w-48" />
+          )}
+        </div>
         {instancesLoading ? (
           <p className="text-slate-500 py-6">加载中...</p>
         ) : instances.length === 0 ? (
           <p className="text-slate-500 py-6">暂无实例</p>
+        ) : filteredInstances.length === 0 ? (
+          <p className="text-slate-500 py-6">未找到匹配「{instanceSearch}」的实例</p>
         ) : (
           <div className="space-y-2">
-            {instances.map((inst) => (
+            {paginatedInstances.map((inst) => (
               <div
                 key={inst.id}
                 className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
@@ -444,6 +590,16 @@ export default function Hosts() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+        {filteredInstances.length > INSTANCE_PAGE_SIZE && (
+          <div className="mt-3">
+            <Pagination
+              page={instancePage}
+              pageSize={INSTANCE_PAGE_SIZE}
+              total={filteredInstances.length}
+              onPageChange={setInstancePage}
+            />
           </div>
         )}
       </div>

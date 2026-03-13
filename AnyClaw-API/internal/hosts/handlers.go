@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/anyclaw/anyclaw-api/internal/db"
@@ -199,6 +200,123 @@ func (h *Handler) CheckStatus(w http.ResponseWriter, r *http.Request) {
 	_ = h.db.UpdateHostStatus(id, status)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": status})
+}
+
+// HostMetricsResponse 宿主机 CPU、磁盘、内存使用情况
+type HostMetricsResponse struct {
+	Disk *DiskMetrics `json:"disk,omitempty"`
+	Mem  *MemMetrics  `json:"mem,omitempty"`
+	Load *LoadMetrics `json:"load,omitempty"`
+	Err  string       `json:"error,omitempty"`
+}
+
+type DiskMetrics struct {
+	Total string  `json:"total"` // e.g. "50G"
+	Used  string  `json:"used"`
+	Avail string  `json:"avail"`
+	Pct   float64 `json:"pct"` // 0-100
+}
+
+type MemMetrics struct {
+	Total int `json:"total"` // MB
+	Used  int `json:"used"`
+	Avail int `json:"avail"`
+	Pct   int `json:"pct"` // 0-100
+}
+
+type LoadMetrics struct {
+	Load1  float64 `json:"load1"`
+	Load5  float64 `json:"load5"`
+	Load15 float64 `json:"load15"`
+}
+
+// HostMetrics 获取宿主机 CPU、磁盘、内存使用情况（通过 SSH 执行 df/free/loadavg）
+func (h *Handler) HostMetrics(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	host, err := h.db.GetHost(id)
+	if err != nil || host == nil {
+		http.Error(w, `{"error":"host not found"}`, http.StatusNotFound)
+		return
+	}
+	resp := HostMetricsResponse{}
+	if h.checker == nil {
+		resp.Err = "SSH 未配置"
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+	// 单次 SSH 执行多个命令，用换行分隔输出
+	cmd := `df -h / 2>/dev/null | tail -1; free -m 2>/dev/null | awk '/^Mem:/'; cat /proc/loadavg 2>/dev/null`
+	out, err := h.checker.RunCommand(host, cmd)
+	if err != nil {
+		resp.Err = err.Error()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+	lines := strings.Split(out, "\n")
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 4 {
+			continue
+		}
+		// df: [fs] size used avail use% [mount] - size/used/avail end with G/M/K
+		if len(fields) >= 5 && (strings.HasSuffix(fields[1], "G") || strings.HasSuffix(fields[1], "M") || strings.HasSuffix(fields[1], "K")) {
+			pctStr := strings.TrimSuffix(fields[4], "%")
+			if pct, e := parseFloat(pctStr); e == nil && pct >= 0 && pct <= 100 {
+				resp.Disk = &DiskMetrics{
+					Total: fields[1],
+					Used:  fields[2],
+					Avail: fields[3],
+					Pct:   pct,
+				}
+				continue
+			}
+		}
+		// Mem: total used free shared buff/cache available
+		if strings.HasPrefix(line, "Mem:") && len(fields) >= 7 {
+			total := parseInt(fields[1])
+			used := parseInt(fields[2])
+			avail := parseInt(fields[6]) // available (newer free)
+			if avail <= 0 && len(fields) >= 4 {
+				avail = parseInt(fields[3]) // free (older free)
+			}
+			if total > 0 {
+				resp.Mem = &MemMetrics{
+					Total: total,
+					Used:  used,
+					Avail: avail,
+					Pct:   used * 100 / total,
+				}
+			}
+			continue
+		}
+		// loadavg: 0.50 0.45 0.40 1/234 56789
+		if len(fields) >= 3 && !strings.HasPrefix(line, "Mem:") && !strings.HasPrefix(line, "/dev/") {
+			if l1, e1 := parseFloat(fields[0]); e1 == nil {
+				if l5, e5 := parseFloat(fields[1]); e5 == nil {
+					if l15, e15 := parseFloat(fields[2]); e15 == nil {
+						resp.Load = &LoadMetrics{Load1: l1, Load5: l5, Load15: l15}
+					}
+				}
+			}
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func parseFloat(s string) (float64, error) {
+	return strconv.ParseFloat(s, 64)
+}
+
+func parseInt(s string) int {
+	n, _ := strconv.Atoi(s)
+	return n
 }
 
 // InstanceImageStatusResponse 实例镜像版本检查结果

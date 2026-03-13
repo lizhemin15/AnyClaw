@@ -205,6 +205,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Delete("/{id}", hostHandler.Delete)
 		r.Post("/{id}/check", hostHandler.CheckStatus)
 		r.Get("/{id}/instance-image-status", hostHandler.InstanceImageStatus)
+		r.Get("/{id}/metrics", hostHandler.HostMetrics)
 		r.Post("/{id}/pull-and-restart-instances", hostHandler.PullAndRestartInstances)
 		r.Post("/{id}/prune-images", hostHandler.PruneImages)
 		r.Post("/{id}/drain", hostHandler.Drain)

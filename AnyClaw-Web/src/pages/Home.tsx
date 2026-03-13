@@ -1,6 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getInstances, createInstance, deleteInstance, subscribeInstance, getAuthConfig, getEnergyConfig, type Instance, type User } from '../api'
+import SearchInput from '../components/SearchInput'
+import Pagination from '../components/Pagination'
+
+const PAGE_SIZE = 8
+const STATUS_ORDER = ['running', 'creating', 'error', 'stopped']
 
 export default function Home({ user, onRefresh, showGuide = false, onDismissGuide }: { user: User | null; onRefresh?: () => void; showGuide?: boolean; onDismissGuide?: () => void }) {
   const [instances, setInstances] = useState<Instance[]>([])
@@ -13,8 +18,36 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
   const [subscribing, setSubscribing] = useState<number | null>(null)
   const [adoptCost, setAdoptCost] = useState(100)
   const [monthlyCost, setMonthlyCost] = useState(0)
+  const [search, setSearch] = useState('')
+  const [viewMode, setViewMode] = useState<'board' | 'list'>('board')
+  const [page, setPage] = useState(1)
 
   const navigate = useNavigate()
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return instances
+    return instances.filter((i) => i.name.toLowerCase().includes(q))
+  }, [instances, search])
+
+  const grouped = useMemo(() => {
+    const groups: Record<string, Instance[]> = { running: [], creating: [], error: [], stopped: [], other: [] }
+    for (const i of filtered) {
+      const key = i.status in groups ? i.status : 'other'
+      if (!groups[key]) groups[key] = []
+      groups[key].push(i)
+    }
+    return groups
+  }, [filtered])
+
+  const paginated = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE
+    return filtered.slice(start, start + PAGE_SIZE)
+  }, [filtered, page])
+
+  useEffect(() => {
+    setPage(1)
+  }, [search])
 
   const formatExpires = (s: string) => {
     if (!s || s.length < 10) return ''
@@ -115,7 +148,7 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
   }
 
   return (
-    <div className="max-w-2xl mx-auto relative">
+    <div className="max-w-4xl mx-auto relative">
       {/* 新手引导 */}
       {showGuide && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
@@ -200,8 +233,33 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
         <p className="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</p>
       )}
 
-      {/* 宠舍 */}
-      <h2 className="text-base sm:text-lg font-semibold text-slate-800 mb-2 sm:mb-3 hidden sm:block">我的宠舍</h2>
+      {/* 宠舍：搜索、视图切换、分页 */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+        <h2 className="text-base sm:text-lg font-semibold text-slate-800">我的宠舍</h2>
+        {instances.length > 0 && (
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <SearchInput value={search} onChange={setSearch} placeholder="按名称搜索宠物" className="sm:w-48" />
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => setViewMode('board')}
+                className={`px-3 py-1.5 text-sm rounded-lg ${viewMode === 'board' ? 'bg-slate-200 text-slate-800 font-medium' : 'text-slate-500 hover:bg-slate-100'}`}
+                title="看板"
+              >
+                看板
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-1.5 text-sm rounded-lg ${viewMode === 'list' ? 'bg-slate-200 text-slate-800 font-medium' : 'text-slate-500 hover:bg-slate-100'}`}
+                title="列表"
+              >
+                列表
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
       {loading ? (
         <p className="text-slate-500 py-8">加载中...</p>
       ) : instances.length === 0 ? (
@@ -210,9 +268,56 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
           <p className="text-slate-500 mb-2">暂无宠物</p>
           <p className="text-sm text-slate-400">领养一只 OpenClaw 开始对话吧</p>
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-12 bg-slate-50 rounded-xl">
+          <p className="text-slate-500">未找到匹配「{search}」的宠物</p>
+        </div>
+      ) : viewMode === 'board' ? (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-4">
+            {STATUS_ORDER.filter((s) => (grouped[s]?.length ?? 0) > 0).map((status) => (
+              <div key={status} className="bg-slate-50 rounded-xl p-3 border border-slate-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className={`text-sm font-medium px-2 py-0.5 rounded ${
+                    status === 'running' ? 'bg-green-100 text-green-800' :
+                    status === 'creating' ? 'bg-amber-100 text-amber-800' :
+                    status === 'error' ? 'bg-red-100 text-red-800' :
+                    'bg-slate-200 text-slate-700'
+                  }`}>
+                    {status === 'running' ? '在线' : status === 'creating' ? '创建中' : status === 'error' ? '异常' : status}
+                  </span>
+                  <span className="text-xs text-slate-500">{grouped[status]?.length ?? 0}</span>
+                </div>
+                <div className="space-y-2">
+                  {(grouped[status] ?? []).map((inst) => (
+                    <div
+                      key={inst.id}
+                      onClick={() => navigate(`/instances/${inst.id}`)}
+                      className="bg-white border border-slate-200 rounded-lg p-3 active:bg-slate-50 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-medium text-slate-800 truncate text-sm flex-1 min-w-0">{inst.name}</p>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {inst.subscribed_until && (
+                            <span className="px-1.5 py-0.5 text-[10px] rounded bg-emerald-100 text-emerald-800">包月</span>
+                          )}
+                          {monthlyCost > 0 && !inst.subscribed_until && (
+                            <button onClick={(e) => { e.stopPropagation(); handleSubscribe(e, inst) }} disabled={!!subscribing || (user?.energy ?? 0) < monthlyCost} className="px-1.5 py-0.5 text-[10px] text-emerald-600 border border-emerald-200 rounded disabled:opacity-50">包月</button>
+                          )}
+                          <button onClick={(e) => { e.stopPropagation(); handleAbandon(e, inst) }} disabled={!!deleting} className="px-1.5 py-0.5 text-[10px] text-red-600 border border-red-200 rounded disabled:opacity-50">{deleting === inst.id ? '...' : '弃养'}</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       ) : (
+        <>
         <div className="grid gap-4 sm:grid-cols-2">
-          {instances.map((inst) => (
+          {paginated.map((inst) => (
             <div
               key={inst.id}
               onClick={() => navigate(`/instances/${inst.id}`)}
@@ -270,6 +375,10 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
             </div>
           ))}
         </div>
+        {filtered.length > PAGE_SIZE && (
+          <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
+        )}
+        </>
       )}
     </div>
   )

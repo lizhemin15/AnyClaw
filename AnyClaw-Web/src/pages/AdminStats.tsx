@@ -1,7 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { getAdminStats, getAdminUsage, checkAndMigrateDb, resetAdminDb, clearToken, type AdminStats, type UsageLogEntryAdmin } from '../api'
+import SearchInput from '../components/SearchInput'
+import Pagination from '../components/Pagination'
 
 const CHART_COLORS = ['#4318FF', '#00B5D8', '#6C63FF', '#05CD99', '#FFB547', '#FF5E7D', '#41B883', '#7983FF']
+const USAGE_PAGE_SIZE = 20
 
 export default function AdminStats() {
   const [stats, setStats] = useState<AdminStats | null>(null)
@@ -12,10 +15,12 @@ export default function AdminStats() {
   const [resetting, setResetting] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [migrating, setMigrating] = useState(false)
+  const [usageSearch, setUsageSearch] = useState('')
+  const [usagePage, setUsagePage] = useState(1)
 
   const load = () => {
     setLoading(true)
-    Promise.all([getAdminStats(days), getAdminUsage(100, 0)])
+    Promise.all([getAdminStats(days), getAdminUsage(500, 0)])
       .then(([s, u]) => {
         setStats(s)
         setUsageList(u.items ?? [])
@@ -27,6 +32,25 @@ export default function AdminStats() {
   useEffect(() => {
     load()
   }, [days])
+
+  const filteredUsage = useMemo(() => {
+    const q = usageSearch.trim().toLowerCase()
+    if (!q) return usageList
+    return usageList.filter((u) =>
+      (u.user_email || '').toLowerCase().includes(q) ||
+      (u.instance_name || '').toLowerCase().includes(q) ||
+      (u.model || '').toLowerCase().includes(q)
+    )
+  }, [usageList, usageSearch])
+
+  const paginatedUsage = useMemo(() => {
+    const start = (usagePage - 1) * USAGE_PAGE_SIZE
+    return filteredUsage.slice(start, start + USAGE_PAGE_SIZE)
+  }, [filteredUsage, usagePage])
+
+  useEffect(() => {
+    setUsagePage(1)
+  }, [usageSearch])
 
   const byModel = stats?.by_model ?? []
   const byUser = stats?.by_user ?? []
@@ -188,9 +212,12 @@ export default function AdminStats() {
           {/* 消耗明细（管理员：用户、宠物、模型、时间、金额） */}
           {usageList.length > 0 && (
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-200">
-                <h2 className="font-semibold text-slate-800">消耗明细</h2>
-                <p className="text-sm text-slate-500 mt-0.5">用户、宠物、模型、时间、金额</p>
+              <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold text-slate-800">消耗明细</h2>
+                  <p className="text-sm text-slate-500 mt-0.5">用户、宠物、模型、时间、金额</p>
+                </div>
+                <SearchInput value={usageSearch} onChange={setUsageSearch} placeholder="搜索用户/宠物/模型" className="sm:w-48" />
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -204,7 +231,7 @@ export default function AdminStats() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {usageList.map((u) => (
+                    {paginatedUsage.map((u) => (
                       <tr key={u.id} className="hover:bg-slate-50/50">
                         <td className="py-3 px-5 text-sm text-slate-800">{u.user_email || '—'}</td>
                         <td className="py-3 px-5 text-sm text-slate-800">{u.instance_name || `#${u.instance_id}`}</td>
@@ -215,6 +242,14 @@ export default function AdminStats() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+              <div className="px-5 border-t border-slate-200">
+                <Pagination
+                  page={usagePage}
+                  pageSize={USAGE_PAGE_SIZE}
+                  total={filteredUsage.length}
+                  onPageChange={setUsagePage}
+                />
               </div>
             </div>
           )}

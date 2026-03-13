@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   getAdminUsers,
   adminRechargeUser,
@@ -8,6 +8,10 @@ import {
   type User,
   type UserWithInstances,
 } from '../api'
+import SearchInput from '../components/SearchInput'
+import Pagination from '../components/Pagination'
+
+const PAGE_SIZE = 15
 
 export default function Energy() {
   const [users, setUsers] = useState<UserWithInstances[]>([])
@@ -25,6 +29,23 @@ export default function Energy() {
   const [editing, setEditing] = useState<number | null>(null)
   const [editRole, setEditRole] = useState<'user' | 'admin'>('user')
   const [editEnergy, setEditEnergy] = useState('')
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return users
+    return users.filter((u) => u.email.toLowerCase().includes(q))
+  }, [users, search])
+
+  const paginated = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE
+    return filtered.slice(start, start + PAGE_SIZE)
+  }, [filtered, page])
+
+  useEffect(() => {
+    setPage(1)
+  }, [search])
 
   const load = () => {
     setLoading(true)
@@ -123,15 +144,20 @@ export default function Energy() {
         <p className="text-slate-500 py-8">加载中...</p>
       ) : (
         <div className="space-y-3">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
             <h2 className="font-medium text-slate-800">用户列表</h2>
-            <button
-              type="button"
-              onClick={() => { setShowAddUser(true); setError('') }}
-              className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-            >
-              添加用户
-            </button>
+            <div className="flex gap-2">
+              {users.length > 0 && (
+                <SearchInput value={search} onChange={setSearch} placeholder="按邮箱搜索" className="sm:w-48" />
+              )}
+              <button
+                type="button"
+                onClick={() => { setShowAddUser(true); setError('') }}
+                className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+              >
+                添加用户
+              </button>
+            </div>
           </div>
           {showAddUser && (
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
@@ -151,7 +177,10 @@ export default function Energy() {
               </div>
             </div>
           )}
-          {users.map((u) => (
+          {filtered.length === 0 && users.length > 0 ? (
+            <p className="text-slate-500 py-8 text-center">未找到匹配「{search}」的用户</p>
+          ) : (
+          paginated.map((u) => (
             <div
               key={u.id}
               className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-3"
@@ -209,7 +238,11 @@ export default function Energy() {
                 </>
               )}
             </div>
-          ))}
+          ))
+          )}
+          {filtered.length > PAGE_SIZE && (
+            <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
+          )}
         </div>
       )}
     </div>

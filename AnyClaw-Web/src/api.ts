@@ -306,6 +306,17 @@ export async function getHostInstanceImageStatus(id: string): Promise<{
   return fetchApi(`/admin/hosts/${id}/instance-image-status`);
 }
 
+export interface HostMetrics {
+  disk?: { total: string; used: string; avail: string; pct: number };
+  mem?: { total: number; used: number; avail: number; pct: number };
+  load?: { load1: number; load5: number; load15: number };
+  error?: string;
+}
+
+export async function getHostMetrics(id: string): Promise<HostMetrics> {
+  return fetchApi<HostMetrics>(`/admin/hosts/${id}/metrics`);
+}
+
 export async function pullAndRestartInstances(id: string): Promise<{ ok: boolean; message: string; failed_ids?: number[]; failed_reasons?: Record<number, string> }> {
   return fetchApi<{ ok: boolean; message: string; failed_ids?: number[]; failed_reasons?: Record<number, string> }>(`/admin/hosts/${id}/pull-and-restart-instances`, { method: 'POST' });
 }
