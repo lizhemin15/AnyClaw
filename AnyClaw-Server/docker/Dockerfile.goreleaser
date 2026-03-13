@@ -3,6 +3,7 @@ FROM alpine:3.21
 ARG TARGETPLATFORM
 
 RUN apk add --no-cache ca-certificates tzdata
+ENV TZ=Asia/Shanghai
 
 COPY $TARGETPLATFORM/anyclaw /usr/local/bin/anyclaw
 COPY docker/entrypoint.sh /entrypoint.sh

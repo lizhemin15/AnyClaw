@@ -21,6 +21,7 @@ RUN make build
 FROM alpine:3.23
 
 RUN apk add --no-cache ca-certificates tzdata curl
+ENV TZ=Asia/Shanghai
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

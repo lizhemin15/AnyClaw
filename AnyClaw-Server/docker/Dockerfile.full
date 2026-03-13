@@ -23,10 +23,12 @@ FROM node:24-alpine3.23
 # Install runtime dependencies
 RUN apk add --no-cache \
   ca-certificates \
+  tzdata \
   curl \
   git \
   python3 \
   py3-pip
+ENV TZ=Asia/Shanghai
 
 # Install uv and symlink to system path
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
