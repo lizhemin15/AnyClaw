@@ -54,7 +54,7 @@ export default function AdminConfig() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [addingChannel, setAddingChannel] = useState(false)
-  const [newChannel, setNewChannel] = useState({ name: '', api_key: '', api_base: '', model: 'gpt-4o' })
+  const [newChannel, setNewChannel] = useState({ name: '', api_key: '', api_base: '', model: 'gpt-4o', daily_tokens_limit: 0, qps_limit: 0 })
   const [editingChannel, setEditingChannel] = useState<string | null>(null)
   const [testingChannel, setTestingChannel] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<{ id: string; ok: boolean; message: string } | null>(null)
@@ -159,14 +159,14 @@ export default function AdminConfig() {
       api_base: newChannel.api_base.trim() || 'https://api.openai.com/v1',
       enabled: true,
       models: [{ id: genModelId(), name: (newChannel.model || 'gpt-4o').trim() || 'gpt-4o', enabled: true }],
-      daily_tokens_limit: 0,
-      qps_limit: 0,
+      daily_tokens_limit: newChannel.daily_tokens_limit ?? 0,
+      qps_limit: newChannel.qps_limit ?? 0,
     }
     const prev = form.channels || []
     setForm({
       channels: [...prev.map((c) => ({ ...c, enabled: false, models: (c.models || []).map((m) => ({ ...m, enabled: false })) })), ch],
     })
-    setNewChannel({ name: '', api_key: '', api_base: '', model: 'gpt-4o' })
+    setNewChannel({ name: '', api_key: '', api_base: '', model: 'gpt-4o', daily_tokens_limit: 0, qps_limit: 0 })
     setAddingChannel(false)
   }
 
@@ -612,7 +612,7 @@ export default function AdminConfig() {
                 type="button"
                 onClick={() => {
                   setAddingChannel(true)
-                  setNewChannel({ name: '', api_key: '', api_base: '', model: 'gpt-4o' })
+                  setNewChannel({ name: '', api_key: '', api_base: '', model: 'gpt-4o', daily_tokens_limit: 0, qps_limit: 0 })
                 }}
                 className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
               >
@@ -647,6 +647,25 @@ export default function AdminConfig() {
                   onChange={(e) => setNewChannel((p) => ({ ...p, model: e.target.value }))}
                   placeholder="模型，如 gpt-4o"
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-32 font-mono"
+                />
+                <input
+                  type="number"
+                  min={0}
+                  value={newChannel.daily_tokens_limit ?? 0}
+                  onChange={(e) => setNewChannel((p) => ({ ...p, daily_tokens_limit: parseInt(e.target.value, 10) || 0 }))}
+                  placeholder="日 tokens 上限"
+                  title="0 表示不限制"
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-28"
+                />
+                <input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  value={newChannel.qps_limit ?? 0}
+                  onChange={(e) => setNewChannel((p) => ({ ...p, qps_limit: parseFloat(e.target.value) || 0 }))}
+                  placeholder="QPS 上限"
+                  title="0 表示不限制"
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-24"
                 />
                 <button
                   type="button"
