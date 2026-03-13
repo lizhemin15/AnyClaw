@@ -18,7 +18,7 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
 
   const formatExpires = (s: string) => {
     if (!s || s.length < 10) return ''
-    const [y, m, d] = s.slice(0, 10).split('-')
+    const [, m, d] = s.slice(0, 10).split('-')
     return `${parseInt(m, 10)}月${parseInt(d, 10)}日`
   }
 
