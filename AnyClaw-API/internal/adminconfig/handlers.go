@@ -142,11 +142,13 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 			channels[i].APIKey = k
 		}
 	}
-	// Merge SMTP: preserve pass if client sent masked value; clear if host empty
+	// Merge SMTP: preserve existing if not sent; clear if host empty; preserve pass if masked
 	smtp := req.SMTP
-	if smtp != nil && strings.TrimSpace(smtp.Host) == "" {
+	if smtp == nil {
+		smtp = cfg.SMTP
+	} else if strings.TrimSpace(smtp.Host) == "" {
 		smtp = nil
-	} else if smtp != nil && cfg.SMTP != nil && (smtp.Pass == "" || strings.HasPrefix(smtp.Pass, "****")) {
+	} else if cfg.SMTP != nil && (smtp.Pass == "" || strings.HasPrefix(smtp.Pass, "****")) {
 		smtp.Pass = cfg.SMTP.Pass
 	}
 	// Merge Payment: preserve secrets if client sent masked value; keep existing if not sent

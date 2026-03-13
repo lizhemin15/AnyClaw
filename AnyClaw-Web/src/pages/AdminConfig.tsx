@@ -164,6 +164,7 @@ export default function AdminConfig() {
     }
     const prev = form.channels || []
     setForm({
+      ...form,
       channels: [...prev, ch],
     })
     setNewChannel({ name: '', api_key: '', api_base: '', model: 'gpt-4o', daily_tokens_limit: 0, qps_limit: 0 })
@@ -172,7 +173,7 @@ export default function AdminConfig() {
 
   const removeChannel = (id: string) => {
     if (!form) return
-    setForm({ channels: (form.channels || []).filter((c) => c.id !== id) })
+    setForm({ ...form, channels: (form.channels || []).filter((c) => c.id !== id) })
     setEditingChannel(null)
   }
 
@@ -180,6 +181,7 @@ export default function AdminConfig() {
     if (!form) return
     const modelName = (name || 'gpt-4o').trim()
     setForm({
+      ...form,
       channels: (form.channels || []).map((c) =>
         c.id === channelId
           ? {
@@ -197,6 +199,7 @@ export default function AdminConfig() {
   const updateChannel = (id: string, upd: Partial<Channel>) => {
     if (!form) return
     setForm({
+      ...form,
       channels: (form.channels || []).map((c) => (c.id === id ? { ...c, ...upd } : c)),
     })
   }
@@ -205,6 +208,7 @@ export default function AdminConfig() {
     if (!form) return
     const channels = form.channels || []
     setForm({
+      ...form,
       channels: channels.map((c) => ({
         ...c,
         enabled: c.id === id ? enabled : c.enabled,
