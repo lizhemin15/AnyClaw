@@ -212,15 +212,20 @@ func (d *DB) migrate() error {
 	)`); err != nil {
 		log.Printf("[db] create system_config: %v", err)
 	}
-	// 包月订阅：instance_id + month_year 唯一，包月期间该宠物对话不消耗金币
+	// 包月订阅：订阅日起 30 天内对话不消耗金币
+	var hasOldSchema int
+	_ = d.QueryRow("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'instance_subscriptions' AND column_name = 'month_year'").Scan(&hasOldSchema)
+	if hasOldSchema > 0 {
+		if _, err := d.Exec("DROP TABLE IF EXISTS instance_subscriptions"); err != nil {
+			log.Printf("[db] drop old instance_subscriptions: %v", err)
+		}
+	}
 	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS instance_subscriptions (
 		id BIGINT AUTO_INCREMENT PRIMARY KEY,
-		instance_id BIGINT NOT NULL,
-		month_year VARCHAR(7) NOT NULL,
+		instance_id BIGINT NOT NULL UNIQUE,
+		expires_at DATETIME NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE KEY uk_instance_month (instance_id, month_year),
-		INDEX idx_instance (instance_id),
-		INDEX idx_month (month_year)
+		INDEX idx_expires (expires_at)
 	)`); err != nil {
 		log.Printf("[db] create instance_subscriptions: %v", err)
 	}

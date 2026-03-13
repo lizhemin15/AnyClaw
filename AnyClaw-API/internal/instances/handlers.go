@@ -65,15 +65,19 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	if list == nil {
 		list = []*db.Instance{}
 	}
-	// 填充包月状态
+	// 填充包月到期时间
 	ids := make([]int64, len(list))
 	for i, inst := range list {
 		ids[i] = inst.ID
 	}
-	subMap, _ := h.db.GetSubscribedMonthsByInstanceIDs(ids)
+	expMap, _ := h.db.GetSubscribedExpiresByInstanceIDs(ids)
 	for _, inst := range list {
-		if m, ok := subMap[inst.ID]; ok {
-			inst.SubscribedMonth = m
+		if exp, ok := expMap[inst.ID]; ok {
+			if t, err := time.Parse("2006-01-02 15:04:05", exp); err == nil {
+				inst.SubscribedUntil = t.Format("2006-01-02")
+			} else {
+				inst.SubscribedUntil = exp[:10]
+			}
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -181,10 +185,14 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	// 填充包月状态
-	subMap, _ := h.db.GetSubscribedMonthsByInstanceIDs([]int64{id})
-	if m, ok := subMap[id]; ok {
-		inst.SubscribedMonth = m
+	// 填充包月到期时间
+	expMap, _ := h.db.GetSubscribedExpiresByInstanceIDs([]int64{id})
+	if exp, ok := expMap[id]; ok {
+		if t, err := time.Parse("2006-01-02 15:04:05", exp); err == nil {
+			inst.SubscribedUntil = t.Format("2006-01-02")
+		} else if len(exp) >= 10 {
+			inst.SubscribedUntil = exp[:10]
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(inst)
@@ -216,12 +224,6 @@ func (h *Handler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"包月功能未开放"}`, http.StatusBadRequest)
 		return
 	}
-	monthYear := time.Now().Format("2006-01")
-	subscribed, _ := h.db.IsInstanceSubscribed(id, monthYear)
-	if subscribed {
-		http.Error(w, `{"error":"本月已包月"}`, http.StatusBadRequest)
-		return
-	}
 	u, _ := h.db.GetUserByID(claims.UserID)
 	if u == nil || u.Energy < ec.MonthlySubscriptionCost {
 		http.Error(w, `{"error":"金币不足，包月需要 `+strconv.Itoa(ec.MonthlySubscriptionCost)+` 金币"}`, http.StatusBadRequest)
@@ -232,12 +234,13 @@ func (h *Handler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"扣费失败"}`, http.StatusInternalServerError)
 		return
 	}
-	if err := h.db.SubscribeInstance(id, claims.UserID, monthYear); err != nil {
+	expiresAt, err := h.db.SubscribeInstance(id, claims.UserID)
+	if err != nil {
 		h.db.AddUserEnergy(claims.UserID, ec.MonthlySubscriptionCost)
 		http.Error(w, `{"error":"包月失败"}`, http.StatusInternalServerError)
 		return
 	}
-	inst.SubscribedMonth = monthYear
+	inst.SubscribedUntil = expiresAt.Format("2006-01-02")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "instance": inst})
 }

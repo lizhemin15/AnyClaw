@@ -34,7 +34,7 @@ export interface Instance {
   zero_energy_since?: string;
   created_at: string;
   unread?: boolean;
-  subscribed_month?: string;
+  subscribed_until?: string;
 }
 
 export interface LoginResponse {

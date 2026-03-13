@@ -103,7 +103,7 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	// 检查用户金币（对话消耗用户金币；包月实例本月不消耗，可豁免）
 	if p.db != nil && userID != "" {
 		instID, _ := strconv.ParseInt(instanceID, 10, 64)
-		subscribed, _ := p.db.IsInstanceSubscribed(instID, "")
+		subscribed, _ := p.db.IsInstanceSubscribed(instID)
 		if !subscribed {
 			cfg, _ := config.Load(p.configPath)
 			minCoins := config.GetEnergyConfig(cfg).MinEnergyForTask
@@ -209,7 +209,7 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		cost := 0
 		if p.db != nil && userID != "" {
 			instID, _ := strconv.ParseInt(instanceID, 10, 64)
-			subscribed, _ := p.db.IsInstanceSubscribed(instID, "")
+			subscribed, _ := p.db.IsInstanceSubscribed(instID)
 			if !subscribed {
 				cfg, _ := config.Load(p.configPath)
 				tokensPerEnergy := config.GetEnergyConfig(cfg).TokensPerEnergy

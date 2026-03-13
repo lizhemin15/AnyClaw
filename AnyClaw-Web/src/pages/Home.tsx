@@ -16,11 +16,10 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
 
   const navigate = useNavigate()
 
-  const getMonthEndDisplay = (monthYear: string) => {
-    if (!monthYear || !/^\d{4}-\d{2}$/.test(monthYear)) return ''
-    const [y, m] = monthYear.split('-').map(Number)
-    const lastDay = new Date(y, m, 0)
-    return `${lastDay.getMonth() + 1}月${lastDay.getDate()}日`
+  const formatExpires = (s: string) => {
+    if (!s || s.length < 10) return ''
+    const [y, m, d] = s.slice(0, 10).split('-')
+    return `${parseInt(m, 10)}月${parseInt(d, 10)}日`
   }
 
   useEffect(() => {
@@ -101,7 +100,7 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
       setError(`金币不足，包月需要 ${monthlyCost} 金币`)
       return
     }
-    if (!confirm(`确定要为「${inst.name}」包月吗？将消耗 ${monthlyCost} 金币，本月对话不再消耗金币。`)) return
+    if (!confirm(`确定要为「${inst.name}」包月吗？将消耗 ${monthlyCost} 金币，30 天内对话不再消耗金币。`)) return
     setSubscribing(inst.id)
     setError('')
     try {
@@ -230,17 +229,17 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
                   <p className="font-medium text-slate-800 truncate">{inst.name}</p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {inst.subscribed_month && (
-                    <span className="px-2.5 py-1 text-xs rounded-full bg-emerald-100 text-emerald-800" title={`本月已包月，对话不消耗金币，到期 ${getMonthEndDisplay(inst.subscribed_month)}`}>
-                      包月至 {getMonthEndDisplay(inst.subscribed_month)}
+                  {inst.subscribed_until && (
+                    <span className="px-2.5 py-1 text-xs rounded-full bg-emerald-100 text-emerald-800" title={`包月有效期内对话不消耗金币，到期 ${formatExpires(inst.subscribed_until)}`}>
+                      包月至 {formatExpires(inst.subscribed_until)}
                     </span>
                   )}
-                  {monthlyCost > 0 && !inst.subscribed_month && (
+                  {monthlyCost > 0 && !inst.subscribed_until && (
                     <button
                       onClick={(e) => handleSubscribe(e, inst)}
                       disabled={!!subscribing || (user?.energy ?? 0) < monthlyCost}
                       className="px-2 py-1 text-xs text-emerald-600 border border-emerald-200 rounded-lg active:bg-emerald-50 disabled:opacity-50"
-                      title={`包月 ${monthlyCost} 金币，本月对话不消耗金币`}
+                      title={`包月 ${monthlyCost} 金币，30 天内对话不消耗金币`}
                     >
                       {subscribing === inst.id ? '包月中...' : `包月(${monthlyCost})`}
                     </button>

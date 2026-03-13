@@ -19,7 +19,7 @@ type Instance struct {
 	Token            string  `json:"-"` // never expose to client
 	CreatedAt        string  `json:"created_at"`
 	Unread           bool    `json:"unread,omitempty"` // 是否有未读的 AI 回复
-	SubscribedMonth  string  `json:"subscribed_month,omitempty"` // 已包月月份，如 "2025-03"，空表示未包月
+	SubscribedUntil  string  `json:"subscribed_until,omitempty"` // 包月到期时间，如 "2025-04-14"，空表示未包月
 }
 
 func (d *DB) CreateInstance(userID int64, name, token string, initialEnergy int, dailyConsume int) (*Instance, error) {
