@@ -164,7 +164,7 @@ export default function AdminConfig() {
     }
     const prev = form.channels || []
     setForm({
-      channels: [...prev.map((c) => ({ ...c, enabled: false, models: (c.models || []).map((m) => ({ ...m, enabled: false })) })), ch],
+      channels: [...prev, ch],
     })
     setNewChannel({ name: '', api_key: '', api_base: '', model: 'gpt-4o', daily_tokens_limit: 0, qps_limit: 0 })
     setAddingChannel(false)
@@ -207,7 +207,7 @@ export default function AdminConfig() {
     setForm({
       channels: channels.map((c) => ({
         ...c,
-        enabled: c.id === id ? enabled : (enabled ? false : c.enabled),
+        enabled: c.id === id ? enabled : c.enabled,
         models:
           c.id === id && enabled
             ? (c.models || []).map((m, i) => ({ ...m, enabled: i === 0 }))
@@ -337,7 +337,7 @@ export default function AdminConfig() {
         <div>
           <h1 className="text-xl font-semibold text-slate-800">AI配置</h1>
           <p className="text-sm text-slate-500 mt-1">
-            添加渠道并配置 API，一次只能启用一个渠道。当前启用：{enabledModel ? enabledModel.name : '无'}。
+            添加渠道并配置 API，可同时启用多个渠道做负载均衡。默认模型：{enabledModel ? enabledModel.name : '无'}。
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
