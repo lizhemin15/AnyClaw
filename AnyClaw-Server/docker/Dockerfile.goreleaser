@@ -6,6 +6,8 @@ RUN apk add --no-cache ca-certificates tzdata
 
 COPY $TARGETPLATFORM/anyclaw /usr/local/bin/anyclaw
 COPY docker/entrypoint.sh /entrypoint.sh
+# 预制 Skillhub 商店配置，首次 onboard 时使用
+COPY config/config.example.json /opt/anyclaw/config.example.json
 
 RUN chmod +x /entrypoint.sh
 

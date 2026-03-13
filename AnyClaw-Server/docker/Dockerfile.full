@@ -37,7 +37,10 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 # Copy binary
 COPY --from=builder /src/build/anyclaw /usr/local/bin/anyclaw
 
-# Create anyclaw home directory
+# 预制 Skillhub 商店配置（参考用）
+COPY config/config.example.json /opt/anyclaw/config.example.json
+
+# Create anyclaw home directory (Skillhub 已内置在 DefaultConfig)
 RUN /usr/local/bin/anyclaw onboard
 
 ENTRYPOINT ["anyclaw"]

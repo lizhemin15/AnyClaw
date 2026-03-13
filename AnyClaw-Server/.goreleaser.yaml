@@ -99,6 +99,7 @@ dockers_v2:
     dockerfile: docker/Dockerfile.goreleaser
     extra_files:
       - docker/entrypoint.sh
+      - config/config.example.json
     ids:
       - anyclaw
     images:

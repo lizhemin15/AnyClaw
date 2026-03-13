@@ -390,7 +390,8 @@
       "registries": {
         "clawhub": {
           "enabled": true,
-          "base_url": "https://clawhub.ai",
+          "base_url": "https://skillhub.tencent.com",
+          "mirror_base_urls": ["https://clawhub.ai", "https://clawhub.com"],
           "auth_token": "",
           "search_path": "",
           "skills_path": "",

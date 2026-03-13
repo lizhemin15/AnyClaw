@@ -3,6 +3,7 @@
 build/
 .anyclaw/
 config/
+!config/config.example.json
 .env
 .env.example
 *.md
