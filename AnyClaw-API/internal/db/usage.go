@@ -2,8 +2,40 @@ package db
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
+
+// GetUsageByProviderToday 返回今日各 provider 的 tokens 总量（prompt+completion）
+func (d *DB) GetUsageByProviderToday(providers []string) (map[string]int64, error) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	out := make(map[string]int64)
+	if len(providers) == 0 {
+		return out, nil
+	}
+	args := make([]any, 0, len(providers)+1)
+	args = append(args, today)
+	for _, p := range providers {
+		args = append(args, p)
+	}
+	ph := strings.Repeat("?,", len(providers)-1) + "?"
+	query := "SELECT provider, COALESCE(SUM(prompt_tokens + completion_tokens), 0) FROM usage_log WHERE created_at >= ? AND provider IN (" + ph + ") GROUP BY provider"
+	rows, err := d.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("get usage by provider: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var p string
+		var sum int64
+		if err := rows.Scan(&p, &sum); err != nil {
+			return nil, err
+		}
+		out[p] = sum
+	}
+	return out, nil
+}
 
 func (d *DB) InsertUsage(instanceID, userID, model, provider string, promptTokens, completionTokens, coinsCost int) error {
 	_, err := d.Exec(

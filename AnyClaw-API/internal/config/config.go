@@ -149,12 +149,14 @@ type SMTPConfig struct {
 
 // Channel 渠道：用户添加，可配置、启用，每个渠道可添加多个模型
 type Channel struct {
-	ID      string       `json:"id"`
-	Name    string       `json:"name"`    // 如 "OpenAI 主账号"
-	APIKey  string       `json:"api_key"`
-	APIBase string       `json:"api_base"`
-	Enabled bool         `json:"enabled"`
-	Models  []ModelEntry `json:"models"`  // 该渠道下的模型列表
+	ID               string       `json:"id"`
+	Name             string       `json:"name"`    // 如 "OpenAI 主账号"
+	APIKey           string       `json:"api_key"`
+	APIBase          string       `json:"api_base"`
+	Enabled          bool         `json:"enabled"`
+	Models           []ModelEntry `json:"models"`  // 该渠道下的模型列表
+	DailyTokensLimit int64        `json:"daily_tokens_limit"` // 日 tokens 上限，0 表示不限制
+	QPSLimit         float64      `json:"qps_limit"`          // 每秒请求数上限，0 表示不限制
 }
 
 type ModelEntry struct {
@@ -180,9 +182,11 @@ func (c *Config) GetEnabledModel() string {
 
 // ChannelEndpoint 渠道端点，用于调度
 type ChannelEndpoint struct {
-	ChannelID string
-	APIBase   string
-	APIKey    string
+	ChannelID         string
+	APIBase           string
+	APIKey            string
+	DailyTokensLimit  int64   // 0=不限制
+	QPSLimit          float64 // 0=不限制
 }
 
 // FindChannelsForModel 返回能提供该模型的所有已启用渠道（用于负载均衡）
@@ -203,7 +207,7 @@ func (c *Config) FindChannelsForModel(model string) []ChannelEndpoint {
 				key := ch.ID + "|" + base
 				if !seen[key] {
 					seen[key] = true
-					out = append(out, ChannelEndpoint{ChannelID: ch.ID, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey})
+					out = append(out, ChannelEndpoint{ChannelID: ch.ID, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey, DailyTokensLimit: ch.DailyTokensLimit, QPSLimit: ch.QPSLimit})
 				}
 				break
 			}
@@ -225,14 +229,14 @@ func (c *Config) FindChannelsForModel(model string) []ChannelEndpoint {
 			key := ch.ID + "|" + base
 			if !seen[key] {
 				seen[key] = true
-				out = append(out, ChannelEndpoint{ChannelID: ch.ID, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey})
+				out = append(out, ChannelEndpoint{ChannelID: ch.ID, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey, DailyTokensLimit: ch.DailyTokensLimit, QPSLimit: ch.QPSLimit})
 			}
 		}
 		if strings.Contains(model, "claude") && strings.Contains(chLower, "anthropic") {
 			key := ch.ID + "|" + base
 			if !seen[key] {
 				seen[key] = true
-				out = append(out, ChannelEndpoint{ChannelID: ch.ID, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey})
+				out = append(out, ChannelEndpoint{ChannelID: ch.ID, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey, DailyTokensLimit: ch.DailyTokensLimit, QPSLimit: ch.QPSLimit})
 			}
 		}
 	}
@@ -248,7 +252,7 @@ func (c *Config) FindChannelsForModel(model string) []ChannelEndpoint {
 			key := ch.ID + "|" + base
 			if !seen[key] {
 				seen[key] = true
-				out = append(out, ChannelEndpoint{ChannelID: ch.ID, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey})
+				out = append(out, ChannelEndpoint{ChannelID: ch.ID, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey, DailyTokensLimit: ch.DailyTokensLimit, QPSLimit: ch.QPSLimit})
 			}
 		}
 	}

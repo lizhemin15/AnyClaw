@@ -44,12 +44,14 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	out := make([]map[string]any, len(channels))
 	for i, ch := range channels {
 		out[i] = map[string]any{
-			"id":       ch.ID,
-			"name":     ch.Name,
-			"api_key":  config.MaskAPIKey(ch.APIKey),
-			"api_base": ch.APIBase,
-			"enabled":  ch.Enabled,
-			"models":   ch.Models,
+			"id":                 ch.ID,
+			"name":               ch.Name,
+			"api_key":            config.MaskAPIKey(ch.APIKey),
+			"api_base":           ch.APIBase,
+			"enabled":            ch.Enabled,
+			"models":             ch.Models,
+			"daily_tokens_limit": ch.DailyTokensLimit,
+			"qps_limit":          ch.QPSLimit,
 		}
 	}
 	resp := map[string]any{"channels": out}

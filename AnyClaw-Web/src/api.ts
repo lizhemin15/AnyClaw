@@ -391,6 +391,8 @@ export interface Channel {
   api_base: string;
   enabled: boolean;
   models: ModelEntry[];
+  daily_tokens_limit?: number;  // 日 tokens 上限，0 表示不限制
+  qps_limit?: number;           // 每秒请求数上限，0 表示不限制
 }
 
 export interface SMTPConfig {

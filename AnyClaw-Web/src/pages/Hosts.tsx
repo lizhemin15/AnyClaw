@@ -341,22 +341,22 @@ export default function Hosts() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4">
+      <div className="flex flex-col gap-4 mb-4">
         <h1 className="text-xl font-semibold text-slate-800">服务器</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2 sm:justify-end sm:items-center">
           {hosts.length > 0 && (
-            <SearchInput value={hostSearch} onChange={setHostSearch} placeholder="搜索名称或地址" className="sm:w-48" />
+            <SearchInput value={hostSearch} onChange={setHostSearch} placeholder="搜索名称或地址" className="w-full sm:w-48 min-w-0" />
           )}
           <button
-          onClick={() => {
-            setModal('add')
-            setEditing(null)
-            setForm({ name: '', addr: '', ssh_port: 22, ssh_user: '', ssh_key: '', ssh_password: '', docker_image: '', enabled: true, instance_capacity: 0 })
-          }}
-          className="w-full sm:w-auto px-6 py-3 bg-slate-800 text-white rounded-xl active:bg-slate-700 min-h-[48px] touch-target"
-        >
-          添加服务器
-        </button>
+            onClick={() => {
+              setModal('add')
+              setEditing(null)
+              setForm({ name: '', addr: '', ssh_port: 22, ssh_user: '', ssh_key: '', ssh_password: '', docker_image: '', enabled: true, instance_capacity: 0 })
+            }}
+            className="w-full sm:w-auto px-6 py-3 bg-slate-800 text-white rounded-xl active:bg-slate-700 min-h-[48px] touch-target"
+          >
+            添加服务器
+          </button>
         </div>
       </div>
 
@@ -366,22 +366,22 @@ export default function Hosts() {
 
       {/* 统计面板 */}
       {hosts.length > 0 && (
-        <div className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-            <p className="text-sm text-slate-500">服务器总数</p>
-            <p className="text-2xl font-semibold text-slate-800 mt-1">{hosts.length}</p>
+        <div className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+          <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4 shadow-sm min-h-[72px] sm:min-h-0 flex flex-col justify-center">
+            <p className="text-xs sm:text-sm text-slate-500 truncate">服务器总数</p>
+            <p className="text-xl sm:text-2xl font-semibold text-slate-800 mt-0.5">{hosts.length}</p>
           </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-            <p className="text-sm text-slate-500">在线服务器</p>
-            <p className="text-2xl font-semibold text-emerald-600 mt-1">{hosts.filter((h) => h.status === 'online').length}</p>
+          <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4 shadow-sm min-h-[72px] sm:min-h-0 flex flex-col justify-center">
+            <p className="text-xs sm:text-sm text-slate-500 truncate">在线</p>
+            <p className="text-xl sm:text-2xl font-semibold text-emerald-600 mt-0.5">{hosts.filter((h) => h.status === 'online').length}</p>
           </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-            <p className="text-sm text-slate-500">实例总数</p>
-            <p className="text-2xl font-semibold text-slate-800 mt-1">{instances.length}</p>
+          <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4 shadow-sm min-h-[72px] sm:min-h-0 flex flex-col justify-center">
+            <p className="text-xs sm:text-sm text-slate-500 truncate">实例总数</p>
+            <p className="text-xl sm:text-2xl font-semibold text-slate-800 mt-0.5">{instances.length}</p>
           </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-            <p className="text-sm text-slate-500">运行中实例</p>
-            <p className="text-2xl font-semibold text-emerald-600 mt-1">{instances.filter((i) => i.status === 'running').length}</p>
+          <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4 shadow-sm min-h-[72px] sm:min-h-0 flex flex-col justify-center">
+            <p className="text-xs sm:text-sm text-slate-500 truncate">运行中</p>
+            <p className="text-xl sm:text-2xl font-semibold text-emerald-600 mt-0.5">{instances.filter((i) => i.status === 'running').length}</p>
           </div>
         </div>
       )}
@@ -389,29 +389,29 @@ export default function Hosts() {
       {/* 资源使用看板 */}
       {hosts.length > 0 && (
         <div className="mb-6 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div>
+          <div className="px-4 sm:px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="min-w-0">
               <h2 className="font-semibold text-slate-800">资源使用</h2>
-              <p className="text-sm text-slate-500 mt-0.5">各服务器 CPU、磁盘、内存使用情况</p>
+              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">各服务器 CPU、磁盘、内存</p>
             </div>
             <button
               type="button"
               onClick={loadMetrics}
               disabled={metricsLoading || hosts.filter((h) => h.enabled).length === 0}
-              className="px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50"
+              className="w-full sm:w-auto px-4 py-3 sm:py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 active:bg-slate-100 disabled:opacity-50 min-h-[44px] touch-target flex-shrink-0"
             >
               {metricsLoading ? '加载中...' : '刷新资源'}
             </button>
           </div>
-          <div className="p-5">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="p-4 sm:p-5">
+            <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filteredHosts.filter((h) => h.enabled).map((h) => {
                 const m = metrics[h.id]
                 return (
-                  <div key={h.id} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="font-medium text-slate-800">{h.name}</span>
-                      <span className="text-xs text-slate-500">{h.addr}</span>
+                  <div key={h.id} className="bg-slate-50 rounded-lg p-3 sm:p-4 border border-slate-200">
+                    <div className="flex items-center justify-between gap-2 mb-3 min-w-0">
+                      <span className="font-medium text-slate-800 truncate">{h.name}</span>
+                      <span className="text-xs text-slate-500 flex-shrink-0">{h.addr}</span>
                     </div>
                     {!m ? (
                       <p className="text-sm text-slate-500">点击「刷新资源」获取</p>
@@ -448,9 +448,9 @@ export default function Hosts() {
                           </div>
                         )}
                         {m.load && (
-                          <div className="text-xs text-slate-600">
+                          <div className="text-xs text-slate-600 break-words">
                             <span>CPU 负载</span>
-                            <span className="ml-2 font-mono">1m {m.load.load1.toFixed(2)} · 5m {m.load.load5.toFixed(2)} · 15m {m.load.load15.toFixed(2)}</span>
+                            <span className="ml-1 sm:ml-2 font-mono">1m {m.load.load1.toFixed(2)} · 5m {m.load.load5.toFixed(2)} · 15m {m.load.load15.toFixed(2)}</span>
                           </div>
                         )}
                       </div>
@@ -494,7 +494,7 @@ export default function Hosts() {
                 <button
                   onClick={() => handleCheck(h.id)}
                   disabled={!!checking}
-                  className="flex-1 sm:flex-none px-4 py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50 disabled:opacity-50 min-h-[44px]"
+                  className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 text-sm border border-slate-300 rounded-lg active:bg-slate-50 disabled:opacity-50 min-h-[44px] touch-target"
                 >
                   {checking === h.id ? '检测中...' : '检测'}
                 </button>
@@ -502,15 +502,15 @@ export default function Hosts() {
                   onClick={() => handlePruneImages(h)}
                   disabled={!!pruningImages}
                   title="清理该主机上的悬空镜像（&lt;none&gt; 的旧版本）"
-                  className="flex-1 sm:flex-none px-4 py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50 disabled:opacity-50 min-h-[44px]"
+                  className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 text-sm border border-slate-300 rounded-lg active:bg-slate-50 disabled:opacity-50 min-h-[44px] touch-target"
                 >
-                  {pruningImages === h.id ? '清理中...' : '清理悬空镜像'}
+                  {pruningImages === h.id ? '清理中...' : <><span className="sm:hidden">清理</span><span className="hidden sm:inline">清理悬空镜像</span></>}
                 </button>
                 <button
                   onClick={() => handleDrain(h)}
                   disabled={!!draining || !!pullingInstances || (instanceImageStatus[h.id]?.instance_count ?? 0) === 0}
                   title="将该主机上所有实例迁移到其他主机"
-                  className="flex-1 sm:flex-none px-4 py-2 text-sm border border-amber-300 text-amber-700 rounded-lg active:bg-amber-50 disabled:opacity-50 min-h-[44px]"
+                  className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 text-sm border border-amber-300 text-amber-700 rounded-lg active:bg-amber-50 disabled:opacity-50 min-h-[44px] touch-target"
                 >
                   {draining === h.id ? '排空中...' : '排空'}
                 </button>
@@ -526,25 +526,25 @@ export default function Hosts() {
                       ? `实例镜像已是最新 (${instanceImageStatus[h.id]?.image || ''})`
                       : `拉取 ${instanceImageStatus[h.id]?.image || ''} 并重启该主机上 ${instanceImageStatus[h.id]?.instance_count ?? 0} 个实例`)
                   }
-                  className="flex-1 sm:flex-none px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg active:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+                  className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 text-sm bg-emerald-600 text-white rounded-lg active:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] touch-target"
                 >
                   {pullingInstances === h.id
                     ? '拉取中...'
                     : instanceImageStatus[h.id] === undefined
                       ? '检查中...'
                       : instanceImageStatus[h.id].update_available
-                        ? `更新实例 (${instanceImageStatus[h.id].instance_count})`
-                        : '实例已最新'}
+                        ? <><span className="sm:hidden">更新</span><span className="hidden sm:inline">更新实例 ({instanceImageStatus[h.id].instance_count})</span></>
+                        : <><span className="sm:hidden">已最新</span><span className="hidden sm:inline">实例已最新</span></>}
                 </button>
                 <button
                   onClick={() => openEdit(h)}
-                  className="flex-1 sm:flex-none px-4 py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50 min-h-[44px]"
+                  className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 text-sm border border-slate-300 rounded-lg active:bg-slate-50 min-h-[44px] touch-target"
                 >
                   编辑
                 </button>
                 <button
                   onClick={() => handleDelete(h)}
-                  className="px-4 py-2 text-sm border border-red-200 text-red-600 rounded-lg active:bg-red-50 min-h-[44px]"
+                  className="px-3 sm:px-4 py-2.5 text-sm border border-red-200 text-red-600 rounded-lg active:bg-red-50 min-h-[44px] touch-target"
                 >
                   删除
                 </button>
@@ -555,11 +555,11 @@ export default function Hosts() {
       )}
 
       {/* 实例列表 */}
-      <div className="mt-10">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-          <h2 className="text-lg font-semibold text-slate-800">实例列表（AnyClaw 容器）</h2>
+      <div className="mt-8 sm:mt-10">
+        <div className="flex flex-col gap-3 mb-3">
+          <h2 className="text-lg font-semibold text-slate-800">实例列表</h2>
           {instances.length > 0 && (
-            <SearchInput value={instanceSearch} onChange={setInstanceSearch} placeholder="搜索实例/用户/主机" className="sm:w-48" />
+            <SearchInput value={instanceSearch} onChange={setInstanceSearch} placeholder="搜索实例/用户/主机" className="w-full sm:w-48 min-w-0" />
           )}
         </div>
         {instancesLoading ? (
@@ -577,19 +577,19 @@ export default function Hosts() {
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-slate-800">#{inst.id} {inst.name}</span>
-                    <span className={`px-2.5 py-1 text-xs rounded-full ${inst.status === 'running' ? 'bg-green-100 text-green-800' : inst.status === 'creating' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>
+                    <span className="font-medium text-slate-800 truncate">#{inst.id} {inst.name}</span>
+                    <span className={`px-2.5 py-1 text-xs rounded-full flex-shrink-0 ${inst.status === 'running' ? 'bg-green-100 text-green-800' : inst.status === 'creating' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>
                       {inst.status === 'running' ? '运行中' : inst.status === 'creating' ? '创建中' : inst.status}
                     </span>
                   </div>
-                  <p className="text-sm text-slate-500 mt-1">
+                  <p className="text-xs sm:text-sm text-slate-500 mt-1 break-words">
                     用户: {inst.user_email || '—'} · 宿主机: {inst.host_name || '—'}
                   </p>
                 </div>
-                <div className="flex gap-2 flex-shrink-0">
+                <div className="flex gap-2 flex-shrink-0 flex-wrap">
                   <Link
                     to={`/instances/${inst.id}`}
-                    className="px-4 py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50 min-h-[44px] inline-block"
+                    className="flex-1 sm:flex-none px-4 py-2.5 text-sm border border-slate-300 rounded-lg active:bg-slate-50 min-h-[44px] inline-flex items-center justify-center touch-target"
                   >
                     打开
                   </Link>
@@ -597,7 +597,7 @@ export default function Hosts() {
                     <button
                       onClick={() => setMigrateModal(inst)}
                       disabled={!!migratingInst}
-                      className="px-4 py-2 text-sm border border-slate-300 rounded-lg active:bg-slate-50 disabled:opacity-50 min-h-[44px]"
+                      className="flex-1 sm:flex-none px-4 py-2.5 text-sm border border-slate-300 rounded-lg active:bg-slate-50 disabled:opacity-50 min-h-[44px] touch-target"
                     >
                       迁移
                     </button>
@@ -605,7 +605,7 @@ export default function Hosts() {
                   <button
                     onClick={() => handleDeleteInstance(inst)}
                     disabled={deletingInst === inst.id}
-                    className="px-4 py-2 text-sm border border-red-200 text-red-600 rounded-lg active:bg-red-50 disabled:opacity-50 min-h-[44px]"
+                    className="flex-1 sm:flex-none px-4 py-2.5 text-sm border border-red-200 text-red-600 rounded-lg active:bg-red-50 disabled:opacity-50 min-h-[44px] touch-target"
                   >
                     {deletingInst === inst.id ? '删除中...' : '删除'}
                   </button>
@@ -628,23 +628,23 @@ export default function Hosts() {
 
       {migrateModal && (
         <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => !migratingInst && setMigrateModal(null)}>
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl p-6 max-w-md w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl p-6 max-w-md w-full max-h-[85vh] overflow-y-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-semibold mb-4">迁移实例 #{migrateModal.id} {migrateModal.name}</h2>
-            <p className="text-sm text-slate-500 mb-4">选择目标宿主机，将复制工作区并重启容器</p>
+            <p className="text-sm text-slate-500 mb-4">选择目标宿主机</p>
             <div className="space-y-2 mb-4">
               {hosts.filter((h) => h.enabled && h.id !== migrateModal.host_id).map((h) => (
                 <button
                   key={h.id}
                   onClick={() => handleMigrateInstance(migrateModal, h.id)}
                   disabled={!!migratingInst}
-                  className="w-full px-4 py-3 text-left border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-50 flex items-center justify-between"
+                  className="w-full px-4 py-3.5 text-left border border-slate-200 rounded-xl hover:bg-slate-50 active:bg-slate-100 disabled:opacity-50 flex items-center justify-between min-h-[48px] touch-target"
                 >
-                  <span>{h.name}</span>
-                  <span className="text-slate-500 text-sm">{(instanceImageStatus[h.id]?.instance_count ?? 0)} 实例</span>
+                  <span className="truncate">{h.name}</span>
+                  <span className="text-slate-500 text-sm flex-shrink-0 ml-2">{(instanceImageStatus[h.id]?.instance_count ?? 0)} 实例</span>
                 </button>
               ))}
             </div>
-            <button type="button" onClick={() => setMigrateModal(null)} className="w-full py-3 border border-slate-300 rounded-xl active:bg-slate-50">
+            <button type="button" onClick={() => setMigrateModal(null)} className="w-full py-3.5 border border-slate-300 rounded-xl active:bg-slate-50 min-h-[48px] touch-target">
               取消
             </button>
           </div>

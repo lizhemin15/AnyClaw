@@ -159,6 +159,8 @@ export default function AdminConfig() {
       api_base: newChannel.api_base.trim() || 'https://api.openai.com/v1',
       enabled: true,
       models: [{ id: genModelId(), name: (newChannel.model || 'gpt-4o').trim() || 'gpt-4o', enabled: true }],
+      daily_tokens_limit: 0,
+      qps_limit: 0,
     }
     const prev = form.channels || []
     setForm({
@@ -601,7 +603,10 @@ export default function AdminConfig() {
         {/* AI 渠道配置 */}
         <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-            <h2 className="font-semibold text-slate-800">AI 渠道配置</h2>
+            <div>
+              <h2 className="font-semibold text-slate-800">AI 渠道配置</h2>
+              <p className="text-xs text-slate-500 mt-0.5">可配置渠道的日 tokens 上限、QPS 限制，调度器将自动避开超限渠道</p>
+            </div>
             {!addingChannel ? (
               <button
                 type="button"
@@ -704,7 +709,7 @@ export default function AdminConfig() {
                     <span className="font-medium text-slate-800 min-w-[100px]">{ch.name}</span>
                     <span className="text-xs text-slate-400">{ch.enabled ? '已启用' : '未启用'}</span>
                     {editingChannel === ch.id ? (
-                      <div className="flex gap-2 flex-1 flex-wrap">
+                      <div className="flex gap-2 flex-1 flex-wrap items-center">
                         <input
                           type="password"
                           value={ch.api_key}
@@ -726,6 +731,25 @@ export default function AdminConfig() {
                           placeholder="模型"
                           className="px-3 py-1.5 border border-slate-300 rounded text-sm font-mono w-32"
                         />
+                        <input
+                          type="number"
+                          min={0}
+                          value={ch.daily_tokens_limit ?? 0}
+                          onChange={(e) => updateChannel(ch.id, { daily_tokens_limit: parseInt(e.target.value, 10) || 0 })}
+                          placeholder="日 tokens 上限"
+                          title="日 tokens 上限，0 表示不限制"
+                          className="px-3 py-1.5 border border-slate-300 rounded text-sm w-28"
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.1}
+                          value={ch.qps_limit ?? 0}
+                          onChange={(e) => updateChannel(ch.id, { qps_limit: parseFloat(e.target.value) || 0 })}
+                          placeholder="QPS 上限"
+                          title="每秒请求数上限，0 表示不限制"
+                          className="px-3 py-1.5 border border-slate-300 rounded text-sm w-24"
+                        />
                         <button type="button" onClick={() => setEditingChannel(null)} className="text-sm text-slate-600">
                           完成
                         </button>
@@ -733,6 +757,8 @@ export default function AdminConfig() {
                     ) : (
                       <span className="text-sm text-slate-500 truncate max-w-[200px]">
                         {ch.api_key ? '****' + ch.api_key.slice(-4) : '—'} · {ch.api_base || '—'} · {(ch.models || [])[0]?.name || 'gpt-4o'}
+                        {(ch.daily_tokens_limit ?? 0) > 0 && ` · 日限 ${(ch.daily_tokens_limit ?? 0).toLocaleString()} tokens`}
+                        {(ch.qps_limit ?? 0) > 0 && ` · QPS ${ch.qps_limit}`}
                       </span>
                     )}
                     {editingChannel !== ch.id && (
