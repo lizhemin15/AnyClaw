@@ -20,6 +20,7 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
   const isConfig = loc.pathname.startsWith('/admin/config')
   const isStats = loc.pathname.startsWith('/admin/stats')
   const isChat = loc.pathname.startsWith('/instances/')
+  const isHelp = loc.pathname === '/help'
 
   return (
     <div className={`min-h-screen bg-slate-50 flex flex-col ${isChat ? 'pb-0' : 'pb-16 sm:pb-0'}`}>
@@ -51,6 +52,12 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
               🪙 {user.energy ?? 0}
             </SafeLink>
           )}
+          <SafeLink
+            to="/help"
+            className={`px-3 py-2 text-sm rounded-lg -m-1 touch-target ${isHelp ? 'text-slate-800 font-medium bg-slate-100' : 'text-slate-600 active:bg-slate-100'}`}
+          >
+            帮助
+          </SafeLink>
           <button
             onClick={onLogout}
             className="px-3 py-2 text-sm text-slate-600 active:bg-slate-100 rounded-lg -m-1 touch-target"
@@ -64,14 +71,20 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
       </main>
       {/* 交流群链接 */}
       {!isChat && (
-        <footer className="py-2 pb-16 sm:pb-2 text-center">
-          <button
-            type="button"
-            onClick={() => setShowQqModal(true)}
-            className="text-sm text-slate-500 hover:text-slate-700 active:opacity-70"
-          >
-            加入 OpenClaw 探索群
-          </button>
+        <footer className="py-2 pb-16 sm:pb-2 text-center flex flex-col items-center gap-1">
+          <div className="flex items-center gap-3">
+            <SafeLink to="/help" className="text-sm text-slate-500 hover:text-slate-700 active:opacity-70">
+              帮助
+            </SafeLink>
+            <span className="text-slate-300">|</span>
+            <button
+              type="button"
+              onClick={() => setShowQqModal(true)}
+              className="text-sm text-slate-500 hover:text-slate-700 active:opacity-70"
+            >
+              加入 OpenClaw 探索群
+            </button>
+          </div>
         </footer>
       )}
       {showQqModal && (

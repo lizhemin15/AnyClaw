@@ -23,6 +23,7 @@ import Usage from './pages/Usage'
 import AdminConfig from './pages/AdminConfig'
 import AdminStats from './pages/AdminStats'
 import Setup from './pages/Setup'
+import Help from './pages/Help'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (!isAuthenticated()) {
@@ -175,6 +176,11 @@ export default function App() {
               <Usage />
             </Layout>
           </ProtectedRoute>
+        } />
+        <Route path="/help" element={
+          <Layout user={user} onLogout={handleLogout}>
+            <Help />
+          </Layout>
         } />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
