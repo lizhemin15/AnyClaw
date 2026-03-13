@@ -255,7 +255,7 @@ func (h *Handler) HostMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lines := strings.Split(out, "\n")
-	for i, line := range lines {
+	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
