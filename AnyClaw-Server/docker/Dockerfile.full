@@ -28,7 +28,9 @@ RUN apk add --no-cache \
   bash \
   git \
   python3 \
-  py3-pip
+  py3-pip \
+  gcompat \
+  libc6-compat
 
 # Headless browser support for agent-browser / Playwright / Puppeteer.
 # Use Alpine's system Chromium (~70 MB) instead of Playwright's self-download (~300 MB).
