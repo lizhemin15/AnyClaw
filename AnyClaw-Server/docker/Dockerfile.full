@@ -76,9 +76,15 @@ COPY config/config.example.json /opt/anyclaw/config.example.json
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# Bake workspace skills into a fixed image path that is never shadowed by the
+# workspace volume mount.  The skills loader picks this up via ANYCLAW_BUILTIN_SKILLS.
+COPY --from=builder /src/workspace/skills /opt/anyclaw/skills
+
 # Create anyclaw home directory (bakes workspace into image layer;
 # entrypoint.sh will sync it into any mounted volume on startup)
 RUN /usr/local/bin/anyclaw onboard
+
+WORKDIR /root
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["gateway"]

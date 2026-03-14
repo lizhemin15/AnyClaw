@@ -1,6 +1,9 @@
 #!/bin/sh
 set -e
 
+# Built-in skills baked into the image (never shadowed by the workspace volume).
+export ANYCLAW_BUILTIN_SKILLS=/opt/anyclaw/skills
+
 # First-run: neither config nor workspace exists.
 # If config.json is already mounted but workspace is missing we skip onboard to
 # avoid the interactive "Overwrite? (y/n)" prompt hanging in a non-TTY container.
