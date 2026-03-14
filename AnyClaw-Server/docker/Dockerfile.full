@@ -40,6 +40,7 @@ RUN apk add --no-cache \
   freetype \
   harfbuzz \
   ttf-freefont \
+  font-wqy-zenhei \
   fontconfig && \
   CHROMIUM_BIN=$(command -v chromium-browser 2>/dev/null || command -v chromium) && \
   printf '#!/bin/sh\nexec %s --no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage "$@"\n' "$CHROMIUM_BIN" \
