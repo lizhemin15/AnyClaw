@@ -17,4 +17,4 @@ fi
 # User-edited files outside skills/ are never overwritten.
 anyclaw sync-workspace
 
-exec anyclaw gateway "$@"
+exec anyclaw ${@:-gateway}

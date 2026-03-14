@@ -29,7 +29,32 @@ RUN apk add --no-cache \
   git \
   python3 \
   py3-pip
-ENV TZ=Asia/Shanghai
+
+# Headless browser support for agent-browser / Playwright / Puppeteer.
+# Use Alpine's system Chromium (~70 MB) instead of Playwright's self-download (~300 MB).
+# A wrapper script injects --no-sandbox universally so every caller works in Docker
+# without needing SYS_ADMIN capability or per-tool configuration.
+RUN apk add --no-cache \
+  chromium \
+  nss \
+  freetype \
+  harfbuzz \
+  ttf-freefont \
+  fontconfig && \
+  CHROMIUM_BIN=$(command -v chromium-browser 2>/dev/null || command -v chromium) && \
+  printf '#!/bin/sh\nexec %s --no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage "$@"\n' "$CHROMIUM_BIN" \
+    > /usr/local/bin/chromium-wrapper && \
+  chmod +x /usr/local/bin/chromium-wrapper
+ENV TZ=Asia/Shanghai \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/local/bin/chromium-wrapper \
+    PUPPETEER_SKIP_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/chromium-wrapper \
+    CHROME_BIN=/usr/local/bin/chromium-wrapper \
+    CHROME_PATH=/usr/local/bin/chromium-wrapper
+
+# Pre-install agent-browser CLI; skip its own Chromium download via env vars above
+RUN npm install -g agent-browser
 
 # 预装 Skillhub CLI（腾讯云镜像，国内加速、合规）
 RUN curl -fsSL https://skillhub-1388575217.cos.ap-guangzhou.myqcloud.com/install/install.sh | bash -s -- --cli-only || true
@@ -44,9 +69,12 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 COPY --from=builder /src/build/anyclaw /usr/local/bin/anyclaw
 
 COPY config/config.example.json /opt/anyclaw/config.example.json
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-# Create anyclaw home directory
+# Create anyclaw home directory (bakes workspace into image layer;
+# entrypoint.sh will sync it into any mounted volume on startup)
 RUN /usr/local/bin/anyclaw onboard
 
-ENTRYPOINT ["anyclaw"]
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["gateway"]

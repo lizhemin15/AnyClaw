@@ -245,8 +245,9 @@ func (h *Handler) HostMetrics(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(resp)
 		return
 	}
-	// 使用 POSIX 格式和多种命令兼容不同发行版（grep 不用 -E 以兼容 BusyBox）
-	cmd := `df -hP / 2>/dev/null || df -h / 2>/dev/null | tail -1; free -m 2>&1 | grep -F Mem:; cat /proc/loadavg 2>/dev/null`
+	// 不做任何 2>/dev/null 静默，保留全部输出以便调试；不使用 || 避免 shell 兼容性问题。
+	// 解析器会跳过无法识别的行（df 表头、错误信息等），多余输出不影响结果。
+	cmd := `df -h / 2>&1; free -m 2>&1; cat /proc/loadavg 2>&1`
 	out, err := h.checker.RunCommand(host, cmd)
 	if err != nil {
 		resp.Err = err.Error()
