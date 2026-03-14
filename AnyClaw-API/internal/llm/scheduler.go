@@ -14,7 +14,8 @@ type UsageByProvider interface {
 
 // ModelScheduler 模型渠道调度器：按日 tokens 上限、QPS 限制过滤后，负载均衡选择请求数最少的渠道
 type ModelScheduler struct {
-	mu       sync.RWMutex
+	mu     sync.Mutex // 保护 usage 的选择+记录，Pick 整体原子执行以消除并发竞态
+	limMu  sync.RWMutex
 	usage    map[string]int64 // key: channelID|apiBase，请求计数
 	limiters map[string]*rate.Limiter
 	db       UsageByProvider
@@ -38,17 +39,22 @@ func (s *ModelScheduler) getLimiter(key string, qps float64) *rate.Limiter {
 	if qps <= 0 {
 		return nil
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if l, ok := s.limiters[key]; ok {
+	s.limMu.RLock()
+	l, ok := s.limiters[key]
+	s.limMu.RUnlock()
+	if ok {
 		return l
 	}
-	// burst 设为 qps*2，至少 1，避免突发被限
+	s.limMu.Lock()
+	defer s.limMu.Unlock()
+	if l, ok = s.limiters[key]; ok {
+		return l
+	}
 	burst := int(qps * 2)
 	if burst < 1 {
 		burst = 1
 	}
-	l := rate.NewLimiter(rate.Limit(qps), burst)
+	l = rate.NewLimiter(rate.Limit(qps), burst)
 	s.limiters[key] = l
 	return l
 }
@@ -91,8 +97,11 @@ func (s *ModelScheduler) Pick(model string, candidates []config.ChannelEndpoint)
 		return config.ChannelEndpoint{}, false
 	}
 
-	// 按负载选最低，若有多个并列则按顺序尝试 QPS
+	// 「读取负载 → 选择渠道 → 记录请求」必须在同一把锁内完成，否则并发请求会同时
+	// 读到相同的最低负载，全部选中同一个渠道（通常是列表第一个），导致负载均衡失效。
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	var minLoad int64 = -1
 	for _, ep := range available {
 		n := s.usage[s.endpointKey(ep)]
@@ -106,24 +115,26 @@ func (s *ModelScheduler) Pick(model string, candidates []config.ChannelEndpoint)
 			bestCandidates = append(bestCandidates, ep)
 		}
 	}
-	s.mu.Unlock()
 
 	for _, ep := range bestCandidates {
 		if ep.QPSLimit <= 0 {
-			s.recordUsage(ep)
+			s.usage[s.endpointKey(ep)]++
 			return ep, true
 		}
+		// getLimiter 使用独立的 limMu，不会和外层 mu 死锁
 		l := s.getLimiter(s.endpointKey(ep), ep.QPSLimit)
 		if l != nil && l.Allow() {
-			s.recordUsage(ep)
+			s.usage[s.endpointKey(ep)]++
 			return ep, true
 		}
 	}
 	// 全部 QPS 受限时仍选第一个（上游可能 429）
-	s.recordUsage(bestCandidates[0])
+	s.usage[s.endpointKey(bestCandidates[0])]++
 	return bestCandidates[0], true
 }
 
+// recordUsage is kept for external callers (e.g. tests), but Pick now inlines
+// the increment inside its own critical section.
 func (s *ModelScheduler) recordUsage(ep config.ChannelEndpoint) {
 	s.mu.Lock()
 	s.usage[s.endpointKey(ep)]++
