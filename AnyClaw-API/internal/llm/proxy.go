@@ -145,59 +145,90 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 	req["model"] = model
 	candidates := cfg.FindChannelsForModel(model)
-	var apiBase, apiKey, channelName string
-	if len(candidates) > 0 {
-		if ep, ok := p.scheduler.Pick(model, candidates); ok {
-			apiBase, apiKey, channelName = ep.APIBase, ep.APIKey, ep.ChannelName
-		}
-	}
-	if apiBase == "" || apiKey == "" {
-		log.Printf("[llm] no key for model %q", model)
+	if len(candidates) == 0 {
+		log.Printf("[llm] no channel for model %q", model)
 		http.Error(w, `{"error":{"message":"no provider configured for model"}}`, http.StatusServiceUnavailable)
 		return
 	}
 
 	bodyBytes, _ := json.Marshal(req)
-	reqURL := strings.TrimSuffix(apiBase, "/") + "/chat/completions"
-	proxyReq, err := http.NewRequestWithContext(r.Context(), "POST", reqURL, bytes.NewReader(bodyBytes))
-	if err != nil {
-		http.Error(w, `{"error":{"message":"internal error"}}`, http.StatusInternalServerError)
-		return
+
+	// 最多尝试 min(len(candidates), 3) 次；每次 5xx 后换下一个渠道
+	type attempt struct {
+		ep         config.ChannelEndpoint
+		statusCode int
+		respHeader http.Header
+		respBody   []byte
 	}
-	proxyReq.Header.Set("Content-Type", "application/json")
-	proxyReq.Header.Set("Authorization", "Bearer "+apiKey)
-	if u, err := url.Parse(reqURL); err == nil && u.Host != "" {
-		host := u.Hostname()
-		if p := u.Port(); p != "" && p != "443" && p != "80" {
-			host = u.Host
+	maxTries := len(candidates)
+	if maxTries > 3 {
+		maxTries = 3
+	}
+	var final *attempt
+	for try := 0; try < maxTries; try++ {
+		ep, ok := p.scheduler.Pick(model, candidates)
+		if !ok {
+			break
 		}
-		proxyReq.Host = host
+		reqURL := strings.TrimSuffix(ep.APIBase, "/") + "/chat/completions"
+		proxyReq, err := http.NewRequestWithContext(r.Context(), "POST", reqURL, bytes.NewReader(bodyBytes))
+		if err != nil {
+			p.scheduler.Done(ep)
+			break
+		}
+		proxyReq.Header.Set("Content-Type", "application/json")
+		proxyReq.Header.Set("Authorization", "Bearer "+ep.APIKey)
+		if u, err := url.Parse(reqURL); err == nil && u.Host != "" {
+			host := u.Hostname()
+			if pt := u.Port(); pt != "" && pt != "443" && pt != "80" {
+				host = u.Host
+			}
+			proxyReq.Host = host
+		}
+		resp, err := p.client.Do(proxyReq)
+		p.scheduler.Done(ep)
+		if err != nil {
+			log.Printf("[llm] upstream error (try %d): channel=%s err=%v", try+1, ep.ChannelName, err)
+			p.scheduler.RecordFailure(ep)
+			continue
+		}
+		rb, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode >= 500 {
+			log.Printf("[llm] upstream 5xx (try %d): channel=%s status=%d body=%s — trying next", try+1, ep.ChannelName, resp.StatusCode, string(rb))
+			p.scheduler.RecordFailure(ep)
+			if try < maxTries-1 {
+				continue
+			}
+		}
+		final = &attempt{ep: ep, statusCode: resp.StatusCode, respHeader: resp.Header, respBody: rb}
+		break
 	}
 
-	resp, err := p.client.Do(proxyReq)
-	if err != nil {
-		log.Printf("[llm] proxy error: url=%s model=%s err=%v", reqURL, model, err)
-		http.Error(w, `{"error":{"message":"upstream error"}}`, http.StatusBadGateway)
+	if final == nil {
+		http.Error(w, `{"error":{"message":"all upstream channels failed"}}`, http.StatusBadGateway)
 		return
 	}
-	defer resp.Body.Close()
 
-	for k, v := range resp.Header {
+	for k, v := range final.respHeader {
 		if strings.ToLower(k) == "content-type" || strings.ToLower(k) == "content-length" {
 			for _, vv := range v {
 				w.Header().Add(k, vv)
 			}
 		}
 	}
-	w.WriteHeader(resp.StatusCode)
+	w.WriteHeader(final.statusCode)
+	w.Write(final.respBody)
 
-	respBody, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("[llm] upstream non-200: url=%s model=%s status=%d body=%s", reqURL, model, resp.StatusCode, string(respBody))
+	respBody := final.respBody
+	channelName := final.ep.ChannelName
+	apiBase := final.ep.APIBase
+
+	if final.statusCode != http.StatusOK {
+		log.Printf("[llm] upstream non-200: channel=%s status=%d body=%s", channelName, final.statusCode, string(respBody))
 	}
-	w.Write(respBody)
 
-	if resp.StatusCode == http.StatusOK {
+	if final.statusCode == http.StatusOK {
 		// 对话成功说明实例在运行，若 DB 误标为 error 则纠正
 		if p.db != nil && instanceID != "" {
 			instID, _ := strconv.ParseInt(instanceID, 10, 64)

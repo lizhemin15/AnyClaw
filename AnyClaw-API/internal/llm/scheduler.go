@@ -2,6 +2,7 @@ package llm
 
 import (
 	"sync"
+	"time"
 
 	"github.com/anyclaw/anyclaw-api/internal/config"
 	"golang.org/x/time/rate"
@@ -12,23 +13,35 @@ type UsageByProvider interface {
 	GetUsageByProviderToday(providers []string) (map[string]int64, error)
 }
 
-// ModelScheduler 模型渠道调度器：按日 tokens 上限、QPS 限制过滤后，负载均衡选择请求数最少的渠道
+// failureCooldown 是渠道发生上游 5xx 后被暂时排除的冷却时间。
+// 冷却期内仍可作为兜底（当所有渠道都在冷却时）。
+const failureCooldown = 60 * time.Second
+
+// ModelScheduler 模型渠道调度器。
+// 选渠道逻辑：
+//  1. 过滤日 tokens 超限的渠道
+//  2. 优先使用不在故障冷却期内的健康渠道
+//  3. 在健康渠道中按当前进行中请求数（负载）最小的为准
+//  4. 负载相同时用 counter 轮转，避免永远选同一个渠道
+//  5. 通过 QPS 令牌桶做最后过滤；全部 QPS 受限时仍选一个（允许上游 429）
 type ModelScheduler struct {
-	mu     sync.Mutex // 保护 usage 的选择+记录，Pick 整体原子执行以消除并发竞态
-	limMu  sync.RWMutex
-	usage    map[string]int64 // key: channelID|apiBase，请求计数
+	mu       sync.Mutex
+	limMu    sync.RWMutex
+	usage    map[string]int64       // 进行中请求计数，key: channelID|apiBase
+	failures map[string]time.Time   // 最近一次失败时间，用于冷却期过滤
+	counter  uint64                 // 等负载轮转计数器
 	limiters map[string]*rate.Limiter
 	db       UsageByProvider
 }
 
 // NewModelScheduler 创建模型调度器，db 可为 nil（不查日 tokens）
 func NewModelScheduler(database UsageByProvider) *ModelScheduler {
-	s := &ModelScheduler{
+	return &ModelScheduler{
 		usage:    make(map[string]int64),
+		failures: make(map[string]time.Time),
 		limiters: make(map[string]*rate.Limiter),
 		db:       database,
 	}
-	return s
 }
 
 func (s *ModelScheduler) endpointKey(ep config.ChannelEndpoint) string {
@@ -59,82 +72,118 @@ func (s *ModelScheduler) getLimiter(key string, qps float64) *rate.Limiter {
 	return l
 }
 
-// Pick 从候选中选择渠道：优先过滤日 tokens 超限、QPS 超限的，再按负载最低选
+// RecordFailure 记录渠道上游错误，使其进入冷却期。
+// 在 proxy 收到 5xx 响应后调用。
+func (s *ModelScheduler) RecordFailure(ep config.ChannelEndpoint) {
+	s.mu.Lock()
+	s.failures[s.endpointKey(ep)] = time.Now()
+	s.mu.Unlock()
+}
+
+// Pick 从候选列表中选择最优渠道。
 func (s *ModelScheduler) Pick(model string, candidates []config.ChannelEndpoint) (config.ChannelEndpoint, bool) {
 	if len(candidates) == 0 {
 		return config.ChannelEndpoint{}, false
 	}
 
-	// 日 tokens 过滤
-	var available []config.ChannelEndpoint
-	if s.db != nil {
-		providers := make([]string, 0, len(candidates))
-		for _, ep := range candidates {
-			if ep.DailyTokensLimit > 0 {
-				providers = append(providers, ep.APIBase)
-			}
-		}
-		usageMap := make(map[string]int64)
-		if len(providers) > 0 {
-			if m, err := s.db.GetUsageByProviderToday(providers); err == nil {
-				usageMap = m
-			}
-		}
-		for _, ep := range candidates {
-			if ep.DailyTokensLimit <= 0 {
-				available = append(available, ep)
-				continue
-			}
-			used := usageMap[ep.APIBase]
-			if used < ep.DailyTokensLimit {
-				available = append(available, ep)
-			}
-		}
-	} else {
-		available = candidates
-	}
+	available := s.filterByDailyTokens(candidates)
 	if len(available) == 0 {
 		return config.ChannelEndpoint{}, false
 	}
 
-	// 「读取负载 → 选择渠道 → 记录请求」必须在同一把锁内完成，否则并发请求会同时
-	// 读到相同的最低负载，全部选中同一个渠道（通常是列表第一个），导致负载均衡失效。
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	var minLoad int64 = -1
+	now := time.Now()
+
+	// 过滤冷却期内的故障渠道；若全部都在冷却，则降级使用全部可用渠道
+	healthy := make([]config.ChannelEndpoint, 0, len(available))
 	for _, ep := range available {
+		if t, failed := s.failures[s.endpointKey(ep)]; !failed || now.Sub(t) >= failureCooldown {
+			healthy = append(healthy, ep)
+		}
+	}
+	if len(healthy) == 0 {
+		healthy = available
+	}
+
+	// 找当前最低负载
+	var minLoad int64 = -1
+	for _, ep := range healthy {
 		n := s.usage[s.endpointKey(ep)]
 		if minLoad < 0 || n < minLoad {
 			minLoad = n
 		}
 	}
-	var bestCandidates []config.ChannelEndpoint
-	for _, ep := range available {
+
+	// 收集负载相同的候选渠道
+	best := make([]config.ChannelEndpoint, 0, len(healthy))
+	for _, ep := range healthy {
 		if s.usage[s.endpointKey(ep)] == minLoad {
-			bestCandidates = append(bestCandidates, ep)
+			best = append(best, ep)
 		}
 	}
 
-	for _, ep := range bestCandidates {
+	// 用 counter 轮转起始位，避免等负载时永远选同一个渠道
+	n := uint64(len(best))
+	start := int(s.counter % n)
+	s.counter++
+
+	for i := 0; i < len(best); i++ {
+		ep := best[(start+i)%len(best)]
 		if ep.QPSLimit <= 0 {
 			s.usage[s.endpointKey(ep)]++
 			return ep, true
 		}
-		// getLimiter 使用独立的 limMu，不会和外层 mu 死锁
 		l := s.getLimiter(s.endpointKey(ep), ep.QPSLimit)
 		if l != nil && l.Allow() {
 			s.usage[s.endpointKey(ep)]++
 			return ep, true
 		}
 	}
-	// 全部 QPS 受限时仍选第一个（上游可能 429）
-	s.usage[s.endpointKey(bestCandidates[0])]++
-	return bestCandidates[0], true
+
+	// 全部 QPS 受限时仍选轮转位的第一个（允许上游 429）
+	ep := best[start]
+	s.usage[s.endpointKey(ep)]++
+	return ep, true
 }
 
-// recordUsage is kept for external callers (e.g. tests), but Pick now inlines
-// the increment inside its own critical section.
+// Done 在请求完成后递减负载计数（成功或失败均需调用）。
+func (s *ModelScheduler) Done(ep config.ChannelEndpoint) {
+	s.mu.Lock()
+	k := s.endpointKey(ep)
+	if s.usage[k] > 0 {
+		s.usage[k]--
+	}
+	s.mu.Unlock()
+}
+
+func (s *ModelScheduler) filterByDailyTokens(candidates []config.ChannelEndpoint) []config.ChannelEndpoint {
+	if s.db == nil {
+		return candidates
+	}
+	providers := make([]string, 0, len(candidates))
+	for _, ep := range candidates {
+		if ep.DailyTokensLimit > 0 {
+			providers = append(providers, ep.APIBase)
+		}
+	}
+	usageMap := make(map[string]int64)
+	if len(providers) > 0 {
+		if m, err := s.db.GetUsageByProviderToday(providers); err == nil {
+			usageMap = m
+		}
+	}
+	out := make([]config.ChannelEndpoint, 0, len(candidates))
+	for _, ep := range candidates {
+		if ep.DailyTokensLimit <= 0 || usageMap[ep.APIBase] < ep.DailyTokensLimit {
+			out = append(out, ep)
+		}
+	}
+	return out
+}
+
+// recordUsage kept for external callers / tests.
 func (s *ModelScheduler) recordUsage(ep config.ChannelEndpoint) {
 	s.mu.Lock()
 	s.usage[s.endpointKey(ep)]++
