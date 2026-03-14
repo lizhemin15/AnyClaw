@@ -12,4 +12,9 @@ if [ ! -d "${HOME}/.anyclaw/workspace" ] && [ ! -f "${HOME}/.anyclaw/config.json
     exit 0
 fi
 
+# Sync built-in workspace files on every start so that image updates (new/changed
+# skills, etc.) propagate into the mounted workspace volume automatically.
+# User-edited files outside skills/ are never overwritten.
+anyclaw sync-workspace
+
 exec anyclaw gateway "$@"

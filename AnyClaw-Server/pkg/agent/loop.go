@@ -317,18 +317,21 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 
 			// Process message
 			func() {
-				// TODO: Re-enable media cleanup after inbound media is properly consumed by the agent.
-				// Currently disabled because files are deleted before the LLM can access their content.
-				// defer func() {
-				// 	if al.mediaStore != nil && msg.MediaScope != "" {
-				// 		if releaseErr := al.mediaStore.ReleaseAll(msg.MediaScope); releaseErr != nil {
-				// 			logger.WarnCF("agent", "Failed to release media", map[string]any{
-				// 				"scope": msg.MediaScope,
-				// 				"error": releaseErr.Error(),
-				// 			})
-				// 		}
-				// 	}
-				// }()
+				// Clean up inbound media files once processMessage returns.
+				// Safe: resolveMediaRefs converts all media:// refs to base64 data URLs at the
+				// start of runAgentLoop, before any LLM call. After processMessage returns all
+				// goroutines inside it have been synchronised (WaitGroup), so original files
+				// are no longer needed.
+				defer func() {
+					if al.mediaStore != nil && msg.MediaScope != "" {
+						if releaseErr := al.mediaStore.ReleaseAll(msg.MediaScope); releaseErr != nil {
+							logger.WarnCF("agent", "Failed to release media", map[string]any{
+								"scope": msg.MediaScope,
+								"error": releaseErr.Error(),
+							})
+						}
+					}
+				}()
 
 				response, err := al.processMessage(ctx, msg)
 				if err != nil {
@@ -1672,10 +1675,23 @@ func (al *AgentLoop) summarizeBatch(
 // estimateTokens estimates the number of tokens in a message list.
 // Uses a safe heuristic of 2.5 characters per token to account for CJK and other
 // overheads better than the previous 3 chars/token.
+// All text-bearing fields are counted: Content, ReasoningContent, ToolCallID, and
+// per-ToolCall ID/Name/Arguments — tool call arguments can be substantial and were
+// previously omitted, causing underestimates in tool-heavy conversations.
 func (al *AgentLoop) estimateTokens(messages []providers.Message) int {
 	totalChars := 0
 	for _, m := range messages {
 		totalChars += utf8.RuneCountInString(m.Content)
+		totalChars += utf8.RuneCountInString(m.ReasoningContent)
+		totalChars += utf8.RuneCountInString(m.ToolCallID)
+		for _, tc := range m.ToolCalls {
+			totalChars += utf8.RuneCountInString(tc.ID)
+			totalChars += utf8.RuneCountInString(tc.Name)
+			if tc.Function != nil {
+				totalChars += utf8.RuneCountInString(tc.Function.Name)
+				totalChars += utf8.RuneCountInString(tc.Function.Arguments)
+			}
+		}
 	}
 	// 2.5 chars per token = totalChars * 2 / 5
 	return totalChars * 2 / 5

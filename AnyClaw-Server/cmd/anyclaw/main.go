@@ -35,6 +35,7 @@ func NewAnyClawCommand() *cobra.Command {
 
 	cmd.AddCommand(
 		onboard.NewOnboardCommand(),
+		onboard.NewSyncWorkspaceCommand(),
 		agent.NewAgentCommand(),
 		auth.NewAuthCommand(),
 		gateway.NewGatewayCommand(),

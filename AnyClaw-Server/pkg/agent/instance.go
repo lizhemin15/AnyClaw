@@ -122,6 +122,15 @@ func NewAgentInstance(
 		maxTokens = 8192
 	}
 
+	// contextWindow is the model's full input context window size, used to determine
+	// when to trigger conversation summarization. It is intentionally separate from
+	// maxTokens (which limits *output* tokens). Defaults to 131072 (128k) to match
+	// most modern models and prevent premature summarization.
+	contextWindow := defaults.ContextWindow
+	if contextWindow <= 0 {
+		contextWindow = 131072
+	}
+
 	temperature := 0.7
 	if defaults.Temperature != nil {
 		temperature = *defaults.Temperature
@@ -219,7 +228,7 @@ func NewAgentInstance(
 		MaxTokens:                 maxTokens,
 		Temperature:               temperature,
 		ThinkingLevel:             thinkingLevel,
-		ContextWindow:             maxTokens,
+		ContextWindow:             contextWindow,
 		SummarizeMessageThreshold: summarizeMessageThreshold,
 		SummarizeTokenPercent:     summarizeTokenPercent,
 		Provider:                  provider,
