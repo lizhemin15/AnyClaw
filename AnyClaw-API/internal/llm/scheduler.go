@@ -13,9 +13,13 @@ type UsageByProvider interface {
 	GetUsageByProviderToday(providers []string) (map[string]int64, error)
 }
 
-// failureCooldown 是渠道发生上游 5xx 后被暂时排除的冷却时间。
-// 冷却期内仍可作为兜底（当所有渠道都在冷却时）。
-const failureCooldown = 60 * time.Second
+// 渠道冷却时长：
+//   - CooldownTransient  瞬时错误（随机 5xx / 网络抖动），60 秒后恢复
+//   - CooldownDailyLimit 配额用尽 / 429 / 余额不足，冷却到当天结束
+const (
+	CooldownTransient  = 60 * time.Second
+	CooldownDailyLimit = 24 * time.Hour
+)
 
 // ModelScheduler 模型渠道调度器。
 // 选渠道逻辑：
@@ -27,9 +31,9 @@ const failureCooldown = 60 * time.Second
 type ModelScheduler struct {
 	mu       sync.Mutex
 	limMu    sync.RWMutex
-	usage    map[string]int64       // 进行中请求计数，key: channelID|apiBase
-	failures map[string]time.Time   // 最近一次失败时间，用于冷却期过滤
-	counter  uint64                 // 等负载轮转计数器
+	usage    map[string]int64     // 进行中请求计数，key: channelID|apiBase
+	failures map[string]time.Time // 渠道冷却到期时间（到期前不选用）
+	counter  uint64               // 等负载轮转计数器
 	limiters map[string]*rate.Limiter
 	db       UsageByProvider
 }
@@ -72,11 +76,12 @@ func (s *ModelScheduler) getLimiter(key string, qps float64) *rate.Limiter {
 	return l
 }
 
-// RecordFailure 记录渠道上游错误，使其进入冷却期。
-// 在 proxy 收到 5xx 响应后调用。
-func (s *ModelScheduler) RecordFailure(ep config.ChannelEndpoint) {
+// RecordFailure 标记渠道进入冷却期，dur 决定冷却时长。
+//   - CooldownTransient  用于瞬时 5xx / 网络错误
+//   - CooldownDailyLimit 用于 429 / 配额用尽 / 余额不足
+func (s *ModelScheduler) RecordFailure(ep config.ChannelEndpoint, dur time.Duration) {
 	s.mu.Lock()
-	s.failures[s.endpointKey(ep)] = time.Now()
+	s.failures[s.endpointKey(ep)] = time.Now().Add(dur)
 	s.mu.Unlock()
 }
 
@@ -99,7 +104,7 @@ func (s *ModelScheduler) Pick(model string, candidates []config.ChannelEndpoint)
 	// 过滤冷却期内的故障渠道；若全部都在冷却，则降级使用全部可用渠道
 	healthy := make([]config.ChannelEndpoint, 0, len(available))
 	for _, ep := range available {
-		if t, failed := s.failures[s.endpointKey(ep)]; !failed || now.Sub(t) >= failureCooldown {
+		if until, failed := s.failures[s.endpointKey(ep)]; !failed || now.After(until) {
 			healthy = append(healthy, ep)
 		}
 	}

@@ -189,14 +189,16 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		p.scheduler.Done(ep)
 		if err != nil {
 			log.Printf("[llm] upstream error (try %d): channel=%s err=%v", try+1, ep.ChannelName, err)
-			p.scheduler.RecordFailure(ep)
+			p.scheduler.RecordFailure(ep, CooldownTransient)
 			continue
 		}
 		rb, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		if resp.StatusCode >= 500 {
-			log.Printf("[llm] upstream 5xx (try %d): channel=%s status=%d body=%s — trying next", try+1, ep.ChannelName, resp.StatusCode, string(rb))
-			p.scheduler.RecordFailure(ep)
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			dur := cooldownFor(resp.StatusCode, rb)
+			log.Printf("[llm] upstream error (try %d): channel=%s status=%d cooldown=%v body=%s",
+				try+1, ep.ChannelName, resp.StatusCode, dur, truncate(string(rb), 200))
+			p.scheduler.RecordFailure(ep, dur)
 			if try < maxTries-1 {
 				continue
 			}
@@ -342,4 +344,46 @@ func extractBearer(r *http.Request) string {
 		return strings.TrimSpace(after)
 	}
 	return ""
+}
+
+// quotaPatterns 是上游响应体中表示"配额用尽 / 余额不足"的特征字符串（全小写）。
+// 匹配到任意一项时渠道将被冷却整天，而非短暂 60 秒。
+var quotaPatterns = []string{
+	"quota",
+	"rate_limit_exceeded",
+	"appidnoautherror",   // 讯飞 AppId 无权限 / 超量
+	"tokens_per_day",
+	"daily_limit",
+	"insufficient_quota",
+	"insufficient_balance",
+	"no balance",
+	"balance insufficient",
+	"billing",
+	"11200",             // one-api 配额超限 code
+	"exceeded your current quota",
+	"you exceeded",
+	"credit",
+}
+
+// cooldownFor 根据 HTTP 状态码和响应体判断合适的冷却时长。
+// 429 或配额用尽类错误返回 CooldownDailyLimit；一般 5xx 返回 CooldownTransient。
+func cooldownFor(statusCode int, body []byte) time.Duration {
+	if statusCode == http.StatusTooManyRequests {
+		return CooldownDailyLimit
+	}
+	lower := strings.ToLower(string(body))
+	for _, p := range quotaPatterns {
+		if strings.Contains(lower, p) {
+			return CooldownDailyLimit
+		}
+	}
+	return CooldownTransient
+}
+
+// truncate 截断字符串到 maxLen 个字符，用于日志输出。
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "…"
 }
