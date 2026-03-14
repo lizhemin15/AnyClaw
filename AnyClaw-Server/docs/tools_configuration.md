@@ -179,7 +179,7 @@ The skills tool configures skill discovery and installation via registries like 
 | Config                             | Type   | Default              | Description             |
 | ---------------------------------- | ------ | -------------------- | ----------------------- |
 | `registries.clawhub.enabled`       | bool   | true                 | Enable ClawHub registry |
-| `registries.clawhub.base_url`      | string | `https://skillhub.tencent.com` | Registry base URL (Skillhub ???????) |
+| `registries.clawhub.base_url`      | string | `https://clawhub.ai` | Registry base URL |
 | `registries.clawhub.auth_token`    | string | `""`                 | Optional Bearer token for higher rate limits |
 | `registries.clawhub.search_path`   | string | `/api/v1/search`     | Search API path         |
 | `registries.clawhub.skills_path`   | string | `/api/v1/skills`     | Skills API path         |

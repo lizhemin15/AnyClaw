@@ -86,19 +86,19 @@ func TestInstallSkillToolParameters(t *testing.T) {
 	assert.Contains(t, props, "slug")
 	assert.Contains(t, props, "version")
 	assert.Contains(t, props, "registry")
+	assert.Contains(t, props, "github_repo")
 	assert.Contains(t, props, "force")
 
 	required, ok := params["required"].([]string)
 	assert.True(t, ok)
-	assert.Contains(t, required, "slug")
-	assert.Contains(t, required, "registry")
+	assert.Equal(t, []string{"slug"}, required)
 }
 
-func TestInstallSkillToolMissingRegistry(t *testing.T) {
+func TestInstallSkillToolMissingRegistryAndGithub(t *testing.T) {
 	tool := NewInstallSkillTool(skills.NewRegistryManager(), t.TempDir())
 	result := tool.Execute(context.Background(), map[string]any{
 		"slug": "some-skill",
 	})
 	assert.True(t, result.IsError)
-	assert.Contains(t, result.ForLLM, "invalid registry")
+	assert.Contains(t, result.ForLLM, "registry or github_repo required")
 }

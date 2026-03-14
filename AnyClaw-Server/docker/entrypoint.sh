@@ -7,7 +7,7 @@ set -e
 if [ ! -d "${HOME}/.anyclaw/workspace" ] && [ ! -f "${HOME}/.anyclaw/config.json" ]; then
     anyclaw onboard
     echo ""
-    echo "First-run setup complete. Skillhub store is pre-configured (domestic acceleration)."
+    echo "First-run setup complete. Skillhub CLI + skill pre-installed (domestic acceleration)."
     echo "Edit ${HOME}/.anyclaw/config.json (add your API key, etc.) then restart the container."
     exit 0
 fi

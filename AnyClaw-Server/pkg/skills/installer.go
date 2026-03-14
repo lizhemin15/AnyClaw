@@ -23,14 +23,32 @@ func NewSkillInstaller(workspace string) *SkillInstaller {
 	}
 }
 
-func (si *SkillInstaller) InstallFromGitHub(ctx context.Context, repo string) error {
-	skillDir := filepath.Join(si.workspace, "skills", filepath.Base(repo))
+// InstallFromGitHubOpts configures GitHub install. Empty targetDir uses filepath.Base(repo).
+// Subpath is for monorepos like openclaw/skills (e.g. "skills/bodietron/openclaw-agent-browser").
+type InstallFromGitHubOpts struct {
+	TargetDir string // empty = skills/{base(repo)}
+	Subpath   string // empty = main/SKILL.md; else main/{subpath}/SKILL.md
+}
 
-	if _, err := os.Stat(skillDir); err == nil {
-		return fmt.Errorf("skill '%s' already exists", filepath.Base(repo))
+func (si *SkillInstaller) InstallFromGitHub(ctx context.Context, repo string, opts *InstallFromGitHubOpts) error {
+	if opts == nil {
+		opts = &InstallFromGitHubOpts{}
+	}
+	skillDir := opts.TargetDir
+	if skillDir == "" {
+		skillDir = filepath.Join(si.workspace, "skills", filepath.Base(repo))
 	}
 
-	url := fmt.Sprintf("https://raw.githubusercontent.com/%s/main/SKILL.md", repo)
+	if _, err := os.Stat(skillDir); err == nil {
+		return fmt.Errorf("skill '%s' already exists", filepath.Base(skillDir))
+	}
+
+	path := "SKILL.md"
+	if opts.Subpath != "" {
+		path = filepath.Join(opts.Subpath, "SKILL.md")
+		path = filepath.ToSlash(path)
+	}
+	url := fmt.Sprintf("https://raw.githubusercontent.com/%s/main/%s", repo, path)
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)

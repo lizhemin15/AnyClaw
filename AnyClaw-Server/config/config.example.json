@@ -128,7 +128,7 @@
       },
       "placeholder": {
         "enabled": true,
-        "text": "Thinking... 💭"
+        "text": "Thinking... ??"
       },
       "reasoning_channel_id": ""
     },
@@ -161,7 +161,7 @@
       "reasoning_channel_id": ""
     },
     "wecom_app": {
-      "_comment": "WeCom App (自建应用) - More features, proactive messaging, private chat only.",
+      "_comment": "WeCom App (????) - More features, proactive messaging, private chat only.",
       "enabled": false,
       "corp_id": "YOUR_CORP_ID",
       "corp_secret": "YOUR_CORP_SECRET",
@@ -174,7 +174,7 @@
       "reasoning_channel_id": ""
     },
     "wecom_aibot": {
-      "_comment": "WeCom AI Bot (智能机器�? - Official WeCom AI Bot integration, supports proactive messaging and private chats.",
+      "_comment": "WeCom AI Bot (?????? - Official WeCom AI Bot integration, supports proactive messaging and private chats.",
       "enabled": false,
       "token": "YOUR_TOKEN",
       "encoding_aes_key": "YOUR_43_CHAR_ENCODING_AES_KEY",
@@ -390,8 +390,7 @@
       "registries": {
         "clawhub": {
           "enabled": true,
-          "base_url": "https://skillhub.tencent.com",
-          "mirror_base_urls": ["https://clawhub.ai", "https://clawhub.com"],
+          "base_url": "https://clawhub.ai",
           "auth_token": "",
           "search_path": "",
           "skills_path": "",

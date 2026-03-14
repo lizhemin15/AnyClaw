@@ -17,8 +17,9 @@ Ultra-lightweight personal AI assistant written in Go, inspired by nanobot.
 
 ## Skills (技能安装)
 
-- 使用内置工具 `find_skills` 搜索、`install_skill` 安装，registry 为 `clawhub`
-- Skillhub 已预制（国内加速），无需安装 SkillHub CLI，直接调用即可
+- **优先**：镜像已预装 Skillhub CLI，使用 `skillhub` skill（exec 调用 `skillhub search` / `skillhub install`），国内加速、合规
+- **备选**：`find_skills` 搜索、`install_skill` 安装，registry 为 `clawhub`
+- 若 registry 下载失败，使用 `github_repo`。agent-browser: install_skill(slug="agent-browser", github_repo="openclaw/skills", github_repo_subpath="skills/bodietron/openclaw-agent-browser")
 
 ## Capabilities
 

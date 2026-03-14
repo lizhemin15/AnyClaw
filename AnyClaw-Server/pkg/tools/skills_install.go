@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,7 +41,7 @@ func (t *InstallSkillTool) Name() string {
 }
 
 func (t *InstallSkillTool) Description() string {
-	return "Install a skill from a registry by slug. Downloads and extracts the skill into the workspace. Use find_skills first to discover available skills."
+	return "Install a skill from a registry by slug, or from GitHub. When registry fails, use github_repo. For agent-browser: slug=agent-browser, github_repo=openclaw/skills, github_repo_subpath=skills/bodietron/openclaw-agent-browser"
 }
 
 func (t *InstallSkillTool) Parameters() map[string]any {
@@ -49,7 +50,7 @@ func (t *InstallSkillTool) Parameters() map[string]any {
 		"properties": map[string]any{
 			"slug": map[string]any{
 				"type":        "string",
-				"description": "The unique slug of the skill to install (e.g., 'github', 'docker-compose')",
+				"description": "The unique slug of the skill to install (e.g., 'github', 'agent-browser')",
 			},
 			"version": map[string]any{
 				"type":        "string",
@@ -57,39 +58,42 @@ func (t *InstallSkillTool) Parameters() map[string]any {
 			},
 			"registry": map[string]any{
 				"type":        "string",
-				"description": "Registry to install from (required, e.g., 'clawhub')",
+				"description": "Registry to install from (e.g., 'clawhub'). Omit when using github_repo.",
+			},
+			"github_repo": map[string]any{
+				"type":        "string",
+				"description": "GitHub repo (owner/repo) when registry fails. For agent-browser use openclaw/skills with github_repo_subpath",
+			},
+			"github_repo_subpath": map[string]any{
+				"type":        "string",
+				"description": "Subpath in monorepo, e.g. 'skills/bodietron/openclaw-agent-browser' for agent-browser from openclaw/skills",
 			},
 			"force": map[string]any{
 				"type":        "boolean",
 				"description": "Force reinstall if skill already exists (default false)",
 			},
 		},
-		"required": []string{"slug", "registry"},
+		"required": []string{"slug"},
 	}
 }
 
 func (t *InstallSkillTool) Execute(ctx context.Context, args map[string]any) *ToolResult {
 	// Install lock to prevent concurrent directory operations.
-	// Ideally this should be done at a `slug` level, currently, its at a `workspace` level.
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	// Validate slug
 	slug, _ := args["slug"].(string)
 	if err := utils.ValidateSkillIdentifier(slug); err != nil {
 		return ErrorResult(fmt.Sprintf("invalid slug %q: error: %s", slug, err.Error()))
 	}
 
-	// Validate registry
-	registryName, _ := args["registry"].(string)
-	if err := utils.ValidateSkillIdentifier(registryName); err != nil {
-		return ErrorResult(fmt.Sprintf("invalid registry %q: error: %s", registryName, err.Error()))
-	}
-
+	githubRepo, _ := args["github_repo"].(string)
+	githubRepo = strings.TrimSpace(githubRepo)
+	githubSubpath, _ := args["github_repo_subpath"].(string)
+	githubSubpath = strings.TrimSpace(githubSubpath)
 	version, _ := args["version"].(string)
 	force, _ := args["force"].(bool)
 
-	// Check if already installed.
 	skillsDir := filepath.Join(t.workspace, "skills")
 	targetDir := filepath.Join(skillsDir, slug)
 
@@ -100,22 +104,41 @@ func (t *InstallSkillTool) Execute(ctx context.Context, args map[string]any) *To
 			)
 		}
 	} else {
-		// Force: remove existing if present.
 		os.RemoveAll(targetDir)
 	}
 
-	// Resolve which registry to use.
+	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
+		return ErrorResult(fmt.Sprintf("failed to create skills directory: %v", err))
+	}
+
+	// GitHub install (fallback when registry fails or user provides github_repo)
+	if githubRepo != "" {
+		opts := &skills.InstallFromGitHubOpts{TargetDir: targetDir}
+		if githubSubpath != "" {
+			opts.Subpath = githubSubpath
+		}
+		if err := skills.NewSkillInstaller(t.workspace).InstallFromGitHub(ctx, githubRepo, opts); err != nil {
+			os.RemoveAll(targetDir)
+			return ErrorResult(fmt.Sprintf("failed to install from GitHub %q: %v", githubRepo, err))
+		}
+		output := fmt.Sprintf("Successfully installed skill from GitHub %q.\nLocation: %s\n", githubRepo, targetDir)
+		return SilentResult(output)
+	}
+
+	// Registry install
+	registryName, _ := args["registry"].(string)
+	if registryName == "" {
+		return ErrorResult("registry or github_repo required")
+	}
+	if err := utils.ValidateSkillIdentifier(registryName); err != nil {
+		return ErrorResult(fmt.Sprintf("invalid registry %q: error: %s", registryName, err.Error()))
+	}
+
 	registry := t.registryMgr.GetRegistry(registryName)
 	if registry == nil {
 		return ErrorResult(fmt.Sprintf("registry %q not found", registryName))
 	}
 
-	// Ensure skills directory exists.
-	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
-		return ErrorResult(fmt.Sprintf("failed to create skills directory: %v", err))
-	}
-
-	// Download and install (handles metadata, version resolution, extraction).
 	result, err := registry.DownloadAndInstall(ctx, slug, version, targetDir)
 	if err != nil {
 		// Clean up partial install.

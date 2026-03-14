@@ -1,6 +1,7 @@
 package skills
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,9 @@ import (
 
 	"github.com/anyclaw/anyclaw-server/pkg/utils"
 )
+
+// zipMagic is the file signature for ZIP files (PK).
+var zipMagic = []byte{0x50, 0x4B}
 
 const (
 	defaultClawHubTimeout  = 30 * time.Second
@@ -274,7 +278,19 @@ func (c *ClawHubRegistry) DownloadAndInstall(
 	}
 	defer os.Remove(tmpPath)
 
-	// Step 4: Extract from file on disk.
+	// Step 4: Validate ZIP before extract (registry may return error page as 200).
+	head := make([]byte, 4)
+	f, err := os.Open(tmpPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open download: %w", err)
+	}
+	_, _ = io.ReadFull(f, head)
+	f.Close()
+	if !bytes.HasPrefix(head, zipMagic) {
+		return nil, fmt.Errorf("registry returned non-ZIP content (possibly error page). Try GitHub: install_skill(slug=\"agent-browser\", github_repo=\"openclaw/skills\", github_repo_subpath=\"skills/bodietron/openclaw-agent-browser\")")
+	}
+
+	// Step 5: Extract from file on disk.
 	if err := utils.ExtractZipFile(tmpPath, targetDir); err != nil {
 		return nil, err
 	}

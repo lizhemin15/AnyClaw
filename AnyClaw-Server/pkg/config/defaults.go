@@ -419,9 +419,8 @@ func DefaultConfig() *Config {
 				},
 				Registries: SkillsRegistriesConfig{
 					ClawHub: ClawHubRegistryConfig{
-						Enabled:        true,
-						BaseURL:        "https://skillhub.tencent.com", // Skillhub 优先（国内加速、合规）
-						MirrorBaseURLs: []string{"https://clawhub.ai", "https://clawhub.com"}, // 429 时自动切换
+						Enabled: true,
+						BaseURL: "https://clawhub.ai",
 					},
 				},
 				MaxConcurrentSearches: 2,

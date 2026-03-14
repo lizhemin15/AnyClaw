@@ -20,8 +20,11 @@ RUN make build
 # ============================================================
 FROM alpine:3.23
 
-RUN apk add --no-cache ca-certificates tzdata curl
+RUN apk add --no-cache ca-certificates tzdata curl bash
 ENV TZ=Asia/Shanghai
+
+# 预装 Skillhub CLI（腾讯云镜像，国内加速、合规）
+RUN curl -fsSL https://skillhub-1388575217.cos.ap-guangzhou.myqcloud.com/install/install.sh | bash -s -- --cli-only || true
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
@@ -30,7 +33,6 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 # Copy binary
 COPY --from=builder /src/build/anyclaw /usr/local/bin/anyclaw
 
-# 预制 Skillhub 商店配置（参考用，onboard 会从 DefaultConfig 生成含 Skillhub 的 config）
 COPY config/config.example.json /opt/anyclaw/config.example.json
 
 # Create non-root user and group
@@ -40,7 +42,7 @@ RUN addgroup -g 1000 anyclaw && \
 # Switch to non-root user
 USER anyclaw
 
-# Run onboard to create initial directories and config (Skillhub 已内置在 DefaultConfig)
+# Run onboard to create initial directories and config
 RUN /usr/local/bin/anyclaw onboard
 
 ENTRYPOINT ["anyclaw"]

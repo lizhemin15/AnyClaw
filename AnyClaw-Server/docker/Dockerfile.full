@@ -25,10 +25,14 @@ RUN apk add --no-cache \
   ca-certificates \
   tzdata \
   curl \
+  bash \
   git \
   python3 \
   py3-pip
 ENV TZ=Asia/Shanghai
+
+# 预装 Skillhub CLI（腾讯云镜像，国内加速、合规）
+RUN curl -fsSL https://skillhub-1388575217.cos.ap-guangzhou.myqcloud.com/install/install.sh | bash -s -- --cli-only || true
 
 # Install uv and symlink to system path
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
@@ -39,10 +43,9 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 # Copy binary
 COPY --from=builder /src/build/anyclaw /usr/local/bin/anyclaw
 
-# 预制 Skillhub 商店配置（参考用）
 COPY config/config.example.json /opt/anyclaw/config.example.json
 
-# Create anyclaw home directory (Skillhub 已内置在 DefaultConfig)
+# Create anyclaw home directory
 RUN /usr/local/bin/anyclaw onboard
 
 ENTRYPOINT ["anyclaw"]

@@ -41,7 +41,7 @@ func skillsInstallCmd(installer *skills.SkillInstaller, repo string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := installer.InstallFromGitHub(ctx, repo); err != nil {
+	if err := installer.InstallFromGitHub(ctx, repo, nil); err != nil {
 		return fmt.Errorf("failed to install skill: %w", err)
 	}
 
