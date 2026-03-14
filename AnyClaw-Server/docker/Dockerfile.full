@@ -17,33 +17,35 @@ RUN make build
 
 # ============================================================
 # Stage 2: Node.js-based runtime with full MCP support
+# Debian Slim (glibc) is required: agent-browser ships a glibc-linked pre-compiled
+# binary that cannot run on Alpine/musl even with gcompat.
 # ============================================================
-FROM node:24-alpine3.23
+FROM node:24-bookworm-slim
 
 # Install runtime dependencies
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y --no-install-recommends \
   ca-certificates \
   tzdata \
   curl \
   bash \
   git \
   python3 \
-  py3-pip \
-  gcompat \
-  libc6-compat
+  python3-pip \
+  && rm -rf /var/lib/apt/lists/*
 
 # Headless browser support for agent-browser / Playwright / Puppeteer.
-# Use Alpine's system Chromium (~70 MB) instead of Playwright's self-download (~300 MB).
+# Use system Chromium instead of Playwright's self-download (~300 MB).
 # A wrapper script injects --no-sandbox universally so every caller works in Docker
 # without needing SYS_ADMIN capability or per-tool configuration.
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y --no-install-recommends \
   chromium \
-  nss \
-  freetype \
-  harfbuzz \
-  ttf-freefont \
-  font-wqy-zenhei \
-  fontconfig && \
+  libnss3 \
+  libfreetype6 \
+  libharfbuzz0b \
+  fonts-freefont-ttf \
+  fonts-wqy-zenhei \
+  fontconfig \
+  && rm -rf /var/lib/apt/lists/* && \
   CHROMIUM_BIN=$(command -v chromium-browser 2>/dev/null || command -v chromium) && \
   printf '#!/bin/sh\nexec %s --no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage "$@"\n' "$CHROMIUM_BIN" \
     > /usr/local/bin/chromium-wrapper && \
