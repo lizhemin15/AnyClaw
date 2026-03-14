@@ -245,12 +245,15 @@ func (h *Handler) HostMetrics(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(resp)
 		return
 	}
-	// 不做任何 2>/dev/null 静默，保留全部输出以便调试；不使用 || 避免 shell 兼容性问题。
-	// 解析器会跳过无法识别的行（df 表头、错误信息等），多余输出不影响结果。
-	cmd := `df -h / 2>&1; free -m 2>&1; cat /proc/loadavg 2>&1`
-	out, err := h.checker.RunCommand(host, cmd)
-	if err != nil {
-		resp.Err = err.Error()
+	// export PATH 确保非交互式 SSH 会话也能找到 df/free；末尾 `true` 保证退出码为 0，
+	// 避免 cat /proc/loadavg 失败时 runSSH 误判整条命令失败而丢弃已有输出。
+	cmd := `export PATH=/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin:$PATH; ` +
+		`df -h / 2>&1; free -m 2>&1; cat /proc/loadavg 2>&1; true`
+	out, sshErr := h.checker.RunCommand(host, cmd)
+	// 当且仅当 SSH 连接本身失败时（out 为空且 err 非 nil）才直接报错；
+	// 若有输出（即使命令部分失败）则继续尝试解析。
+	if sshErr != nil && out == "" {
+		resp.Err = sshErr.Error()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
 		return
