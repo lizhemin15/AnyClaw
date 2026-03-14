@@ -255,45 +255,45 @@ func (h *Handler) HostMetrics(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(resp)
 		return
 	}
-	lines := strings.Split(out, "\n")
-	for _, line := range lines {
+	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
 		fields := strings.Fields(line)
-		if len(fields) < 4 {
-			continue
-		}
-		// df: 跳过表头，找含 % 的列，其前 3 列为 size/used/avail
-		if strings.HasPrefix(line, "Filesystem") || strings.HasPrefix(line, "文件系统") {
-			continue
-		}
-		for i := 4; i < len(fields); i++ {
-			if strings.Contains(fields[i], "%") {
-				pctStr := strings.TrimSuffix(strings.TrimSuffix(fields[i], "%"), "Use%")
-				if pct, e := parseFloat(pctStr); e == nil && pct >= 0 && pct <= 100 && i >= 3 {
-					s1, s2, s3 := fields[i-3], fields[i-2], fields[i-1]
-					if isSizeLike(s1) && isSizeLike(s2) && isSizeLike(s3) {
-						resp.Disk = &DiskMetrics{Total: s1, Used: s2, Avail: s3, Pct: pct}
+
+		// ── Disk ────────────────────────────────────────────────────────────
+		// Skip df header; look for the column containing "%" – the 3 fields
+		// before it are size / used / avail.
+		if resp.Disk == nil &&
+			!strings.HasPrefix(line, "Filesystem") &&
+			!strings.HasPrefix(line, "文件系统") &&
+			len(fields) >= 4 {
+			for i := 4; i < len(fields); i++ {
+				if strings.Contains(fields[i], "%") {
+					pctStr := strings.TrimSuffix(strings.TrimSuffix(fields[i], "%"), "Use%")
+					if pct, e := parseFloat(pctStr); e == nil && pct >= 0 && pct <= 100 && i >= 3 {
+						s1, s2, s3 := fields[i-3], fields[i-2], fields[i-1]
+						if isSizeLike(s1) && isSizeLike(s2) && isSizeLike(s3) {
+							resp.Disk = &DiskMetrics{Total: s1, Used: s2, Avail: s3, Pct: pct}
+						}
 					}
+					break
 				}
-				break
 			}
 		}
-		if resp.Disk != nil {
-			continue
-		}
-		// Mem: total used free shared buff/cache available
-		if strings.HasPrefix(line, "Mem:") && len(fields) >= 4 {
+
+		// ── Memory ──────────────────────────────────────────────────────────
+		// "Mem:  total  used  free  shared  buff/cache  available"
+		if resp.Mem == nil && strings.HasPrefix(line, "Mem:") && len(fields) >= 4 {
 			total := parseInt(fields[1])
 			used := parseInt(fields[2])
 			avail := 0
 			if len(fields) >= 7 {
-				avail = parseInt(fields[6]) // available (free 3.3+)
+				avail = parseInt(fields[6]) // available column (free ≥3.3)
 			}
-			if avail <= 0 && len(fields) >= 4 {
-				avail = parseInt(fields[3]) // free (旧版 free)
+			if avail <= 0 {
+				avail = parseInt(fields[3]) // free column (older free)
 			}
 			if total > 0 {
 				resp.Mem = &MemMetrics{
@@ -303,18 +303,26 @@ func (h *Handler) HostMetrics(w http.ResponseWriter, r *http.Request) {
 					Pct:   used * 100 / total,
 				}
 			}
-			continue
 		}
-		// loadavg: 0.50 0.45 0.40 1/234 56789（跳过设备路径等）
-		if len(fields) >= 3 && !strings.HasPrefix(line, "Mem:") && !strings.HasPrefix(fields[0], "/") {
+
+		// ── Load average ────────────────────────────────────────────────────
+		// "/proc/loadavg" format: "0.50 0.45 0.40 1/234 56789"
+		// Skip lines that are device paths or the Mem: line.
+		if resp.Load == nil &&
+			len(fields) >= 3 &&
+			!strings.HasPrefix(line, "Mem:") &&
+			!strings.HasPrefix(fields[0], "/") {
 			if l1, e1 := parseFloat(fields[0]); e1 == nil && l1 >= 0 {
 				if l5, e5 := parseFloat(fields[1]); e5 == nil {
 					if l15, e15 := parseFloat(fields[2]); e15 == nil {
 						resp.Load = &LoadMetrics{Load1: l1, Load5: l5, Load15: l15}
-						break
 					}
 				}
 			}
+		}
+
+		if resp.Disk != nil && resp.Mem != nil && resp.Load != nil {
+			break // all three found, no need to scan further
 		}
 	}
 	// If SSH succeeded but we couldn't parse any metrics, report the raw output
@@ -411,6 +419,13 @@ func (h *Handler) InstanceImageStatus(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
+	// 本地镜像完整 ID（sha256:...），用于与正在运行的容器对比
+	localImageID := ""
+	if idOut, idErr := h.checker.RunCommand(host, `docker inspect "`+image+`" --format '{{.Id}}' 2>/dev/null || echo ""`); idErr == nil {
+		localImageID = strings.TrimSpace(idOut)
+	}
+
 	// Docker Hub digests 通过宿主机 SSH 获取（含 manifest list 各平台 digest，与本地 RepoDigests 可比）
 	hubDigests, err := getDockerHubDigestsViaHost(h.checker, host, image)
 	if err != nil {
@@ -428,18 +443,47 @@ func (h *Handler) InstanceImageStatus(w http.ResponseWriter, r *http.Request) {
 	for _, d := range hubDigests {
 		hubDigestSet[d] = true
 	}
-	// 任一本地 digest 在 hub digests 中即视为已最新（多架构时本地存平台 digest，hub 需解析 list 获取全部）
-	hasMatch := false
+	// 任一本地 digest 在 hub digests 中即视为本地已是最新
+	hubMatch := false
 	for d := range localDigests {
 		if hubDigestSet[d] {
-			hasMatch = true
+			hubMatch = true
 			break
 		}
 	}
-	updateAvailable := localDigest == "" || !hasMatch
+
+	// 即使本地镜像与 Hub 一致，也要检查运行中的容器是否真正用了该镜像。
+	// 典型场景：上次更新部分容器重启失败，它们仍在跑旧镜像（ID 不同）。
+	staleContainers := false
+	if localImageID != "" && len(instances) > 0 {
+		containerIDs := make([]string, 0, len(instances))
+		for _, inst := range instances {
+			if inst.ContainerID != "" {
+				containerIDs = append(containerIDs, inst.ContainerID)
+			}
+		}
+		if len(containerIDs) > 0 {
+			inspectCmd := `docker inspect ` + strings.Join(containerIDs, " ") + ` --format '{{.Image}}' 2>/dev/null || echo ""`
+			if cOut, cErr := h.checker.RunCommand(host, inspectCmd); cErr == nil {
+				for _, cImg := range strings.Split(strings.TrimSpace(cOut), "\n") {
+					cImg = strings.TrimSpace(cImg)
+					if cImg != "" && cImg != localImageID {
+						staleContainers = true
+						break
+					}
+				}
+			}
+		}
+	}
+
+	updateAvailable := localDigest == "" || !hubMatch || staleContainers
 	hubDigestForResp := ""
 	if len(hubDigests) > 0 {
 		hubDigestForResp = hubDigests[0]
+	}
+	msg := ""
+	if staleContainers && hubMatch {
+		msg = "本地镜像已是最新，但部分运行中容器仍使用旧镜像，需要重启更新"
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(InstanceImageStatusResponse{
@@ -449,6 +493,7 @@ func (h *Handler) InstanceImageStatus(w http.ResponseWriter, r *http.Request) {
 		LatestDigest:    hubDigestForResp,
 		InstanceCount:   len(instances),
 		InstanceIDs:     ids,
+		Message:         msg,
 	})
 }
 
