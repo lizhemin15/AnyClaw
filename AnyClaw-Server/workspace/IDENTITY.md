@@ -15,6 +15,11 @@ Ultra-lightweight personal AI assistant written in Go, inspired by nanobot.
 - Enable easy customization through skills system
 - Run on minimal hardware ($10 boards, <10MB RAM)
 
+## Skills (技能安装)
+
+- 使用内置工具 `find_skills` 搜索、`install_skill` 安装，registry 为 `clawhub`
+- Skillhub 已预制（国内加速），无需安装 SkillHub CLI，直接调用即可
+
 ## Capabilities
 
 - Web search and content fetching
