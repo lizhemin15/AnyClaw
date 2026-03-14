@@ -7,10 +7,13 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/anyclaw/anyclaw-api/internal/db"
 	"golang.org/x/crypto/ssh"
 )
+
+const sshDialTimeout = 15 * time.Second
 
 func sshConfig(host *db.Host) (*ssh.ClientConfig, error) {
 	var auth []ssh.AuthMethod
@@ -31,6 +34,7 @@ func sshConfig(host *db.Host) (*ssh.ClientConfig, error) {
 		User:            host.SSHUser,
 		Auth:            auth,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         sshDialTimeout,
 	}, nil
 }
 

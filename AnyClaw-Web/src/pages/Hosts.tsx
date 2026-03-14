@@ -416,7 +416,9 @@ export default function Hosts() {
                     {!m ? (
                       <p className="text-sm text-slate-500">点击「刷新资源」获取</p>
                     ) : m.error ? (
-                      <p className="text-sm text-red-600">{m.error}</p>
+                      <p className="text-sm text-red-600 break-all">{m.error}</p>
+                    ) : !m.disk && !m.mem && !m.load ? (
+                      <p className="text-sm text-amber-600">SSH 已连接，但未能解析到指标数据</p>
                     ) : (
                       <div className="space-y-3">
                         {m.disk && (

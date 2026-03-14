@@ -316,6 +316,15 @@ func (h *Handler) HostMetrics(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// If SSH succeeded but we couldn't parse any metrics, report the raw output
+	// so the frontend can show something useful instead of a blank card.
+	if resp.Disk == nil && resp.Mem == nil && resp.Load == nil && resp.Err == "" {
+		if out == "" {
+			resp.Err = "SSH 命令无输出"
+		} else {
+			resp.Err = "无法解析指标，原始输出：" + out
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -333,12 +342,15 @@ func isSizeLike(s string) bool {
 	if s == "" {
 		return false
 	}
-	s = strings.TrimSuffix(s, "G")
-	s = strings.TrimSuffix(s, "M")
-	s = strings.TrimSuffix(s, "K")
-	s = strings.TrimSuffix(s, "g")
-	s = strings.TrimSuffix(s, "m")
-	s = strings.TrimSuffix(s, "k")
+	// strip optional 'i' suffix first (e.g. "Gi", "Mi" from some df variants)
+	s = strings.TrimSuffix(s, "i")
+	// strip one unit letter: T G M K B (upper and lower)
+	for _, suffix := range []string{"T", "G", "M", "K", "B", "t", "g", "m", "k", "b"} {
+		if strings.HasSuffix(s, suffix) {
+			s = s[:len(s)-1]
+			break
+		}
+	}
 	_, err := strconv.ParseFloat(s, 64)
 	return err == nil
 }
