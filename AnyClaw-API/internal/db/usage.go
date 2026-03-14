@@ -49,8 +49,9 @@ func (d *DB) InsertUsage(instanceID, userID, model, provider string, promptToken
 type UsageLogEntry struct {
 	ID               int64  `json:"id"`
 	InstanceID       string `json:"instance_id"`
-	InstanceName     string `json:"instance_name,omitempty"` // 宠物名称，用于用户友好展示
+	InstanceName     string `json:"instance_name,omitempty"`
 	Model            string `json:"model"`
+	Provider         string `json:"provider,omitempty"` // 渠道名称（如"OpenAI 主账号"）
 	PromptTokens     int    `json:"prompt_tokens"`
 	CompletionTokens int    `json:"completion_tokens"`
 	CoinsCost        int    `json:"coins_cost"`
@@ -73,7 +74,7 @@ func (d *DB) ListUserUsage(userID int64, limit, offset int) ([]*UsageLogEntry, e
 	uid := fmt.Sprintf("%d", userID)
 	// 优先尝试带 JOIN 的查询（含宠物名称）；用 i.id = u.instance_id 隐式转换，兼容性更好
 	rows, err := d.Query(
-		`SELECT u.id, u.instance_id, COALESCE(i.name, ''), u.model, u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at
+		`SELECT u.id, u.instance_id, COALESCE(i.name, ''), u.model, COALESCE(u.provider,''), u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at
 		 FROM usage_log u LEFT JOIN instances i ON i.id = u.instance_id AND i.user_id = ?
 		 WHERE u.user_id = ? ORDER BY u.created_at DESC LIMIT ? OFFSET ?`,
 		userID, uid, limit, offset,
@@ -83,14 +84,14 @@ func (d *DB) ListUserUsage(userID int64, limit, offset int) ([]*UsageLogEntry, e
 		rows, err = d.Query(
 			`SELECT u.id, u.instance_id,
 			 COALESCE((SELECT i.name FROM instances i WHERE i.id = u.instance_id AND i.user_id = ? LIMIT 1), '') as instance_name,
-			 u.model, u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at
+			 u.model, COALESCE(u.provider,''), u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at
 			 FROM usage_log u WHERE u.user_id = ? ORDER BY u.created_at DESC LIMIT ? OFFSET ?`,
 			userID, uid, limit, offset,
 		)
 		if err != nil {
 			// 回退2：最简查询，确保能返回数据（instance_name 为空）
 			rows, err = d.Query(
-				`SELECT id, instance_id, '' as instance_name, model, prompt_tokens, completion_tokens, COALESCE(coins_cost,0), created_at
+				`SELECT id, instance_id, '' as instance_name, model, COALESCE(provider,''), prompt_tokens, completion_tokens, COALESCE(coins_cost,0), created_at
 				 FROM usage_log WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 				uid, limit, offset,
 			)
@@ -103,7 +104,7 @@ func (d *DB) ListUserUsage(userID int64, limit, offset int) ([]*UsageLogEntry, e
 	var list []*UsageLogEntry
 	for rows.Next() {
 		var e UsageLogEntry
-		if err := rows.Scan(&e.ID, &e.InstanceID, &e.InstanceName, &e.Model, &e.PromptTokens, &e.CompletionTokens, &e.CoinsCost, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.InstanceID, &e.InstanceName, &e.Model, &e.Provider, &e.PromptTokens, &e.CompletionTokens, &e.CoinsCost, &e.CreatedAt); err != nil {
 			return nil, err
 		}
 		list = append(list, &e)
@@ -119,7 +120,7 @@ func (d *DB) ListAdminUsage(limit, offset int) ([]*UsageLogEntryAdmin, error) {
 		limit = 500
 	}
 	rows, err := d.Query(
-		`SELECT u.id, u.instance_id, COALESCE(i.name, ''), u.model, u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at, COALESCE(us.email, u.user_id)
+		`SELECT u.id, u.instance_id, COALESCE(i.name, ''), u.model, COALESCE(u.provider,''), u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at, COALESCE(us.email, u.user_id)
 		 FROM usage_log u
 		 LEFT JOIN instances i ON i.id = u.instance_id
 		 LEFT JOIN users us ON us.id = u.user_id
@@ -131,7 +132,7 @@ func (d *DB) ListAdminUsage(limit, offset int) ([]*UsageLogEntryAdmin, error) {
 		rows, err = d.Query(
 			`SELECT u.id, u.instance_id,
 			 COALESCE((SELECT i.name FROM instances i WHERE i.id = u.instance_id LIMIT 1), '') as instance_name,
-			 u.model, u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at,
+			 u.model, COALESCE(u.provider,''), u.prompt_tokens, u.completion_tokens, COALESCE(u.coins_cost,0), u.created_at,
 			 COALESCE((SELECT us.email FROM users us WHERE us.id = u.user_id LIMIT 1), u.user_id) as user_email
 			 FROM usage_log u ORDER BY u.created_at DESC LIMIT ? OFFSET ?`,
 			limit, offset,
@@ -139,7 +140,7 @@ func (d *DB) ListAdminUsage(limit, offset int) ([]*UsageLogEntryAdmin, error) {
 		if err != nil {
 			// 回退2：最简查询，确保能返回数据
 			rows, err = d.Query(
-				`SELECT id, instance_id, '' as instance_name, model, prompt_tokens, completion_tokens, COALESCE(coins_cost,0), created_at, user_id as user_email
+				`SELECT id, instance_id, '' as instance_name, model, COALESCE(provider,''), prompt_tokens, completion_tokens, COALESCE(coins_cost,0), created_at, user_id as user_email
 				 FROM usage_log ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 				limit, offset,
 			)
@@ -152,7 +153,7 @@ func (d *DB) ListAdminUsage(limit, offset int) ([]*UsageLogEntryAdmin, error) {
 	var list []*UsageLogEntryAdmin
 	for rows.Next() {
 		var e UsageLogEntryAdmin
-		if err := rows.Scan(&e.ID, &e.InstanceID, &e.InstanceName, &e.Model, &e.PromptTokens, &e.CompletionTokens, &e.CoinsCost, &e.CreatedAt, &e.UserEmail); err != nil {
+		if err := rows.Scan(&e.ID, &e.InstanceID, &e.InstanceName, &e.Model, &e.Provider, &e.PromptTokens, &e.CompletionTokens, &e.CoinsCost, &e.CreatedAt, &e.UserEmail); err != nil {
 			return nil, err
 		}
 		list = append(list, &e)

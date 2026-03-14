@@ -226,6 +226,7 @@ export default function AdminStats() {
                       <th className="text-left py-3 px-5 text-sm font-medium text-slate-600">用户</th>
                       <th className="text-left py-3 px-5 text-sm font-medium text-slate-600">宠物</th>
                       <th className="text-left py-3 px-5 text-sm font-medium text-slate-600">模型</th>
+                      <th className="text-left py-3 px-5 text-sm font-medium text-slate-600">渠道</th>
                       <th className="text-left py-3 px-5 text-sm font-medium text-slate-600">时间</th>
                       <th className="text-right py-3 px-5 text-sm font-medium text-slate-600">消耗</th>
                     </tr>
@@ -236,6 +237,7 @@ export default function AdminStats() {
                         <td className="py-3 px-5 text-sm text-slate-800">{u.user_email || '—'}</td>
                         <td className="py-3 px-5 text-sm text-slate-800">{u.instance_name || `#${u.instance_id}`}</td>
                         <td className="py-3 px-5 text-sm font-mono text-slate-600 truncate max-w-[200px]">{u.model}</td>
+                        <td className="py-3 px-5 text-sm text-slate-500 truncate max-w-[160px]">{u.provider || '—'}</td>
                         <td className="py-3 px-5 text-sm text-slate-600">{u.created_at}</td>
                         <td className="py-3 px-5 text-right text-sm font-medium text-amber-600">-{u.coins_cost}</td>
                       </tr>

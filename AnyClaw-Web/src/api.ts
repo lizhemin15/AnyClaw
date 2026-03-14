@@ -155,6 +155,7 @@ export interface UsageLogEntry {
   instance_id: string;
   instance_name?: string;
   model: string;
+  provider?: string;
   prompt_tokens: number;
   completion_tokens: number;
   coins_cost: number;

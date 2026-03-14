@@ -183,6 +183,7 @@ func (c *Config) GetEnabledModel() string {
 // ChannelEndpoint 渠道端点，用于调度
 type ChannelEndpoint struct {
 	ChannelID         string
+	ChannelName       string  // 渠道展示名，如"OpenAI 主账号"
 	APIBase           string
 	APIKey            string
 	DailyTokensLimit  int64   // 0=不限制
@@ -207,9 +208,9 @@ func (c *Config) FindChannelsForModel(model string) []ChannelEndpoint {
 				key := ch.ID + "|" + base
 				if !seen[key] {
 					seen[key] = true
-					out = append(out, ChannelEndpoint{ChannelID: ch.ID, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey, DailyTokensLimit: ch.DailyTokensLimit, QPSLimit: ch.QPSLimit})
-				}
-				break
+				out = append(out, ChannelEndpoint{ChannelID: ch.ID, ChannelName: ch.Name, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey, DailyTokensLimit: ch.DailyTokensLimit, QPSLimit: ch.QPSLimit})
+			}
+			break
 			}
 		}
 	}
@@ -229,14 +230,14 @@ func (c *Config) FindChannelsForModel(model string) []ChannelEndpoint {
 			key := ch.ID + "|" + base
 			if !seen[key] {
 				seen[key] = true
-				out = append(out, ChannelEndpoint{ChannelID: ch.ID, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey, DailyTokensLimit: ch.DailyTokensLimit, QPSLimit: ch.QPSLimit})
+				out = append(out, ChannelEndpoint{ChannelID: ch.ID, ChannelName: ch.Name, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey, DailyTokensLimit: ch.DailyTokensLimit, QPSLimit: ch.QPSLimit})
 			}
 		}
 		if strings.Contains(model, "claude") && strings.Contains(chLower, "anthropic") {
 			key := ch.ID + "|" + base
 			if !seen[key] {
 				seen[key] = true
-				out = append(out, ChannelEndpoint{ChannelID: ch.ID, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey, DailyTokensLimit: ch.DailyTokensLimit, QPSLimit: ch.QPSLimit})
+				out = append(out, ChannelEndpoint{ChannelID: ch.ID, ChannelName: ch.Name, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey, DailyTokensLimit: ch.DailyTokensLimit, QPSLimit: ch.QPSLimit})
 			}
 		}
 	}
@@ -252,7 +253,7 @@ func (c *Config) FindChannelsForModel(model string) []ChannelEndpoint {
 			key := ch.ID + "|" + base
 			if !seen[key] {
 				seen[key] = true
-				out = append(out, ChannelEndpoint{ChannelID: ch.ID, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey, DailyTokensLimit: ch.DailyTokensLimit, QPSLimit: ch.QPSLimit})
+				out = append(out, ChannelEndpoint{ChannelID: ch.ID, ChannelName: ch.Name, APIBase: strings.TrimSuffix(base, "/"), APIKey: ch.APIKey, DailyTokensLimit: ch.DailyTokensLimit, QPSLimit: ch.QPSLimit})
 			}
 		}
 	}

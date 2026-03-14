@@ -145,10 +145,10 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 	req["model"] = model
 	candidates := cfg.FindChannelsForModel(model)
-	var apiBase, apiKey string
+	var apiBase, apiKey, channelName string
 	if len(candidates) > 0 {
 		if ep, ok := p.scheduler.Pick(model, candidates); ok {
-			apiBase, apiKey = ep.APIBase, ep.APIKey
+			apiBase, apiKey, channelName = ep.APIBase, ep.APIKey, ep.ChannelName
 		}
 	}
 	if apiBase == "" || apiKey == "" {
@@ -220,7 +220,11 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		p.logUsage(instanceID, userID, model, apiBase, promptTokens, completionTokens, cost)
+		provider := channelName
+		if provider == "" {
+			provider = apiBase
+		}
+		p.logUsage(instanceID, userID, model, provider, promptTokens, completionTokens, cost)
 	}
 }
 

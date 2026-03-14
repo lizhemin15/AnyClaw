@@ -75,7 +75,7 @@ export default function Usage() {
                   <p className="text-sm font-medium text-slate-800 truncate">
                     {e.instance_name || `宠物 #${e.instance_id}`}
                   </p>
-                  <p className="text-xs text-slate-500">{e.created_at} · {e.model}</p>
+                  <p className="text-xs text-slate-500">{e.created_at} · {e.model}{e.provider ? ` · ${e.provider}` : ''}</p>
                 </div>
                 <span className="text-sm font-medium text-amber-600 flex-shrink-0">-{e.coins_cost} 金币</span>
               </div>
