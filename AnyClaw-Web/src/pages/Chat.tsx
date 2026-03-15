@@ -170,7 +170,9 @@ function MessageContent({
       if (!isSafeHref(href)) return <span {...props}>{children}</span>
       if (href.startsWith('data:')) return <a href={href} download {...props}>{children}</a>
       const text = linkText(children)
-      const ext = getExt(href)
+      const filenameFromText = text.replace(/^[📎📹🔊]\s*/, '').trim()
+      const ext = getExt(href) || (filenameFromText.split('.').pop()?.toLowerCase() ?? '')
+      const filename = filenameFromText || (href.split('/').pop() || 'file').split('?')[0]
       // 优先按 bridge 的 emoji 标识：📹 video、🔊 audio
       if (text.includes('📹')) return <video src={href} controls className="max-w-full max-h-80 rounded" />
       if (text.includes('🔊')) return <audio src={href} controls className="max-w-full" />
@@ -178,16 +180,16 @@ function MessageContent({
       if (ext && videoExts.has(ext) && ext !== 'ogg') return <video src={href} controls className="max-w-full max-h-80 rounded" />
       if (ext && audioExts.has(ext)) return <audio src={href} controls className="max-w-full" />
       const isTextFile = ext && textExts.has(ext)
-      const filename = text.replace(/^[📎📹🔊]\s*/, '').trim() || (href.split('/').pop() || 'file').split('?')[0]
       if (isTextFile) {
         return (
-          <button
-            type="button"
-            onClick={() => setPreviewModal({ url: href, filename })}
-            className="text-indigo-600 hover:underline cursor-pointer bg-transparent border-none p-0 font-inherit"
+          <a
+            href={href}
+            onClick={(e) => { e.preventDefault(); setPreviewModal({ url: href, filename }) }}
+            className="cursor-pointer"
+            style={{ touchAction: 'manipulation' }}
           >
             {children}
-          </button>
+          </a>
         )
       }
       const isFile = !!ext
