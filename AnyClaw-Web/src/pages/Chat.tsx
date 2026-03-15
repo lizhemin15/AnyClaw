@@ -39,6 +39,90 @@ function isThinkingPlaceholder(content: string): boolean {
   return s.startsWith('thinking')
 }
 
+function TextPreviewModal({ url, filename, onClose }: { url: string; filename: string; onClose: () => void }) {
+  const [content, setContent] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const ext = (filename.split('.').pop() || '').toLowerCase()
+  const isMd = ext === 'md' || ext === 'markdown'
+
+  useEffect(() => {
+    if (url.startsWith('data:')) {
+      const comma = url.indexOf(',')
+      if (comma >= 0) {
+        try {
+          const data = url.slice(comma + 1)
+          const text = url.slice(0, comma).toLowerCase().includes(';base64')
+            ? new TextDecoder().decode(Uint8Array.from(atob(data), (c) => c.charCodeAt(0)))
+            : decodeURIComponent(data)
+          setContent(text)
+        } catch {
+          setError('无法解析 data URL')
+        }
+      }
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    setError(null)
+    fetch(url)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.text()
+      })
+      .then(setContent)
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : '加载失败'
+        setError(msg.includes('Failed to fetch') || msg.includes('NetworkError') ? '加载失败，请确保 COS 已配置 CORS 允许当前域名' : msg)
+      })
+      .finally(() => setLoading(false))
+  }, [url])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+      <div
+        className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0">
+          <span className="font-medium text-slate-800 truncate">{filename}</span>
+          <div className="flex gap-2 shrink-0">
+            <a
+              href={url}
+              download={filename}
+              className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+            >
+              下载
+            </a>
+            <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50">
+              关闭
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 min-h-0 overflow-auto p-4 bg-slate-50">
+          {loading && <div className="text-slate-500">加载中...</div>}
+          {error && <div className="text-red-600">{error}</div>}
+          {content !== null && !error && (
+            isMd ? (
+              <div className="msg-markdown msg-md-assistant prose prose-slate max-w-none">
+                <ReactMarkdown remarkPlugins={supportsGfm ? [remarkGfm] : []}>{content}</ReactMarkdown>
+              </div>
+            ) : (
+              <pre className="text-sm text-slate-800 whitespace-pre-wrap break-words font-mono">{content}</pre>
+            )
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function MessageContent({
   content,
   isUser,
@@ -61,6 +145,8 @@ function MessageContent({
   const getExt = (url: string) => (url.split('?')[0].split('#')[0].match(/\.([a-zA-Z0-9]+)$/) || [])[1]?.toLowerCase()
   const videoExts = new Set(['mp4', 'webm', 'mov', 'ogg'])
   const audioExts = new Set(['mp3', 'wav', 'ogg', 'm4a', 'webm'])
+  const textExts = new Set(['md', 'txt', 'json', 'csv', 'log', 'xml', 'yaml', 'yml', 'js', 'ts', 'tsx', 'jsx', 'py', 'html', 'htm', 'css', 'scss', 'sh', 'bash', 'sql', 'ini', 'cfg', 'conf'])
+  const [previewModal, setPreviewModal] = useState<{ url: string; filename: string } | null>(null)
   const isSafeHref = (h: string) => {
     const lower = h.toLowerCase()
     if (lower.startsWith('https://') || lower.startsWith('http://')) return true
@@ -90,12 +176,27 @@ function MessageContent({
       // 无 emoji 时按扩展名推断，ogg 多为音频、webm 多为视频
       if (ext && videoExts.has(ext) && ext !== 'ogg') return <video src={href} controls className="max-w-full max-h-80 rounded" />
       if (ext && audioExts.has(ext)) return <audio src={href} controls className="max-w-full" />
+      const isTextFile = ext && textExts.has(ext)
+      const filename = text.replace(/^[📎📹🔊]\s*/, '').trim() || (href.split('/').pop() || 'file').split('?')[0]
+      if (isTextFile) {
+        return (
+          <button
+            type="button"
+            onClick={() => setPreviewModal({ url: href, filename })}
+            className="text-indigo-600 hover:underline cursor-pointer bg-transparent border-none p-0 font-inherit"
+            {...props}
+          >
+            {children}
+          </button>
+        )
+      }
       const isFile = !!ext
       return <a href={href} {...(isFile ? { download: true } : {})} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>
     },
   }
 
   return (
+  <>
     <ErrorBoundary fallback={
       <div className={`msg-markdown ${wrapClass}`}>
         <div className="whitespace-pre-wrap break-words">{displayContent || '\u00A0'}</div>
@@ -115,6 +216,14 @@ function MessageContent({
         )}
       </div>
     </ErrorBoundary>
+    {previewModal && (
+      <TextPreviewModal
+        url={previewModal.url}
+        filename={previewModal.filename}
+        onClose={() => setPreviewModal(null)}
+      />
+    )}
+  </>
   )
 }
 const TYPING_ROTATE_MS = 2500
