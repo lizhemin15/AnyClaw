@@ -191,6 +191,9 @@ func (d *DB) migrate() error {
 	if _, err := d.Exec("ALTER TABLE usage_log ADD COLUMN coins_cost INT NOT NULL DEFAULT 0"); err != nil && !isDuplicateColumn(err) {
 		log.Printf("[db] alter usage_log coins_cost: %v", err)
 	}
+	if _, err := d.Exec("ALTER TABLE usage_log ADD COLUMN provider VARCHAR(128)"); err != nil && !isDuplicateColumn(err) {
+		log.Printf("[db] alter usage_log provider: %v", err)
+	}
 	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS activation_codes (
 		code VARCHAR(32) PRIMARY KEY,
 		energy INT NOT NULL,
