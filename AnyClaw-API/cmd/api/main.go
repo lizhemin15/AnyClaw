@@ -18,6 +18,7 @@ import (
 	"github.com/anyclaw/anyclaw-api/internal/instances"
 	"github.com/anyclaw/anyclaw-api/internal/llm"
 	"github.com/anyclaw/anyclaw-api/internal/media"
+	"github.com/anyclaw/anyclaw-api/internal/proxy"
 	"github.com/anyclaw/anyclaw-api/internal/messages"
 	"github.com/anyclaw/anyclaw-api/internal/usage"
 	"github.com/anyclaw/anyclaw-api/internal/scheduler"
@@ -104,6 +105,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	wsHandler := ws.NewHandler(database, wsHub)
 	msgHandler := messages.New(database)
 	mediaHandler := media.New(database, configPath)
+	proxyHandler := proxy.New(configPath)
 	usageHandler := usage.New(database, configPath)
 	energyHandler := energy.New(database, configPath, authSvc)
 	proxy := llm.New(configPath, database, database)
@@ -143,6 +145,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Get("/", authSvc.HandleMe)
 		r.Get("/usage", usageHandler.ListMyUsage)
 	})
+	r.With(authSvc.Middleware).Get("/api/proxy", proxyHandler.HandleProxy)
 
 	r.Route("/instances", func(r chi.Router) {
 		r.Use(authSvc.Middleware)

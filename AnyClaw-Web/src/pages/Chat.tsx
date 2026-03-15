@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { getToken, getWebSocketUrl, getMessages, getInstance, markInstanceRead, type ChatMessage as ApiMessage } from '../api'
+import { getToken, getWebSocketUrl, getMessages, getInstance, markInstanceRead, fetchProxyText, type ChatMessage as ApiMessage } from '../api'
 
 // remark-gfm 使用 lookbehind 正则，Safari 16.4 以下不支持，会报 invalid group specifier name
 const supportsGfm = typeof window !== 'undefined' && (() => {
@@ -65,15 +65,11 @@ function TextPreviewModal({ url, filename, onClose }: { url: string; filename: s
     }
     setLoading(true)
     setError(null)
-    fetch(url)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.text()
-      })
+    fetchProxyText(url)
       .then(setContent)
       .catch((e) => {
         const msg = e instanceof Error ? e.message : '加载失败'
-        setError(msg.includes('Failed to fetch') || msg.includes('NetworkError') ? '加载失败，请确保 COS 已配置 CORS 允许当前域名' : msg)
+        setError(msg)
       })
       .finally(() => setLoading(false))
   }, [url])

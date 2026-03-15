@@ -77,6 +77,29 @@ async function fetchApi<T>(
   return data as T;
 }
 
+/** 通过 API 代理获取外部 URL 内容，用于绕过 CORS（如 COS 文件预览） */
+export async function fetchProxyText(url: string): Promise<string> {
+  const token = getToken();
+  const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+  const res = await fetch(`${API_BASE}/api/proxy?url=${encodeURIComponent(url)}`, { headers });
+  const text = await res.text();
+  if (!res.ok) {
+    if (res.status === 401) {
+      clearToken();
+      const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `/login?expired=1&return_to=${returnTo}`;
+      throw new Error('登录已过期，请重新登录');
+    }
+    let err = text;
+    try {
+      const d = JSON.parse(text) as { error?: string };
+      if (d?.error) err = d.error;
+    } catch {}
+    throw new Error(err || res.statusText);
+  }
+  return text;
+}
+
 export async function getAuthConfig(): Promise<{ email_verification_required: boolean; adopt_cost?: number }> {
   return fetchApi<{ email_verification_required: boolean; adopt_cost?: number }>('/auth/config');
 }
