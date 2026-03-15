@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -66,19 +67,30 @@ func (d *DB) DeleteMessagesByInstance(instanceID int64) error {
 	return err
 }
 
+// IsMediaContent 判断 content 是否为媒体消息（含图片/文件/音视频链接），此类消息不应被后续文本覆盖
+func IsMediaContent(content string) bool {
+	s := content
+	return strings.Contains(s, "![") || strings.Contains(s, "[📎") ||
+		strings.Contains(s, "[📹") || strings.Contains(s, "[🔊")
+}
+
 // UpdateLastAssistantMessage updates the content of the most recent assistant message.
-// Used when receiving message.update (streaming) to avoid inserting duplicate rows.
+// 若最后一条是媒体消息（含文件链接），则不覆盖，返回 0 让调用方 Insert 新消息。
 func (d *DB) UpdateLastAssistantMessage(instanceID int64, content string) (int64, error) {
 	var id int64
+	var lastContent string
 	err := d.QueryRow(
-		"SELECT id FROM messages WHERE instance_id = ? AND role = 'assistant' ORDER BY id DESC LIMIT 1",
+		"SELECT id, content FROM messages WHERE instance_id = ? AND role = 'assistant' ORDER BY id DESC LIMIT 1",
 		instanceID,
-	).Scan(&id)
+	).Scan(&id, &lastContent)
 	if err == sql.ErrNoRows {
 		return 0, nil
 	}
 	if err != nil {
 		return 0, fmt.Errorf("update last assistant message: %w", err)
+	}
+	if IsMediaContent(lastContent) {
+		return 0, nil
 	}
 	res, err := d.Exec("UPDATE messages SET content = ? WHERE id = ?", content, id)
 	if err != nil {
