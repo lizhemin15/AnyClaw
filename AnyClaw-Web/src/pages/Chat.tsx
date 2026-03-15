@@ -313,7 +313,7 @@ export default function Chat() {
     markInstanceRead(instanceId).catch(() => {})
   }, [instanceId, navigate, loadInitial])
 
-  // 页面重新可见时拉取最新消息并合并（多标签/后台时可能漏收 WebSocket），不覆盖已有历史
+  // 合并服务端消息，避免 DB 与 WS 重复：user 按 content+u- 替换；assistant 按 content 替换或去重
   const mergeMessagesFromServer = useCallback(
     (list: ChatMessage[], setter: React.Dispatch<React.SetStateAction<ChatMessage[]>>) => {
       const arr = Array.isArray(list) ? list : []
@@ -330,6 +330,13 @@ export default function Chat() {
             const idx = merged.findIndex((x) => x.role === 'user' && x.content === content && String(x.id).startsWith('u-'))
             if (idx >= 0) {
               merged[idx] = { id: m.id, content, role }
+              continue
+            }
+          }
+          if (role === 'assistant') {
+            const sameContentIdx = merged.findIndex((x) => x.role === 'assistant' && x.content === content)
+            if (sameContentIdx >= 0) {
+              merged[sameContentIdx] = { ...merged[sameContentIdx], id: m.id }
               continue
             }
           }
@@ -354,39 +361,14 @@ export default function Chat() {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [instanceId, loadMessages, mergeMessagesFromServer])
 
-  // 等待回答时轮询拉取，兜底 WebSocket 漏传（如飞书绑定后容器重启导致消息未实时推送）
+  // 等待回答时轮询拉取，兜底 WebSocket 漏传
   useEffect(() => {
     if (!typing || isNaN(instanceId)) return
     const timer = setInterval(() => {
-      loadMessages().then((list) => {
-        const arr = Array.isArray(list) ? list : []
-        if (arr.length === 0) return
-        const reversed = [...arr].reverse()
-        setMessages((prev) => {
-          const prevIds = new Set(prev.map((m) => m.id))
-          const merged = [...prev]
-          for (const m of reversed) {
-            const role = m.role ?? 'assistant'
-            const content = m.content ?? ''
-            if (role === 'assistant' && isThinkingPlaceholder(content)) continue
-            if (role === 'user') {
-              const idx = merged.findIndex((x) => x.role === 'user' && x.content === content && String(x.id).startsWith('u-'))
-              if (idx >= 0) {
-                merged[idx] = { id: m.id, content, role }
-                continue
-              }
-            }
-            if (!prevIds.has(m.id)) {
-              merged.push({ id: m.id, content, role })
-              prevIds.add(m.id)
-            }
-          }
-          return merged.length > prev.length ? merged : prev
-        })
-      })
+      loadMessages().then((list) => mergeMessagesFromServer(list, setMessages))
     }, 3000)
     return () => clearInterval(timer)
-  }, [typing, instanceId, loadMessages])
+  }, [typing, instanceId, loadMessages, mergeMessagesFromServer])
 
   useEffect(() => {
     if (isNaN(instanceId)) return
@@ -408,11 +390,15 @@ export default function Chat() {
         switch (msg.type) {
           case 'message.create':
             if (msg.payload?.content != null) {
-              const mid = msg.payload.message_id ?? msg.id ?? String(Date.now())
+              const mid = msg.payload.message_id ?? msg.id ?? 'a-' + Date.now()
               const content = String(msg.payload.content)
               if (isThinkingPlaceholder(content)) return
               setMessages((prev) => {
-                if (prev.some((m) => m.id === mid || (m.content === content && m.role === 'assistant'))) return prev
+                if (prev.some((m) => m.id === mid)) return prev
+                const sameContentIdx = prev.findIndex((m) => m.role === 'assistant' && m.content === content)
+                if (sameContentIdx >= 0) {
+                  return prev.map((m, i) => (i === sameContentIdx ? { ...m, id: mid } : m))
+                }
                 return [...prev, { id: mid, content, role: (msg.payload!.role as string) || 'assistant' }]
               })
               scheduleMarkRead()
@@ -429,13 +415,17 @@ export default function Chat() {
                   if (idx >= 0) {
                     return prev.map((m) => (m.id === targetId ? { ...m, content } : m))
                   }
-                  // 占位消息可能被过滤未添加，尝试替换已有的 Thinking 气泡
                   const thinkingIdx = prev.findIndex((m) => m.role === 'assistant' && isThinkingPlaceholder(m.content))
                   if (thinkingIdx >= 0) {
                     return prev.map((m, i) => (i === thinkingIdx ? { ...m, id: targetId, content } : m))
                   }
                 }
-                return [...prev, { id: targetId || 'u-' + Date.now(), content, role: 'assistant' }]
+                // 无 targetId 时更新最后一条 assistant，避免每次追加导致重复
+                const lastAssistantIdx = prev.map((m, i) => (m.role === 'assistant' ? i : -1)).filter((i) => i >= 0).pop()
+                if (lastAssistantIdx != null) {
+                  return prev.map((m, i) => (i === lastAssistantIdx ? { ...m, content } : m))
+                }
+                return [...prev, { id: targetId || 'a-' + Date.now(), content, role: 'assistant' }]
               })
               scheduleMarkRead()
             }
@@ -446,34 +436,7 @@ export default function Chat() {
             break
           case 'typing.stop':
             setTyping(false)
-            // typing 结束时拉取一次，兜底 WebSocket 漏传的末尾消息
-            loadMessages().then((list) => {
-              const arr = Array.isArray(list) ? list : []
-              if (arr.length > 0) {
-                setMessages((prev) => {
-                  const prevIds = new Set(prev.map((m) => m.id))
-                  const reversed = [...arr].reverse()
-                  let merged = [...prev]
-                  for (const m of reversed) {
-                    const role = m.role ?? 'assistant'
-                    const content = m.content ?? ''
-                    if (role === 'assistant' && isThinkingPlaceholder(content)) continue
-                    if (role === 'user') {
-                      const idx = merged.findIndex((x) => x.role === 'user' && x.content === content && String(x.id).startsWith('u-'))
-                      if (idx >= 0) {
-                        merged[idx] = { id: m.id, content, role }
-                        continue
-                      }
-                    }
-                    if (!prevIds.has(m.id)) {
-                      merged = [...merged, { id: m.id, content, role }]
-                      prevIds.add(m.id)
-                    }
-                  }
-                  return merged
-                })
-              }
-            })
+            loadMessages().then((list) => mergeMessagesFromServer(list, setMessages))
             break
         }
       } catch {
@@ -498,7 +461,7 @@ export default function Chat() {
       wsRef.current = null
       if (markReadTimeoutRef.current) clearTimeout(markReadTimeoutRef.current)
     }
-  }, [instanceId, scheduleMarkRead, loadMessages])
+  }, [instanceId, scheduleMarkRead, loadMessages, mergeMessagesFromServer])
 
   useEffect(() => {
     listRef.current?.scrollTo(0, listRef.current?.scrollHeight ?? 0)
@@ -672,11 +635,16 @@ export default function Chat() {
             <div className="space-y-4">
               {messages
                 .filter((m) => !isThinkingPlaceholder(m.content ?? ''))
-                .filter((m, i, arr) => {
-                  if (i === 0) return true
-                  const prev = arr[i - 1]
-                  return !(m.role === 'assistant' && prev.role === 'assistant' && m.content === prev.content)
-                })
+                .reduce(
+                  (acc: { list: ChatMessage[]; ids: Set<string | number> }, m) => {
+                    if (acc.ids.has(m.id as string | number)) return acc
+                    const last = acc.list[acc.list.length - 1]
+                    if (last && m.role === 'assistant' && last.role === 'assistant' && m.content === last.content) return acc
+                    acc.ids.add(m.id as string | number)
+                    return { list: [...acc.list, m], ids: acc.ids }
+                  },
+                  { list: [] as ChatMessage[], ids: new Set<string | number>() }
+                ).list
                 .map((m) => {
                 const isUser = m.role === 'user'
                 const expanded = expandedIds.has(m.id)
