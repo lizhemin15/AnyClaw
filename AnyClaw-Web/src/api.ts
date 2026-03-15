@@ -480,11 +480,14 @@ export async function getChannelStatus(): Promise<ChannelStatus[]> {
 }
 
 export async function setUsageCorrection(params: {
-  provider: string;
+  channel_id?: string;
+  provider?: string;
   tokens_delta?: number;
   corrected_total?: number;
 }): Promise<void> {
-  const body: Record<string, unknown> = { provider: params.provider };
+  const body: Record<string, unknown> = {};
+  if (params.channel_id) body.channel_id = params.channel_id;
+  if (params.provider) body.provider = params.provider;
   if (params.corrected_total !== undefined) {
     body.corrected_total = params.corrected_total;
   } else if (params.tokens_delta !== undefined) {

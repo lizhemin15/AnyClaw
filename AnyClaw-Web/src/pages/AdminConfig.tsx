@@ -1017,7 +1017,7 @@ export default function AdminConfig() {
                   setCorrecting(true)
                   try {
                     await setUsageCorrection({
-                      provider: getChannelProvider(correctingChannel),
+                      channel_id: correctingChannel.id,
                       corrected_total: val,
                     })
                     setCorrectingChannel(null)

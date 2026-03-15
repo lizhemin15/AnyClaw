@@ -8,16 +8,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/anyclaw/anyclaw-api/internal/config"
 	"github.com/anyclaw/anyclaw-api/internal/db"
 	"github.com/anyclaw/anyclaw-api/internal/request"
 )
 
 type Handler struct {
-	db *db.DB
+	db         *db.DB
+	configPath string
 }
 
-func New(db *db.DB) *Handler {
-	return &Handler{db: db}
+func New(db *db.DB, configPath string) *Handler {
+	return &Handler{db: db, configPath: configPath}
 }
 
 func (h *Handler) ListAdminUsage(w http.ResponseWriter, r *http.Request) {
@@ -83,9 +85,10 @@ func (h *Handler) ListMyUsage(w http.ResponseWriter, r *http.Request) {
 
 // SetUsageCorrectionRequest 矫正今日 token 用量
 type SetUsageCorrectionRequest struct {
-	Provider       string `json:"provider"`        // 渠道名或 api_base，与 usage_log 一致
-	TokensDelta    int64  `json:"tokens_delta"`    // 校正量，正数增加、负数减少
-	CorrectedTotal *int64 `json:"corrected_total"` // 可选：直接设置为目标值，与 tokens_delta 二选一
+	ChannelID      string `json:"channel_id"`       // 渠道 id，优先于 provider
+	Provider       string `json:"provider"`         // 渠道名或 api_base，与 channel_id 二选一
+	TokensDelta    int64  `json:"tokens_delta"`     // 校正量，正数增加、负数减少
+	CorrectedTotal *int64 `json:"corrected_total"`  // 可选：直接设置为目标值，与 tokens_delta 二选一
 }
 
 func (h *Handler) SetUsageCorrection(w http.ResponseWriter, r *http.Request) {
@@ -104,8 +107,28 @@ func (h *Handler) SetUsageCorrection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	provider := strings.TrimSpace(req.Provider)
+	if provider == "" && req.ChannelID != "" {
+		// 从 config 按 channel_id 解析 provider，确保与 channel-status 一致
+		cfg, err := config.Load(h.configPath)
+		if err == nil {
+			for _, ch := range cfg.Channels {
+				if ch.ID == req.ChannelID {
+					if ch.Name != "" {
+						provider = ch.Name
+					} else {
+						base := strings.TrimSuffix(ch.APIBase, "/")
+						if base == "" {
+							base = "https://api.openai.com/v1"
+						}
+						provider = base
+					}
+					break
+				}
+			}
+		}
+	}
 	if provider == "" {
-		http.Error(w, `{"error":"provider required"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"provider or channel_id required"}`, http.StatusBadRequest)
 		return
 	}
 	loc, _ := time.LoadLocation("Asia/Shanghai")

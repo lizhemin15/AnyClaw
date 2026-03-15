@@ -41,14 +41,9 @@ func (d *DB) GetUsageByProviderToday(providers []string) (map[string]int64, erro
 	}
 	rows.Close()
 
-	// 叠加今日校正量
-	args2 := make([]any, 0, len(providers)+1)
-	args2 = append(args2, today)
-	for _, p := range providers {
-		args2 = append(args2, p)
-	}
-	ph2 := strings.Repeat("?,", len(providers)-1) + "?"
-	rows2, err := d.Query("SELECT provider, tokens_delta FROM usage_corrections WHERE correction_date = ? AND provider IN ("+ph2+")", args2...)
+	// 叠加今日校正量（查询当日全部校正，避免 provider 键不一致导致遗漏）
+	dateStr := today.Format("2006-01-02")
+	rows2, err := d.Query("SELECT provider, tokens_delta FROM usage_corrections WHERE correction_date = ?", dateStr)
 	if err != nil {
 		return out, nil // 表可能不存在，忽略
 	}

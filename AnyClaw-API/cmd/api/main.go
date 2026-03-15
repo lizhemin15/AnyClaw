@@ -102,7 +102,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	wsHub := ws.NewHub()
 	wsHandler := ws.NewHandler(database, wsHub)
 	msgHandler := messages.New(database)
-	usageHandler := usage.New(database)
+	usageHandler := usage.New(database, configPath)
 	energyHandler := energy.New(database, configPath, authSvc)
 	proxy := llm.New(configPath, database, database)
 	proxy.StartKeepAlive(5 * time.Minute)
