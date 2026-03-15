@@ -53,10 +53,15 @@ func New(configPath string, resolver TokenResolver, database *db.DB) *Proxy {
 	}
 }
 
-// StartKeepAlive 启动保活协程，定期向各渠道发送最小请求
+// StartKeepAlive 启动保活协程，定期探测各渠道连通性并更新调度器健康状态
 func (p *Proxy) StartKeepAlive(interval time.Duration) {
-	ka := NewKeepAlive(p.configPath, interval)
+	ka := NewKeepAlive(p.configPath, p.scheduler, interval)
 	ka.Start()
+}
+
+// GetChannelStatus 返回各渠道的当日 token 用量、可用性、冷却到期时间
+func (p *Proxy) GetChannelStatus(channels []config.Channel) []ChannelStatus {
+	return p.scheduler.GetChannelStatus(channels)
 }
 
 func (p *Proxy) loadConfig() (*config.Config, error) {
@@ -153,19 +158,15 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	bodyBytes, _ := json.Marshal(req)
 
-	// 最多尝试 min(len(candidates), 3) 次；每次 5xx 后换下一个渠道
+	// 有错误就换下一个渠道，直到成功或全部试完；优先保证请求不失败
 	type attempt struct {
 		ep         config.ChannelEndpoint
 		statusCode int
 		respHeader http.Header
 		respBody   []byte
 	}
-	maxTries := len(candidates)
-	if maxTries > 3 {
-		maxTries = 3
-	}
 	var final *attempt
-	for try := 0; try < maxTries; try++ {
+	for try := 0; try < len(candidates); try++ {
 		ep, ok := p.scheduler.Pick(model, candidates)
 		if !ok {
 			break
@@ -189,17 +190,17 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		p.scheduler.Done(ep)
 		if err != nil {
 			log.Printf("[llm] upstream error (try %d): channel=%s err=%v", try+1, ep.ChannelName, err)
-			p.scheduler.RecordFailure(ep, CooldownTransient)
+			p.scheduler.RecordFailureUntil(ep, time.Now().Add(CooldownTransient))
 			continue
 		}
 		rb, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-			dur := cooldownFor(resp.StatusCode, rb)
-			log.Printf("[llm] upstream error (try %d): channel=%s status=%d cooldown=%v body=%s",
-				try+1, ep.ChannelName, resp.StatusCode, dur, truncate(string(rb), 200))
-			p.scheduler.RecordFailure(ep, dur)
-			if try < maxTries-1 {
+			until := cooldownUntil(resp.StatusCode, rb)
+			log.Printf("[llm] upstream error (try %d): channel=%s status=%d cooldown_until=%v body=%s",
+				try+1, ep.ChannelName, resp.StatusCode, until.Format("2006-01-02 15:04"), truncate(string(rb), 200))
+			p.scheduler.RecordFailureUntil(ep, until)
+			if try < len(candidates)-1 {
 				continue
 			}
 		}
@@ -365,19 +366,30 @@ var quotaPatterns = []string{
 	"credit",
 }
 
-// cooldownFor 根据 HTTP 状态码和响应体判断合适的冷却时长。
-// 429 或配额用尽类错误返回 CooldownDailyLimit；一般 5xx 返回 CooldownTransient。
-func cooldownFor(statusCode int, body []byte) time.Duration {
+// cooldownUntil 根据 HTTP 状态码和响应体返回冷却到期时间。
+// 429 或配额用尽类错误：北京时间次日 0 点；一般 5xx：60 秒后。
+func cooldownUntil(statusCode int, body []byte) time.Time {
 	if statusCode == http.StatusTooManyRequests {
-		return CooldownDailyLimit
+		return midnightBeijing()
 	}
 	lower := strings.ToLower(string(body))
 	for _, p := range quotaPatterns {
 		if strings.Contains(lower, p) {
-			return CooldownDailyLimit
+			return midnightBeijing()
 		}
 	}
-	return CooldownTransient
+	return time.Now().Add(CooldownTransient)
+}
+
+// midnightBeijing 返回北京时间次日 0 点（配额通常在此刻刷新）。
+func midnightBeijing() time.Time {
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		loc = time.FixedZone("CST", 8*3600)
+	}
+	now := time.Now().In(loc)
+	tomorrow := now.AddDate(0, 0, 1)
+	return time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 0, 0, 0, 0, loc)
 }
 
 // truncate 截断字符串到 maxLen 个字符，用于日志输出。

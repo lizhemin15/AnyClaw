@@ -7,9 +7,14 @@ import (
 )
 
 // GetUsageByProviderToday 返回今日各 provider 的 tokens 总量（prompt+completion）
+// 「今日」按北京时间 0 点起算，与渠道配额刷新一致
 func (d *DB) GetUsageByProviderToday(providers []string) (map[string]int64, error) {
-	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	if loc == nil {
+		loc = time.FixedZone("CST", 8*3600)
+	}
+	now := time.Now().In(loc)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 	out := make(map[string]int64)
 	if len(providers) == 0 {
 		return out, nil

@@ -466,6 +466,19 @@ export async function putAdminConfig(config: AdminConfig): Promise<void> {
   });
 }
 
+export interface ChannelStatus {
+  channel_id: string;
+  token_usage_today: number;
+  available: boolean;
+  cooldown_until?: string;
+  in_flight: number;
+}
+
+export async function getChannelStatus(): Promise<ChannelStatus[]> {
+  const data = await fetchApi<{ status: ChannelStatus[] }>('/admin/config/channel-status');
+  return Array.isArray(data?.status) ? data.status : [];
+}
+
 export async function testSMTPConfig(params?: Partial<SMTPConfig>): Promise<{ ok: boolean; message: string }> {
   return fetchApi<{ ok: boolean; message: string }>('/admin/config/test-smtp', {
     method: 'POST',

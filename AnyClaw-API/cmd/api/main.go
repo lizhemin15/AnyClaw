@@ -162,6 +162,20 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	r.Route("/admin", func(r chi.Router) {
 		r.Use(authSvc.AdminMiddleware)
 		r.Get("/config", adminConfigHandler.GetConfig)
+		r.Get("/config/channel-status", func(w http.ResponseWriter, r *http.Request) {
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				http.Error(w, `{"error":"failed to load config"}`, http.StatusInternalServerError)
+				return
+			}
+			channels := cfg.Channels
+			if channels == nil {
+				channels = []config.Channel{}
+			}
+			status := proxy.GetChannelStatus(channels)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{"status": status})
+		})
 		r.Put("/config", adminConfigHandler.PutConfig)
 		r.Post("/config/test", adminConfigHandler.TestChannel)
 		r.Post("/config/test-smtp", adminConfigHandler.TestSMTP)

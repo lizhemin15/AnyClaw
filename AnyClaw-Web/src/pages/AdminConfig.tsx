@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getAdminConfig, putAdminConfig, testChannelConfig, testSMTPConfig, adminReconnectInstances, type AdminConfig, type Channel, type SMTPConfig, type PaymentConfig, type PaymentPlan, type EnergyConfig, type ContainerConfig } from '../api'
+import { getAdminConfig, putAdminConfig, getChannelStatus, testChannelConfig, testSMTPConfig, adminReconnectInstances, type AdminConfig, type Channel, type ChannelStatus, type SMTPConfig, type PaymentConfig, type PaymentPlan, type EnergyConfig, type ContainerConfig } from '../api'
 import { useUnsavedConfig } from '../contexts/UnsavedConfigContext'
 
 function genId() {
@@ -64,6 +64,7 @@ export default function AdminConfig() {
   const [smtpTestResult, setSmtpTestResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [reconnecting, setReconnecting] = useState(false)
   const [reconnectResult, setReconnectResult] = useState<{ ok: boolean; message: string; reconnected?: number } | null>(null)
+  const [channelStatus, setChannelStatus] = useState<Record<string, ChannelStatus>>({})
 
   const unsavedCtx = useUnsavedConfig()
   const hasUnsaved = !!(form && config && JSON.stringify(form) !== JSON.stringify(config))
@@ -139,6 +140,25 @@ export default function AdminConfig() {
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
       .finally(() => setLoading(false))
   }, [])
+
+  const refreshChannelStatus = useCallback(async () => {
+    try {
+      const list = await getChannelStatus()
+      const map: Record<string, ChannelStatus> = {}
+      for (const s of list) map[s.channel_id] = s
+      setChannelStatus(map)
+    } catch {
+      // 静默失败
+    }
+  }, [])
+
+  useEffect(() => {
+    const count = form?.channels?.length ?? 0
+    if (count === 0) return
+    refreshChannelStatus()
+    const t = setInterval(refreshChannelStatus, 30000)
+    return () => clearInterval(t)
+  }, [form?.channels?.length, refreshChannelStatus])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -735,6 +755,27 @@ export default function AdminConfig() {
                     </button>
                     <span className="font-medium text-slate-800 min-w-[100px]">{ch.name}</span>
                     <span className="text-xs text-slate-400">{ch.enabled ? '已启用' : '未启用'}</span>
+                    {channelStatus[ch.id] && (
+                      <span className="flex items-center gap-2 text-xs">
+                        <span className={channelStatus[ch.id].available ? 'text-emerald-600' : 'text-amber-600'}>
+                          {channelStatus[ch.id].available ? '可用' : '冷却中'}
+                        </span>
+                        <span className="text-slate-500">
+                          今日 {(channelStatus[ch.id].token_usage_today ?? 0).toLocaleString()} tokens
+                        </span>
+                        {(ch.daily_tokens_limit ?? 0) > 0 && (
+                          <span className="text-slate-400">
+                            / {(ch.daily_tokens_limit ?? 0).toLocaleString()}
+                          </span>
+                        )}
+                        {channelStatus[ch.id].in_flight > 0 && (
+                          <span className="text-indigo-500">进行中 {channelStatus[ch.id].in_flight}</span>
+                        )}
+                        {channelStatus[ch.id].cooldown_until && (
+                          <span className="text-amber-600">恢复 {channelStatus[ch.id].cooldown_until}</span>
+                        )}
+                      </span>
+                    )}
                     {editingChannel === ch.id ? (
                       <div className="flex gap-2 flex-1 flex-wrap items-center">
                         <input
