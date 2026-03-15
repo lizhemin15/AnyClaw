@@ -62,8 +62,8 @@ func parseContainerMsg(data []byte) (msgType, content, role string, ok bool) {
 	return msgType, "", "", false
 }
 
-func NewHandler(db *db.DB, hub *Hub) *Handler {
-	h := &Handler{db: db, hub: hub}
+func NewHandler(database *db.DB, hub *Hub) *Handler {
+	h := &Handler{db: database, hub: hub}
 	hub.SetOnContainerMessage(func(instanceID int64, data []byte) {
 		msgType, content, role, ok := parseContainerMsg(data)
 		if !ok {
