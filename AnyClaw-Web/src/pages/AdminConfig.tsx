@@ -764,7 +764,7 @@ export default function AdminConfig() {
                     </button>
                     <span className="font-medium text-slate-800 min-w-[100px]">{ch.name}</span>
                     {channelStatus[ch.id] ? (
-                      <span className="flex items-center gap-2 text-xs">
+                      <span className="flex items-center gap-3 text-xs flex-wrap">
                         {!ch.enabled ? (
                           <span className="text-slate-500">手动关闭</span>
                         ) : channelStatus[ch.id].available ? (
@@ -772,14 +772,41 @@ export default function AdminConfig() {
                         ) : (
                           <span className="text-amber-600">系统自动关闭</span>
                         )}
-                        <span className="text-slate-500">
-                          今日 {(channelStatus[ch.id].token_usage_today ?? 0).toLocaleString()} tokens
-                        </span>
-                        {(ch.daily_tokens_limit ?? 0) > 0 && (
-                          <span className="text-slate-400">
-                            / {(ch.daily_tokens_limit ?? 0).toLocaleString()}
+                        <span className="flex items-center gap-2 min-w-[160px]">
+                          <span className="flex-1 min-w-[96px] max-w-[120px] h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <span
+                              className={`block h-full rounded-full transition-all ${
+                                (ch.daily_tokens_limit ?? 0) > 0
+                                  ? (channelStatus[ch.id].token_usage_today ?? 0) >= (ch.daily_tokens_limit ?? 1)
+                                    ? 'bg-red-500'
+                                    : ((channelStatus[ch.id].token_usage_today ?? 0) / (ch.daily_tokens_limit ?? 1)) >= 0.8
+                                      ? 'bg-amber-500'
+                                      : 'bg-emerald-500'
+                                  : 'bg-slate-400'
+                              }`}
+                              style={{
+                                width: `${
+                                  (() => {
+                                    const used = channelStatus[ch.id].token_usage_today ?? 0
+                                    const limit = ch.daily_tokens_limit ?? 0
+                                    const pct =
+                                      limit > 0
+                                        ? (used / limit) * 100
+                                        : (used / 50000) * 100
+                                    return `${Math.max(pct > 0 ? 2 : 0, Math.min(100, pct))}%`
+                                  })()
+                                }`,
+                              }}
+                            />
                           </span>
-                        )}
+                          <span className="text-slate-600 shrink-0">
+                            {(channelStatus[ch.id].token_usage_today ?? 0).toLocaleString()}
+                            {(ch.daily_tokens_limit ?? 0) > 0 && (
+                              <span className="text-slate-400">/{(ch.daily_tokens_limit ?? 0).toLocaleString()}</span>
+                            )}{' '}
+                            tokens
+                          </span>
+                        </span>
                         {channelStatus[ch.id].in_flight > 0 && (
                           <span className="text-indigo-500">进行中 {channelStatus[ch.id].in_flight}</span>
                         )}
