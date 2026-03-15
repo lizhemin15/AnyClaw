@@ -1,11 +1,21 @@
 package anyclaw_bridge
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/jpeg"
+	"mime/multipart"
+	_ "image/png"
+	_ "image/gif"
+	"mime"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -389,6 +399,231 @@ func (c *BridgeChannel) SendPlaceholder(ctx context.Context, chatID string) (str
 		return "", err
 	}
 	return msgID, nil
+}
+
+// compressImageForWeb compresses images for web transmission: re-encode as JPEG (quality 82).
+// For large images (>1920x1080), scales down to reduce payload. Returns compressed data and new content type.
+func compressImageForWeb(data []byte, contentType string) ([]byte, string, error) {
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, "", err
+	}
+	bounds := img.Bounds()
+	w, h := bounds.Dx(), bounds.Dy()
+	const maxW, maxH = 1920, 1080
+	var target image.Image = img
+	if w > maxW || h > maxH {
+		scale := float64(maxW) / float64(w)
+		if float64(h)*scale > float64(maxH) {
+			scale = float64(maxH) / float64(h)
+		}
+		nw := int(float64(w)*scale + 0.5)
+		nh := int(float64(h)*scale + 0.5)
+		if nw < 1 {
+			nw = 1
+		}
+		if nh < 1 {
+			nh = 1
+		}
+		dst := image.NewRGBA(image.Rect(0, 0, nw, nh))
+		for y := 0; y < nh; y++ {
+			for x := 0; x < nw; x++ {
+				sx := bounds.Min.X + int(float64(x)/scale+0.5)
+				sy := bounds.Min.Y + int(float64(y)/scale+0.5)
+				if sx >= bounds.Max.X {
+					sx = bounds.Max.X - 1
+				}
+				if sy >= bounds.Max.Y {
+					sy = bounds.Max.Y - 1
+				}
+				dst.Set(x, y, img.At(sx, sy))
+			}
+		}
+		target = dst
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, target, &jpeg.Options{Quality: 82}); err != nil {
+		return nil, "", err
+	}
+	return buf.Bytes(), "image/jpeg", nil
+}
+
+// uploadToAPI 上传文件到 API（会转发到 COS），返回 URL；失败返回空字符串
+func (c *BridgeChannel) uploadToAPI(ctx context.Context, filePath, filename, contentType string, data []byte) string {
+	baseURL := strings.TrimSuffix(c.config.APIURL, "/")
+	uploadURL := baseURL + "/instances/" + c.config.InstanceID + "/media"
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	part, err := w.CreateFormFile("file", filename)
+	if err != nil {
+		return ""
+	}
+	if _, err := part.Write(data); err != nil {
+		return ""
+	}
+	if err := w.Close(); err != nil {
+		return ""
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", uploadURL, &buf)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer "+c.config.Token)
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.DebugCF(channelName, "Upload to API failed", map[string]any{"error": err.Error()})
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+	var out struct {
+		URL      string `json:"url"`
+		Filename string `json:"filename"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&out) != nil || out.URL == "" {
+		return ""
+	}
+	return out.URL
+}
+
+// sanitizeFilenameForMarkdown 移除会破坏 markdown 链接语法的字符
+func sanitizeFilenameForMarkdown(s string) string {
+	return strings.NewReplacer("[", "-", "]", "-", "(", "-", ")", "-", "\\", "-").Replace(s)
+}
+
+// inferMediaTypeFromMeta infers "image"|"audio"|"video"|"file" from filename and content type.
+func inferMediaTypeFromMeta(filename, contentType string) string {
+	ct := strings.ToLower(contentType)
+	fn := strings.ToLower(filename)
+	if strings.HasPrefix(ct, "image/") {
+		return "image"
+	}
+	if strings.HasPrefix(ct, "audio/") || ct == "application/ogg" {
+		return "audio"
+	}
+	if strings.HasPrefix(ct, "video/") {
+		return "video"
+	}
+	ext := filepath.Ext(fn)
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg":
+		return "image"
+	case ".mp3", ".wav", ".ogg", ".m4a", ".flac", ".aac", ".wma", ".opus":
+		return "audio"
+	case ".mp4", ".avi", ".mov", ".webm", ".mkv":
+		return "video"
+	}
+	return "file"
+}
+
+// SendMedia implements channels.MediaSender. Tries to upload to COS via API first;
+// falls back to base64 embedding when COS is not configured.
+func (c *BridgeChannel) SendMedia(ctx context.Context, msg bus.OutboundMediaMessage) error {
+	if !c.IsRunning() {
+		return channels.ErrNotRunning
+	}
+	if c.conn == nil || c.conn.closed.Load() {
+		return fmt.Errorf("not connected to API")
+	}
+	store := c.GetMediaStore()
+	if store == nil {
+		return fmt.Errorf("media store not configured")
+	}
+
+	sessionID := strings.TrimPrefix(msg.ChatID, channelName+":")
+	if sessionID == "" {
+		sessionID = c.sessionID
+	}
+
+	const maxEmbedSize = 4 << 20 // 4MB per file (fallback base64)
+	var parts []string
+	for _, p := range msg.Parts {
+		path, meta, err := store.ResolveWithMeta(p.Ref)
+		if err != nil {
+			logger.WarnCF(channelName, "Failed to resolve media ref", map[string]any{
+				"ref": p.Ref, "error": err.Error(),
+			})
+			continue
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			logger.WarnCF(channelName, "Failed to read media file", map[string]any{
+				"path": path, "error": err.Error(),
+			})
+			continue
+		}
+		ct := meta.ContentType
+		if ct == "" {
+			ct = mime.TypeByExtension(filepath.Ext(meta.Filename))
+		}
+		if ct == "" {
+			ct = "application/octet-stream"
+		}
+		mediaType := p.Type
+		if mediaType == "" {
+			mediaType = inferMediaTypeFromMeta(meta.Filename, ct)
+		}
+		if mediaType == "image" {
+			if compressed, newCT, err := compressImageForWeb(data, ct); err == nil {
+				data = compressed
+				ct = newCT
+			}
+		}
+		linkPrefix := "📎"
+		switch mediaType {
+		case "video":
+			linkPrefix = "📹"
+		case "audio":
+			linkPrefix = "🔊"
+		}
+		filename := meta.Filename
+		if filename == "" {
+			filename = p.Filename
+		}
+		if filename == "" {
+			filename = filepath.Base(path)
+		}
+		if filename == "" {
+			filename = "file"
+		}
+		filename = sanitizeFilenameForMarkdown(filename)
+		// 优先上传到 COS
+		fileURL := c.uploadToAPI(ctx, path, filename, ct, data)
+		if fileURL != "" {
+			if mediaType == "image" {
+				parts = append(parts, fmt.Sprintf("![%s](%s)", filename, fileURL))
+			} else {
+				parts = append(parts, fmt.Sprintf("[%s %s](%s)", linkPrefix, filename, fileURL))
+			}
+			continue
+		}
+		// 回退：base64 嵌入（仅小文件）
+		if len(data) > maxEmbedSize {
+			parts = append(parts, fmt.Sprintf("%s %s（文件过大，未嵌入）", linkPrefix, filename))
+			continue
+		}
+		b64 := base64.StdEncoding.EncodeToString(data)
+		dataURL := fmt.Sprintf("data:%s;base64,%s", ct, b64)
+		if mediaType == "image" {
+			parts = append(parts, fmt.Sprintf("![%s](%s)", filename, dataURL))
+		} else {
+			parts = append(parts, fmt.Sprintf("[%s %s](%s)", linkPrefix, filename, dataURL))
+		}
+	}
+	if len(parts) == 0 {
+		return nil
+	}
+	content := strings.Join(parts, "\n\n")
+	outMsg := pico.NewMessage(pico.TypeMessageCreate, map[string]any{
+		"content": content,
+		"role":    "assistant",
+	})
+	outMsg.SessionID = sessionID
+	return c.conn.writeJSON(outMsg)
 }
 
 func truncate(s string, maxLen int) string {

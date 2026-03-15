@@ -17,6 +17,7 @@ import (
 	"github.com/anyclaw/anyclaw-api/internal/hosts"
 	"github.com/anyclaw/anyclaw-api/internal/instances"
 	"github.com/anyclaw/anyclaw-api/internal/llm"
+	"github.com/anyclaw/anyclaw-api/internal/media"
 	"github.com/anyclaw/anyclaw-api/internal/messages"
 	"github.com/anyclaw/anyclaw-api/internal/usage"
 	"github.com/anyclaw/anyclaw-api/internal/scheduler"
@@ -102,6 +103,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	wsHub := ws.NewHub()
 	wsHandler := ws.NewHandler(database, wsHub)
 	msgHandler := messages.New(database)
+	mediaHandler := media.New(database, configPath)
 	usageHandler := usage.New(database, configPath)
 	energyHandler := energy.New(database, configPath, authSvc)
 	proxy := llm.New(configPath, database, database)
@@ -153,6 +155,8 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Get("/{id}", instHandler.Get)
 		r.Delete("/{id}", instHandler.Delete)
 	})
+	// 容器上传媒体到 COS（使用 instance token 鉴权，不走 JWT）
+	r.Post("/instances/{id}/media", mediaHandler.UploadMedia)
 
 	r.Get("/energy/config", energyHandler.GetPublicConfig)
 	r.Route("/energy", func(r chi.Router) {

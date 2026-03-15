@@ -446,12 +446,23 @@ export interface ContainerConfig {
   workspace_size_gb: number;
 }
 
+export interface COSConfig {
+  enabled: boolean;
+  secret_id: string;
+  secret_key: string;
+  bucket: string;
+  region: string;
+  domain: string;
+  path_prefix: string;
+}
+
 export interface AdminConfig {
   channels: Channel[];
   smtp?: SMTPConfig;
   payment?: PaymentConfig;
   energy?: EnergyConfig;
   container?: ContainerConfig;
+  cos?: COSConfig;
   api_url?: string;
 }
 

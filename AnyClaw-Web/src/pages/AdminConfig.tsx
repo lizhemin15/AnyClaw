@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getAdminConfig, putAdminConfig, getChannelStatus, setUsageCorrection, testChannelConfig, testSMTPConfig, adminReconnectInstances, type AdminConfig, type Channel, type ChannelStatus, type SMTPConfig, type PaymentConfig, type PaymentPlan, type EnergyConfig, type ContainerConfig } from '../api'
+import { getAdminConfig, putAdminConfig, getChannelStatus, setUsageCorrection, testChannelConfig, testSMTPConfig, adminReconnectInstances, type AdminConfig, type Channel, type ChannelStatus, type SMTPConfig, type PaymentConfig, type PaymentPlan, type EnergyConfig, type ContainerConfig, type COSConfig } from '../api'
 import { useUnsavedConfig } from '../contexts/UnsavedConfigContext'
 
 function genId() {
@@ -142,9 +142,10 @@ export default function AdminConfig() {
         const defaultEnergy: EnergyConfig = { tokens_per_energy: 1000, adopt_cost: 100, daily_consume: 0, min_energy_for_task: 5, zero_days_to_delete: 0, invite_reward: 50, new_user_energy: 0, daily_login_bonus: 10, invite_commission_rate: 5, monthly_subscription_cost: 50 }
         const energy: EnergyConfig = c.energy ? { ...defaultEnergy, ...c.energy } : defaultEnergy
         const container: ContainerConfig = c.container ? { ...c.container } : { workspace_size_gb: 0 }
+        const cos: COSConfig | undefined = (c as { cos?: COSConfig }).cos
         const api_url = (c as { api_url?: string }).api_url ?? ''
-        setConfig({ channels, smtp, payment, energy, container, api_url })
-        setForm({ channels: JSON.parse(JSON.stringify(channels)), smtp, payment: JSON.parse(JSON.stringify(payment)), energy: { ...energy }, container: { ...container }, api_url })
+        setConfig({ channels, smtp, payment, energy, container, cos, api_url })
+        setForm({ channels: JSON.parse(JSON.stringify(channels)), smtp, payment: JSON.parse(JSON.stringify(payment)), energy: { ...energy }, container: { ...container }, cos: cos ? { ...cos } : undefined, api_url })
       })
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
       .finally(() => setLoading(false))
@@ -305,6 +306,12 @@ export default function AdminConfig() {
       ...form,
       smtp: { host: '', port: 587, user: '', pass: '', from: '', ...form.smtp, ...upd },
     })
+  }
+
+  const updateCOS = (upd: Partial<COSConfig>) => {
+    if (!form) return
+    const cos = form.cos ?? { enabled: false, secret_id: '', secret_key: '', bucket: '', region: '', domain: '', path_prefix: 'media/' }
+    setForm({ ...form, cos: { ...cos, ...upd } })
   }
 
   const updateContainer = (upd: Partial<ContainerConfig>) => {
@@ -630,6 +637,90 @@ export default function AdminConfig() {
               </div>
               <p className="text-sm text-slate-500 mt-6">0 = 不限制；新招聘实例生效</p>
             </div>
+          </div>
+        </div>
+
+        {/* 腾讯云 COS */}
+        <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200">
+            <h2 className="font-semibold text-slate-800">腾讯云 COS</h2>
+            <p className="text-sm text-slate-500 mt-1">AI 发送的图片、音视频、文件将上传到 COS，消息中存链接，前端直接渲染或下载</p>
+          </div>
+          <div className="px-5 py-4 space-y-4">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form?.cos?.enabled ?? false}
+                onChange={(e) => updateCOS({ enabled: e.target.checked })}
+                className="rounded border-slate-300"
+              />
+              <span className="text-sm font-medium text-slate-700">启用 COS</span>
+            </label>
+            {form?.cos?.enabled && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">SecretId</label>
+                  <input
+                    type="password"
+                    value={form.cos.secret_id ?? ''}
+                    onChange={(e) => updateCOS({ secret_id: e.target.value })}
+                    placeholder="腾讯云 API 密钥"
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">SecretKey</label>
+                  <input
+                    type="password"
+                    value={form.cos.secret_key ?? ''}
+                    onChange={(e) => updateCOS({ secret_key: e.target.value })}
+                    placeholder="腾讯云 API 密钥"
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Bucket</label>
+                  <input
+                    type="text"
+                    value={form.cos.bucket ?? ''}
+                    onChange={(e) => updateCOS({ bucket: e.target.value })}
+                    placeholder="如 mybucket-1234567890"
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Region</label>
+                  <input
+                    type="text"
+                    value={form.cos.region ?? ''}
+                    onChange={(e) => updateCOS({ region: e.target.value })}
+                    placeholder="如 ap-guangzhou"
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">自定义域名（可选）</label>
+                  <input
+                    type="url"
+                    value={form.cos.domain ?? ''}
+                    onChange={(e) => updateCOS({ domain: e.target.value })}
+                    placeholder="https://cdn.example.com"
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
+                  />
+                  <p className="text-xs text-slate-500 mt-0.5">空则使用 COS 默认域名</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">路径前缀（可选）</label>
+                  <input
+                    type="text"
+                    value={form.cos.path_prefix ?? 'media/'}
+                    onChange={(e) => updateCOS({ path_prefix: e.target.value })}
+                    placeholder="media/"
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

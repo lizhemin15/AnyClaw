@@ -20,7 +20,19 @@ type Config struct {
 	SMTP         *SMTPConfig    `json:"smtp,omitempty"` // 注册验证码邮件
 	Payment      *PaymentConfig `json:"payment,omitempty"`
 	Energy       *EnergyConfig  `json:"energy,omitempty"` // 金币/活力经济参数，即时生效
-	Container    *ContainerConfig `json:"container,omitempty"` // 宠物容器配置
+	Container    *ContainerConfig `json:"container,omitempty"` // 员工容器配置
+	COS          *COSConfig      `json:"cos,omitempty"`       // 腾讯云 COS 对象存储，用于媒体文件
+}
+
+// COSConfig 腾讯云 COS 配置，用于上传 AI 发送的图片/音视频/文件
+type COSConfig struct {
+	Enabled    bool   `json:"enabled"`
+	SecretID   string `json:"secret_id"`
+	SecretKey  string `json:"secret_key"`
+	Bucket     string `json:"bucket"`      // 存储桶名称，如 mybucket-1234567890
+	Region     string `json:"region"`      // 地域，如 ap-guangzhou
+	Domain     string `json:"domain"`      // 自定义域名，空则用默认 cos.<bucket>.cos.<region>.myqcloud.com
+	PathPrefix string `json:"path_prefix"` // 对象键前缀，如 media/
 }
 
 // ContainerConfig 宠物容器配置
@@ -337,6 +349,7 @@ func Load(path string) (*Config, error) {
 				Payment    *PaymentConfig     `json:"payment"`
 				Energy     *EnergyConfig      `json:"energy"`
 				Container  *ContainerConfig   `json:"container"`
+				COS        *COSConfig         `json:"cos"`
 				APIURL     string             `json:"api_url"`
 			}
 			if json.Unmarshal(b, &dbCfg) == nil {
@@ -354,6 +367,9 @@ func Load(path string) (*Config, error) {
 				}
 				if dbCfg.Container != nil {
 					cfg.Container = dbCfg.Container
+				}
+				if dbCfg.COS != nil {
+					cfg.COS = dbCfg.COS
 				}
 				if dbCfg.APIURL != "" {
 					cfg.APIURL = strings.TrimSpace(dbCfg.APIURL)

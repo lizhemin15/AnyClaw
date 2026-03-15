@@ -101,6 +101,19 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	if cfg.APIURL != "" {
 		resp["api_url"] = cfg.APIURL
 	}
+	if cfg.COS != nil {
+		resp["cos"] = map[string]any{
+			"enabled":     cfg.COS.Enabled,
+			"secret_id":  config.MaskAPIKey(cfg.COS.SecretID),
+			"secret_key": config.MaskAPIKey(cfg.COS.SecretKey),
+			"bucket":     cfg.COS.Bucket,
+			"region":     cfg.COS.Region,
+			"domain":     cfg.COS.Domain,
+			"path_prefix": cfg.COS.PathPrefix,
+		}
+	} else {
+		resp["cos"] = map[string]any{"enabled": false, "bucket": "", "region": "", "domain": "", "path_prefix": "media/"}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -117,6 +130,7 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 		Payment    *config.PaymentConfig   `json:"payment"`
 		Energy     *config.EnergyConfig    `json:"energy"`
 		Container  *config.ContainerConfig `json:"container"`
+		COS        *config.COSConfig       `json:"cos"`
 		APIURL     string                  `json:"api_url"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -176,9 +190,25 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 	if container != nil && container.WorkspaceSizeGB < 0 {
 		container.WorkspaceSizeGB = 0
 	}
+	cos := req.COS
+	if cos == nil {
+		cos = cfg.COS
+	} else {
+		if cfg.COS != nil {
+			if cos.SecretID == "" || strings.HasPrefix(cos.SecretID, "****") {
+				cos.SecretID = cfg.COS.SecretID
+			}
+			if cos.SecretKey == "" || strings.HasPrefix(cos.SecretKey, "****") {
+				cos.SecretKey = cfg.COS.SecretKey
+			}
+		}
+		if !cos.Enabled {
+			cos = nil
+		}
+	}
 	apiURL := strings.TrimSpace(req.APIURL)
 	// 全部写入数据库，DB 为唯一数据源
-	dbPayload := map[string]any{"channels": channels, "smtp": smtp, "payment": payment, "energy": energy, "container": container, "api_url": apiURL}
+	dbPayload := map[string]any{"channels": channels, "smtp": smtp, "payment": payment, "energy": energy, "container": container, "cos": cos, "api_url": apiURL}
 	dbBytes, _ := json.Marshal(dbPayload)
 	if h.database == nil {
 		http.Error(w, `{"error":"database not configured"}`, http.StatusInternalServerError)
@@ -186,7 +216,9 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.database.SaveAdminConfigJSON(dbBytes); err != nil {
 		log.Printf("[admin] SaveAdminConfig to DB failed: %v", err)
-		http.Error(w, `{"error":"failed to save config to database: `+err.Error()+`"}`, http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "failed to save config to database: " + err.Error()})
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

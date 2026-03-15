@@ -666,6 +666,25 @@ func (m *Manager) dispatchOutboundMedia(ctx context.Context) {
 		func(ctx context.Context, w *channelWorker, msg bus.OutboundMediaMessage) bool {
 			select {
 			case w.mediaQueue <- msg:
+				// Mirror media to anyclaw_bridge so the web UI shows files/images from other channels
+				if msg.Channel != "anyclaw_bridge" {
+					m.mu.RLock()
+					bridgeCh, bridgeOk := m.channels["anyclaw_bridge"]
+					wBridge := m.workers["anyclaw_bridge"]
+					m.mu.RUnlock()
+					if bridgeOk && wBridge != nil {
+						if mc, ok := bridgeCh.(interface{ MirrorChatID() string }); ok {
+							mirrorMsg := msg
+							mirrorMsg.Channel = "anyclaw_bridge"
+							mirrorMsg.ChatID = mc.MirrorChatID()
+							select {
+							case wBridge.mediaQueue <- mirrorMsg:
+							case <-ctx.Done():
+								return false
+							}
+						}
+					}
+				}
 				return true
 			case <-ctx.Done():
 				return false

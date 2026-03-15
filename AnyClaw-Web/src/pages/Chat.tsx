@@ -51,11 +51,49 @@ function MessageContent({
   onToggleExpand: () => void
 }) {
   const s = typeof content === 'string' ? content : String(content ?? '')
-  const isLong = s.length > COLLAPSE_THRESHOLD
+  const hasEmbeddedMedia = /\]\(data:/.test(s)
+  const isLong = !hasEmbeddedMedia && s.length > COLLAPSE_THRESHOLD
   const showCollapsed = isLong && !expanded
   const displayContent = showCollapsed ? s.slice(0, COLLAPSE_THRESHOLD) + '...' : s
 
   const wrapClass = isUser ? 'msg-md-user' : 'msg-md-assistant'
+
+  const getExt = (url: string) => (url.split('?')[0].split('#')[0].match(/\.([a-zA-Z0-9]+)$/) || [])[1]?.toLowerCase()
+  const videoExts = new Set(['mp4', 'webm', 'mov', 'ogg'])
+  const audioExts = new Set(['mp3', 'wav', 'ogg', 'm4a', 'webm'])
+  const isSafeHref = (h: string) => {
+    const lower = h.toLowerCase()
+    if (lower.startsWith('https://') || lower.startsWith('http://')) return true
+    if (!lower.startsWith('data:')) return false
+    const m = lower.slice(5, 50)
+    return (m.startsWith('image/') && !m.startsWith('image/svg')) || m.startsWith('audio/') || m.startsWith('video/') || m.startsWith('application/octet-stream')
+  }
+  const linkText = (c: React.ReactNode): string => {
+    if (c == null) return ''
+    if (typeof c === 'string') return c
+    if (Array.isArray(c)) return c.map(linkText).join('')
+    return ''
+  }
+
+  const markdownComponents = {
+    img: ({ src, alt, ...props }: React.ImgHTMLAttributes<HTMLImageElement>) =>
+      src && isSafeHref(src) ? <img src={src} alt={alt ?? ''} className="max-w-full max-h-80 rounded" {...props} /> : null,
+    a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
+      if (!href) return <a {...props}>{children}</a>
+      if (!isSafeHref(href)) return <span {...props}>{children}</span>
+      if (href.startsWith('data:')) return <a href={href} download {...props}>{children}</a>
+      const text = linkText(children)
+      const ext = getExt(href)
+      // 优先按 bridge 的 emoji 标识：📹 video、🔊 audio
+      if (text.includes('📹')) return <video src={href} controls className="max-w-full max-h-80 rounded" />
+      if (text.includes('🔊')) return <audio src={href} controls className="max-w-full" />
+      // 无 emoji 时按扩展名推断，ogg 多为音频、webm 多为视频
+      if (ext && videoExts.has(ext) && ext !== 'ogg') return <video src={href} controls className="max-w-full max-h-80 rounded" />
+      if (ext && audioExts.has(ext)) return <audio src={href} controls className="max-w-full" />
+      const isFile = !!ext
+      return <a href={href} {...(isFile ? { download: true } : {})} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>
+    },
+  }
 
   return (
     <ErrorBoundary fallback={
@@ -69,7 +107,7 @@ function MessageContent({
       </div>
     }>
       <div className={`msg-markdown ${wrapClass}`}>
-        <ReactMarkdown remarkPlugins={supportsGfm ? [remarkGfm] : []}>{displayContent || '\u00A0'}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={supportsGfm ? [remarkGfm] : []} components={markdownComponents}>{displayContent || '\u00A0'}</ReactMarkdown>
         {isLong && (
           <button type="button" onClick={onToggleExpand} className="msg-expand-btn">
             {expanded ? '收起' : '展开'}
