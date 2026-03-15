@@ -184,7 +184,6 @@ function MessageContent({
             type="button"
             onClick={() => setPreviewModal({ url: href, filename })}
             className="text-indigo-600 hover:underline cursor-pointer bg-transparent border-none p-0 font-inherit"
-            {...props}
           >
             {children}
           </button>
