@@ -81,9 +81,17 @@ func NewHandler(db *db.DB, hub *Hub) *Handler {
 		// 流式回复：首条 message.create 常为 "Thinking..."，也存为占位符，后续 message.update 会覆盖
 		stored := false
 		if msgType == "message.create" {
-			_, err := h.db.InsertMessage(instanceID, role, content)
-			log.Printf("[ws] instance %d: message.create stored len=%d err=%v", instanceID, len(content), err)
-			stored = err == nil
+			if db.IsMediaContent(content) {
+				n, _ := h.db.AppendToLastAssistantMessage(instanceID, content)
+				if n > 0 {
+					stored = true
+				}
+			}
+			if !stored {
+				_, err := h.db.InsertMessage(instanceID, role, content)
+				log.Printf("[ws] instance %d: message.create stored len=%d err=%v", instanceID, len(content), err)
+				stored = err == nil
+			}
 		}
 		if msgType == "message.update" {
 			n, _ := h.db.UpdateLastAssistantMessage(instanceID, content)

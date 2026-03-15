@@ -74,6 +74,32 @@ func IsMediaContent(content string) bool {
 		strings.Contains(s, "[📹") || strings.Contains(s, "[🔊")
 }
 
+// AppendToLastAssistantMessage 将 content 追加到最后一条 assistant 消息。仅当最后一条非媒体时追加，返回影响行数。
+func (d *DB) AppendToLastAssistantMessage(instanceID int64, content string) (int64, error) {
+	var id int64
+	var lastContent string
+	err := d.QueryRow(
+		"SELECT id, content FROM messages WHERE instance_id = ? AND role = 'assistant' ORDER BY id DESC LIMIT 1",
+		instanceID,
+	).Scan(&id, &lastContent)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("append to last assistant message: %w", err)
+	}
+	if IsMediaContent(lastContent) {
+		return 0, nil
+	}
+	merged := strings.TrimSpace(lastContent + "\n\n" + content)
+	res, err := d.Exec("UPDATE messages SET content = ? WHERE id = ?", merged, id)
+	if err != nil {
+		return 0, fmt.Errorf("append to last assistant message: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
 // UpdateLastAssistantMessage updates the content of the most recent assistant message.
 // 若最后一条是媒体消息（含文件链接），则不覆盖，返回 0 让调用方 Insert 新消息。
 func (d *DB) UpdateLastAssistantMessage(instanceID int64, content string) (int64, error) {

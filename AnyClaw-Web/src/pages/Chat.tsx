@@ -39,6 +39,11 @@ function isThinkingPlaceholder(content: string): boolean {
   return s.startsWith('thinking')
 }
 
+function isMediaContent(content: string): boolean {
+  const s = String(content ?? '')
+  return s.includes('![') || s.includes('[📎') || s.includes('[📹') || s.includes('[🔊')
+}
+
 function TextPreviewModal({ url, filename, onClose }: { url: string; filename: string; onClose: () => void }) {
   const [content, setContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -399,6 +404,14 @@ export default function Chat() {
                 if (sameContentIdx >= 0) {
                   return prev.map((m, i) => (i === sameContentIdx ? { ...m, id: mid } : m))
                 }
+                // 媒体消息且上一条 assistant 是纯文本：追加到上一条，不单独成条
+                if (isMediaContent(content)) {
+                  const lastIdx = prev.map((m, i) => (m.role === 'assistant' ? i : -1)).filter((i) => i >= 0).pop()
+                  if (lastIdx != null && !isMediaContent(prev[lastIdx]?.content ?? '')) {
+                    const merged = (prev[lastIdx]!.content + '\n\n' + content).trim()
+                    return prev.map((m, i) => (i === lastIdx ? { ...m, content: merged } : m))
+                  }
+                }
                 return [...prev, { id: mid, content, role: (msg.payload!.role as string) || 'assistant' }]
               })
               scheduleMarkRead()
@@ -420,9 +433,13 @@ export default function Chat() {
                     return prev.map((m, i) => (i === thinkingIdx ? { ...m, id: targetId, content } : m))
                   }
                 }
-                // 无 targetId 时更新最后一条 assistant，避免每次追加导致重复
+                // 无 targetId 时：若最后一条是媒体消息，不覆盖，追加新消息；否则更新最后一条
                 const lastAssistantIdx = prev.map((m, i) => (m.role === 'assistant' ? i : -1)).filter((i) => i >= 0).pop()
                 if (lastAssistantIdx != null) {
+                  const lastContent = prev[lastAssistantIdx]?.content ?? ''
+                  if (isMediaContent(lastContent)) {
+                    return [...prev, { id: targetId || 'a-' + Date.now(), content, role: 'assistant' }]
+                  }
                   return prev.map((m, i) => (i === lastAssistantIdx ? { ...m, content } : m))
                 }
                 return [...prev, { id: targetId || 'a-' + Date.now(), content, role: 'assistant' }]
