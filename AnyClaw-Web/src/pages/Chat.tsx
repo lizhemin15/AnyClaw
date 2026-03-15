@@ -27,12 +27,48 @@ interface ChatMessage {
   id: string | number
   content: string
   role?: string
+  created_at?: string
 }
 
 // 初始只加载约两屏，其余通过上拉加载
 const PAGE_SIZE = 10
 
 const TYPING_PHRASES = ['嗯...', '想想看...', '稍等一下下～', '快好啦～', '马上就好～']
+
+/** 将连续的 assistant 消息中，第二条为媒体内容时合并到第一条，避免刷新后链接丢失 */
+function mergeMediaIntoPrevious(list: ChatMessage[]): ChatMessage[] {
+  const result: ChatMessage[] = []
+  for (const m of list) {
+    const last = result[result.length - 1]
+    if (last && m.role === 'assistant' && last.role === 'assistant' && isMediaContent(m.content) && !isMediaContent(last.content)) {
+      result[result.length - 1] = {
+        ...last,
+        content: (last.content + '\n\n' + m.content).trim(),
+      }
+    } else {
+      result.push(m)
+    }
+  }
+  return result
+}
+
+function formatMessageTime(iso: string): string {
+  try {
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return ''
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const msgDate = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+    const diffDays = Math.floor((today.getTime() - msgDate.getTime()) / 86400000)
+    const time = d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+    if (diffDays === 0) return time
+    if (diffDays === 1) return `昨天 ${time}`
+    if (diffDays < 7) return `${diffDays}天前 ${time}`
+    return d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' }) + ' ' + time
+  } catch {
+    return ''
+  }
+}
 
 function isThinkingPlaceholder(content: string): boolean {
   const s = String(content ?? '').trim().toLowerCase()
@@ -265,11 +301,13 @@ export default function Chat() {
       try {
         const { messages: list } = await getMessages(instanceId, PAGE_SIZE, before)
         const arr = Array.isArray(list) ? list : []
-        return arr.map((m: ApiMessage) => ({
+        const mapped = arr.map((m: ApiMessage) => ({
           id: m.id,
           content: m.content ?? '',
           role: m.role,
+          created_at: m.created_at,
         }))
+        return mergeMediaIntoPrevious(mapped)
       } catch {
         return []
       }
@@ -323,7 +361,7 @@ export default function Chat() {
   // 合并服务端消息，避免 DB 与 WS 重复：user 按 content+u- 替换；assistant 按 content 替换或去重
   const mergeMessagesFromServer = useCallback(
     (list: ChatMessage[], setter: React.Dispatch<React.SetStateAction<ChatMessage[]>>) => {
-      const arr = Array.isArray(list) ? list : []
+      const arr = mergeMediaIntoPrevious(Array.isArray(list) ? list : [])
       if (arr.length === 0) return
       const reversed = [...arr].reverse()
       setter((prev) => {
@@ -336,19 +374,19 @@ export default function Chat() {
           if (role === 'user') {
             const idx = merged.findIndex((x) => x.role === 'user' && x.content === content && String(x.id).startsWith('u-'))
             if (idx >= 0) {
-              merged[idx] = { id: m.id, content, role }
+              merged[idx] = { id: m.id, content, role, created_at: m.created_at }
               continue
             }
           }
           if (role === 'assistant') {
             const sameContentIdx = merged.findIndex((x) => x.role === 'assistant' && x.content === content)
             if (sameContentIdx >= 0) {
-              merged[sameContentIdx] = { ...merged[sameContentIdx], id: m.id }
+              merged[sameContentIdx] = { ...merged[sameContentIdx], id: m.id, created_at: m.created_at }
               continue
             }
           }
           if (!prevIds.has(m.id)) {
-            merged = [...merged, { id: m.id, content, role }]
+            merged = [...merged, { id: m.id, content, role, created_at: m.created_at }]
             prevIds.add(m.id)
           }
         }
@@ -698,6 +736,11 @@ export default function Chat() {
                         expanded={expanded}
                         onToggleExpand={toggleExpand}
                       />
+                      {m.created_at && (
+                        <div className={`mt-1.5 text-[10px] ${isUser ? 'text-indigo-200' : 'text-slate-400'}`}>
+                          {formatMessageTime(m.created_at)}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )
