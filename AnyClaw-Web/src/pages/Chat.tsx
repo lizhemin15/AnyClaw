@@ -35,18 +35,35 @@ const PAGE_SIZE = 10
 
 const TYPING_PHRASES = ['嗯...', '想想看...', '稍等一下下～', '快好啦～', '马上就好～']
 
-/** 将连续的 assistant 消息中，第二条为媒体内容时合并到第一条，避免刷新后链接丢失 */
+/** 从展示内容中移除 Thinking... 占位符行（供 mergeMediaIntoPrevious 等使用） */
+function stripThinkingFromContent(content: string): string {
+  return content
+    .split('\n')
+    .filter((line) => !/^Thinking\.\.\./i.test(line.trim()))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+/** 将连续的 assistant 消息中，第二条为媒体内容时合并到第一条，避免刷新后链接丢失。合并时移除 Thinking... */
 function mergeMediaIntoPrevious(list: ChatMessage[]): ChatMessage[] {
   const result: ChatMessage[] = []
   for (const m of list) {
     const last = result[result.length - 1]
     if (last && m.role === 'assistant' && last.role === 'assistant' && isMediaContent(m.content) && !isMediaContent(last.content)) {
-      result[result.length - 1] = {
-        ...last,
-        content: (last.content + '\n\n' + m.content).trim(),
+      const cleanMedia = stripThinkingFromContent(m.content)
+      if (cleanMedia) {
+        result[result.length - 1] = {
+          ...last,
+          content: (stripThinkingFromContent(last.content) + '\n\n' + cleanMedia).trim(),
+        }
+      } else {
+        result.push(m)
       }
     } else {
-      result.push(m)
+      const cleaned = stripThinkingFromContent(m.content) || m.content
+      if (m.role === 'assistant' && !cleaned.trim()) continue
+      result.push({ ...m, content: cleaned })
     }
   }
   return result
@@ -171,7 +188,8 @@ function MessageContent({
   expanded: boolean
   onToggleExpand: () => void
 }) {
-  const s = typeof content === 'string' ? content : String(content ?? '')
+  const raw = typeof content === 'string' ? content : String(content ?? '')
+  const s = isUser ? raw : stripThinkingFromContent(raw)
   const hasEmbeddedMedia = /\]\(data:/.test(s)
   const isLong = !hasEmbeddedMedia && s.length > COLLAPSE_THRESHOLD
   const showCollapsed = isLong && !expanded
@@ -437,20 +455,25 @@ export default function Chat() {
             if (msg.payload?.content != null) {
               const mid = msg.payload.message_id ?? msg.id ?? 'a-' + Date.now()
               const content = String(msg.payload.content)
-              if (isThinkingPlaceholder(content)) return
               setMessages((prev) => {
                 if (prev.some((m) => m.id === mid)) return prev
                 const sameContentIdx = prev.findIndex((m) => m.role === 'assistant' && m.content === content)
                 if (sameContentIdx >= 0) {
                   return prev.map((m, i) => (i === sameContentIdx ? { ...m, id: mid } : m))
                 }
+                const lastIdx = prev.map((m, i) => (m.role === 'assistant' ? i : -1)).filter((i) => i >= 0).pop()
+                // Thinking 占位符：添加，等待正式消息替换
+                if (isThinkingPlaceholder(content)) {
+                  return [...prev, { id: mid, content, role: (msg.payload!.role as string) || 'assistant' }]
+                }
+                // 正式消息来了：若上一条是 Thinking，替换而非追加
+                if (lastIdx != null && isThinkingPlaceholder(prev[lastIdx]?.content ?? '')) {
+                  return prev.map((m, i) => (i === lastIdx ? { ...m, id: mid, content } : m))
+                }
                 // 媒体消息且上一条 assistant 是纯文本：追加到上一条，不单独成条
-                if (isMediaContent(content)) {
-                  const lastIdx = prev.map((m, i) => (m.role === 'assistant' ? i : -1)).filter((i) => i >= 0).pop()
-                  if (lastIdx != null && !isMediaContent(prev[lastIdx]?.content ?? '')) {
-                    const merged = (prev[lastIdx]!.content + '\n\n' + content).trim()
-                    return prev.map((m, i) => (i === lastIdx ? { ...m, content: merged } : m))
-                  }
+                if (isMediaContent(content) && lastIdx != null && !isMediaContent(prev[lastIdx]?.content ?? '')) {
+                  const merged = (prev[lastIdx]!.content + '\n\n' + content).trim()
+                  return prev.map((m, i) => (i === lastIdx ? { ...m, content: merged } : m))
                 }
                 return [...prev, { id: mid, content, role: (msg.payload!.role as string) || 'assistant' }]
               })
@@ -461,7 +484,6 @@ export default function Chat() {
             if (msg.payload?.content != null) {
               const targetId = msg.payload.message_id ?? msg.id
               const content = String(msg.payload.content)
-              if (isThinkingPlaceholder(content)) return
               setMessages((prev) => {
                 if (targetId) {
                   const idx = prev.findIndex((m) => m.id === targetId)
@@ -691,7 +713,6 @@ export default function Chat() {
             )}
             <div className="space-y-4">
               {messages
-                .filter((m) => !isThinkingPlaceholder(m.content ?? ''))
                 .reduce(
                   (acc: { list: ChatMessage[]; ids: Set<string | number> }, m) => {
                     if (acc.ids.has(m.id as string | number)) return acc
@@ -746,7 +767,7 @@ export default function Chat() {
                 )
               })}
             </div>
-            {typing && (
+            {typing && !messages.some((m) => m.role === 'assistant' && isThinkingPlaceholder(m.content ?? '')) && (
               <ErrorBoundary fallback={
                 <div className="flex gap-2 mt-4">
                   <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-sm">🦞</div>

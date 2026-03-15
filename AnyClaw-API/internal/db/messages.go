@@ -74,7 +74,14 @@ func IsMediaContent(content string) bool {
 		strings.Contains(s, "[📹") || strings.Contains(s, "[🔊")
 }
 
+// IsThinkingPlaceholder 判断 content 是否为 Thinking... 占位符，此类消息不应被追加媒体
+func IsThinkingPlaceholder(content string) bool {
+	s := strings.TrimSpace(strings.ToLower(content))
+	return strings.HasPrefix(s, "thinking")
+}
+
 // AppendToLastAssistantMessage 将 content 追加到最后一条 assistant 消息。仅当最后一条非媒体时追加，返回影响行数。
+// 若最后一条为 Thinking... 占位符，则用媒体内容替换而非追加，避免 Thinking 泄露到最终消息。
 func (d *DB) AppendToLastAssistantMessage(instanceID int64, content string) (int64, error) {
 	var id int64
 	var lastContent string
@@ -90,6 +97,15 @@ func (d *DB) AppendToLastAssistantMessage(instanceID int64, content string) (int
 	}
 	if IsMediaContent(lastContent) {
 		return 0, nil
+	}
+	// Thinking... 占位符：用媒体内容替换，不追加
+	if IsThinkingPlaceholder(lastContent) {
+		res, err := d.Exec("UPDATE messages SET content = ? WHERE id = ?", strings.TrimSpace(content), id)
+		if err != nil {
+			return 0, fmt.Errorf("replace thinking with media: %w", err)
+		}
+		n, _ := res.RowsAffected()
+		return n, nil
 	}
 	merged := strings.TrimSpace(lastContent + "\n\n" + content)
 	res, err := d.Exec("UPDATE messages SET content = ? WHERE id = ?", merged, id)
