@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"path"
 	"strings"
@@ -36,9 +37,11 @@ func UploadToCOS(ctx context.Context, cfg *config.COSConfig, reader io.Reader, f
 	key += time.Now().Format("2006/01/02") + "/" + uuid.New().String() + ext
 
 	bucketURL, _ := url.Parse(fmt.Sprintf("https://%s.cos.%s.myqcloud.com", cfg.Bucket, cfg.Region))
-	client := cos.NewClient(&cos.BaseURL{BucketURL: bucketURL}, &cos.AuthorizationTransport{
-		SecretID:  cfg.SecretID,
-		SecretKey: cfg.SecretKey,
+	client := cos.NewClient(&cos.BaseURL{BucketURL: bucketURL}, &http.Client{
+		Transport: &cos.AuthorizationTransport{
+			SecretID:  cfg.SecretID,
+			SecretKey: cfg.SecretKey,
+		},
 	})
 
 	opt := &cos.ObjectPutOptions{
