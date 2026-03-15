@@ -166,7 +166,7 @@ export default function Chat() {
     }
     loadInitial()
     getInstance(instanceId)
-      .then((inst) => setInstanceName(inst.name || '宠物'))
+      .then((inst) => setInstanceName(inst.name || '员工'))
       .catch(() => setInstanceName(''))
     markInstanceRead(instanceId).catch(() => {})
   }, [instanceId, navigate, loadInitial])
@@ -518,10 +518,10 @@ export default function Chat() {
                   <p className="text-slate-700 font-medium mb-1">打个招呼吧～</p>
                   <p className="text-slate-500 text-sm mb-6">发送任意消息开始对话</p>
                   <div className="text-left max-w-sm mx-auto p-4 bg-white/80 rounded-2xl border border-slate-200/80 shadow-sm text-xs text-slate-600 space-y-2.5">
-                    <p className="font-semibold text-slate-700">OpenClaw 与普通 AI 不同</p>
+                    <p className="font-semibold text-slate-700">OpenClaw：效率工具，一人公司的底座</p>
                     <p>· 擅长复杂任务，会调用工具、查资料、执行操作</p>
                     <p>· 拥有超长记忆，会记住你们的对话与约定</p>
-                    <p>· 每只宠物都有唯一的灵魂，会随相处而成长</p>
+                    <p>· 每位员工都有独特的专长，会随协作而成长</p>
                     <p>· 回答前会深入思考，请耐心等待～</p>
                   </div>
                 </div>

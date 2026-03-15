@@ -575,7 +575,7 @@ static void DeleteInstance(string apiBase, string token, int instanceId)
     using var client = CreateHttpClient();
     client.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
     var resp = client.DeleteAsync(apiBase.TrimEnd('/') + "/instances/" + instanceId).GetAwaiter().GetResult();
-    if (!resp.IsSuccessStatusCode) throw new Exception("弃养失败");
+    if (!resp.IsSuccessStatusCode) throw new Exception("解雇失败");
 }
 
 static List<(string Id, string Content, bool IsUser)> GetMessages(string httpBase, string token, int instanceId, int limit = 10, string before = null)
@@ -897,8 +897,8 @@ class ClawAdminWindow : Window
             Cursor = Cursors.Hand
         };
         var sp = new StackPanel();
-        sp.Children.Add(new TextBlock { Text = "👋 点击我打开宠舍", FontSize = 14, FontWeight = FontWeights.Medium, Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)) });
-        sp.Children.Add(new TextBlock { Text = "领养宠物、管理宠物，选好后应用到桌面", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap });
+        sp.Children.Add(new TextBlock { Text = "👋 点击我打开公司", FontSize = 14, FontWeight = FontWeights.Medium, Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)) });
+        sp.Children.Add(new TextBlock { Text = "招聘员工、管理员工，选好后应用到桌面", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap });
         border.Child = sp;
         border.MouseLeftButtonDown += (s, e) =>
         {
@@ -943,7 +943,7 @@ class ClawMascotWindow : Window
         _apiBase = apiBase;
         _token = token;
         _instanceId = instanceId;
-        _instanceName = instanceName ?? "宠物";
+        _instanceName = instanceName ?? "员工";
         Title = _instanceName;
         Width = 56;
         Height = 56;
@@ -1108,7 +1108,7 @@ class ClawMascotWindow : Window
             Owner = this
         };
 
-        // 定位在宠物图标上方
+        // 定位在员工图标上方
         var screenX = Left + (Width - 320) / 2;
         var screenY = Top - windowHeight - 10;
         _quickReplyWindow.Left = screenX;
@@ -1630,7 +1630,7 @@ class AnyClawMainWindow : Window
     {
         _apiBase = apiBase;
         _token = token;
-        Title = "OpenClaw 宠舍";
+        Title = "OpenClaw 公司";
         Width = 440;
         Height = 560;
         MinHeight = 480;
@@ -1662,7 +1662,7 @@ class AnyClawMainWindow : Window
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var title = new TextBlock { Text = "OpenClaw 宠舍", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)) };
+        var title = new TextBlock { Text = "OpenClaw 公司", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)) };
         Grid.SetColumn(title, 0);
         var refreshBtn = new Button { Content = "刷新", Width = 60, Height = 34, Margin = new Thickness(10, 0, 0, 0), FontSize = 13 };
         refreshBtn.Background = Brushes.White;
@@ -1722,13 +1722,13 @@ class AnyClawMainWindow : Window
 
         var adoptCard = new Border { Background = Brushes.White, Padding = new Thickness(20, 16, 20, 16), Margin = new Thickness(0, 16, 0, 0), CornerRadius = new CornerRadius(16), Effect = CardShadow() };
         var adoptPanel = new StackPanel();
-        adoptPanel.Children.Add(new TextBlock { Text = "领养 OpenClaw", FontSize = 16, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)) });
-        adoptPanel.Children.Add(new TextBlock { Text = "每只宠物都有唯一的灵魂，擅长复杂任务、拥有超长记忆", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), Margin = new Thickness(0, 6, 0, 0) });
+        adoptPanel.Children.Add(new TextBlock { Text = "招聘 AI 员工", FontSize = 16, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)) });
+        adoptPanel.Children.Add(new TextBlock { Text = "每位员工都有独特的专长，擅长复杂任务、拥有超长记忆", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), Margin = new Thickness(0, 6, 0, 0) });
         var adoptRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
         _newNameBox = new TextBox { Width = 170, Height = 40, Padding = new Thickness(14, 10, 14, 10), VerticalContentAlignment = VerticalAlignment.Center, FontSize = 14 };
         _newNameBox.BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240));
         _newNameBox.BorderThickness = new Thickness(1, 1, 1, 1);
-        _adoptBtn = new Button { Content = "领养", Width = 140, Height = 40, Margin = new Thickness(14, 0, 0, 0), FontSize = 14, Foreground = Brushes.White, BorderThickness = new Thickness(0, 0, 0, 0) };
+        _adoptBtn = new Button { Content = "招聘", Width = 140, Height = 40, Margin = new Thickness(14, 0, 0, 0), FontSize = 14, Foreground = Brushes.White, BorderThickness = new Thickness(0, 0, 0, 0) };
         _adoptBtn.Background = AccentGrad();
         _adoptBtn.Effect = SoftShadow();
         _adoptBtn.Click += OnAdopt;
@@ -1740,8 +1740,8 @@ class AnyClawMainWindow : Window
         grid.Children.Add(adoptCard);
 
         var petHeader = new StackPanel { Margin = new Thickness(0, 24, 0, 0) };
-        petHeader.Children.Add(new TextBlock { Text = "我的宠舍", FontSize = 16, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)) });
-        petHeader.Children.Add(new TextBlock { Text = "勾选要显示的宠物、选择配色，点击「应用到桌面」。右键可弃养，双击可打开对话。", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap });
+        petHeader.Children.Add(new TextBlock { Text = "我的公司", FontSize = 16, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)) });
+        petHeader.Children.Add(new TextBlock { Text = "勾选要显示的员工、选择配色，点击「应用到桌面」。右键可解雇，双击可打开对话。", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap });
         Grid.SetRow(petHeader, 3);
         grid.Children.Add(petHeader);
 
@@ -1808,7 +1808,7 @@ class AnyClawMainWindow : Window
             };
             var step1Content = new StackPanel();
             step1Content.Children.Add(new TextBlock { Text = "👋 欢迎！", FontSize = 18, FontWeight = FontWeights.Bold, Foreground = Brushes.White });
-            step1Content.Children.Add(new TextBlock { Text = "在这里领养你的第一只宠物，输入名字后点击领养", FontSize = 14, Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)), Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 });
+            step1Content.Children.Add(new TextBlock { Text = "在这里招聘你的第一名员工，输入名字后点击招聘", FontSize = 14, Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)), Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 });
             var next1 = new Button { Content = "下一步", Margin = new Thickness(0, 12, 0, 0), Padding = new Thickness(20, 8, 20, 8), Background = Brushes.White, Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)) };
             step1Content.Children.Add(next1);
             step1.Child = step1Content;
@@ -1825,8 +1825,8 @@ class AnyClawMainWindow : Window
                 Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 20, ShadowDepth = 0, Opacity = 0.5 }
             };
             var step2Content = new StackPanel();
-            step2Content.Children.Add(new TextBlock { Text = "📋 我的宠舍", FontSize = 18, FontWeight = FontWeights.Bold, Foreground = Brushes.White });
-            step2Content.Children.Add(new TextBlock { Text = "领养的宠物会显示在这里，勾选要显示的、选配色", FontSize = 14, Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)), Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 });
+            step2Content.Children.Add(new TextBlock { Text = "📋 我的公司", FontSize = 18, FontWeight = FontWeights.Bold, Foreground = Brushes.White });
+            step2Content.Children.Add(new TextBlock { Text = "招聘的员工会显示在这里，勾选要显示的、选配色", FontSize = 14, Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)), Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 });
             var next2 = new Button { Content = "下一步", Margin = new Thickness(0, 12, 0, 0), Padding = new Thickness(20, 8, 20, 8), Background = Brushes.White, Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)) };
             step2Content.Children.Add(next2);
             step2.Child = step2Content;
@@ -1844,7 +1844,7 @@ class AnyClawMainWindow : Window
             };
             var step3Content = new StackPanel();
             step3Content.Children.Add(new TextBlock { Text = "🖥 应用到桌面", FontSize = 18, FontWeight = FontWeights.Bold, Foreground = Brushes.White });
-            step3Content.Children.Add(new TextBlock { Text = "点击这里，宠物会出现在桌面右下角，双击可对话", FontSize = 14, Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)), Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 });
+            step3Content.Children.Add(new TextBlock { Text = "点击这里，员工会出现在桌面右下角，双击可对话", FontSize = 14, Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)), Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 });
             var doneBtn = new Button { Content = "知道了", Margin = new Thickness(0, 12, 0, 0), Padding = new Thickness(20, 8, 20, 8), Background = new SolidColorBrush(Color.FromRgb(34, 197, 94)), Foreground = Brushes.White };
             step3Content.Children.Add(doneBtn);
             step3.Child = step3Content;
@@ -1867,7 +1867,7 @@ class AnyClawMainWindow : Window
             var adoptCost = user.AdoptCost > 0 ? user.AdoptCost : 0;
             if (adoptCost <= 0) { var (_, c) = GetAuthConfig(_apiBase); adoptCost = c > 0 ? c : 100; }
             if (adoptCost <= 0) adoptCost = 100;
-            _adoptBtn.Content = "领养 · " + adoptCost + " 金币";
+            _adoptBtn.Content = "招聘 · " + adoptCost + " 金币";
             _energyText.Text = user.Energy.ToString();
             var instances = GetInstances(_apiBase, _token);
             var saved = LoadDesktopConfig(_apiBase);
@@ -1915,10 +1915,10 @@ class AnyClawMainWindow : Window
                     }
                 };
                 var abandonMenu = new ContextMenu();
-                var abandonItem = new MenuItem { Header = "弃养" };
+                var abandonItem = new MenuItem { Header = "解雇" };
                 abandonItem.Click += (s2, e2) =>
                 {
-                    if (MessageBox.Show("确定弃养「" + inst.Name + "」？弃养后无法恢复。", "确认", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+                    if (MessageBox.Show("确定解雇「" + inst.Name + "」？解雇后无法恢复。", "确认", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
                     {
                         try { DeleteInstance(_apiBase, _token, inst.Id); Refresh(); } catch (Exception ex) { MessageBox.Show(ex.Message); }
                     }
@@ -1980,7 +1980,7 @@ class AnyClawMainWindow : Window
         try
         {
             CreateInstance(_apiBase, _token, name);
-            MessageBox.Show("领养成功！宠物正在创建中，约 1–2 分钟，请稍后刷新。");
+            MessageBox.Show("招聘成功！员工正在创建中，约 1–2 分钟，请稍后刷新。");
             Refresh();
         }
         catch (Exception ex)
@@ -2030,7 +2030,7 @@ class AnyClawChatWindow : Window
         _apiBase = apiBase.TrimEnd('/');
         _token = token;
         _instanceId = instanceId;
-        _instanceName = string.IsNullOrEmpty(instanceName) ? "宠物" : instanceName;
+        _instanceName = string.IsNullOrEmpty(instanceName) ? "员工" : instanceName;
         Title = _instanceName + " - OpenClaw";
         Width = 460;
         Height = 620;

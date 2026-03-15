@@ -46,7 +46,7 @@ export default function Usage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <h1 className="text-lg font-semibold text-slate-800">消耗记录</h1>
         {items.length > 0 && (
-          <SearchInput value={search} onChange={setSearch} placeholder="按宠物或模型搜索" className="sm:w-48" />
+          <SearchInput value={search} onChange={setSearch} placeholder="按员工或模型搜索" className="sm:w-48" />
         )}
       </div>
       {error && <p className="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</p>}
@@ -73,7 +73,7 @@ export default function Usage() {
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-slate-800 truncate">
-                    {e.instance_name || `宠物 #${e.instance_id}`}
+                    {e.instance_name || `员工 #${e.instance_id}`}
                   </p>
                   <p className="text-xs text-slate-500">{e.created_at} · {e.model}{e.provider ? ` · ${e.provider}` : ''}</p>
                 </div>

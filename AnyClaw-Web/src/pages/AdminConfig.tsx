@@ -419,7 +419,7 @@ export default function AdminConfig() {
                 <p className="text-xs text-slate-500 mt-0.5">每 N token 消耗 1 活力</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">领养消耗</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">招聘消耗</label>
                 <input
                   type="number"
                   min={0}
@@ -566,7 +566,7 @@ export default function AdminConfig() {
         <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-200">
             <h2 className="font-semibold text-slate-800">部署配置</h2>
-            <p className="text-sm text-slate-500 mt-1">API 地址供宠物容器连接，迁移域名后需更新并重新连接</p>
+            <p className="text-sm text-slate-500 mt-1">API 地址供员工容器连接，迁移域名后需更新并重新连接</p>
           </div>
           <div className="px-5 py-4 space-y-4">
             <div>
@@ -613,7 +613,7 @@ export default function AdminConfig() {
         <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-200">
             <h2 className="font-semibold text-slate-800">容器存储</h2>
-            <p className="text-sm text-slate-500 mt-1">每个宠物实例工作区存储上限，0 表示不限制</p>
+            <p className="text-sm text-slate-500 mt-1">每个员工实例工作区存储上限，0 表示不限制</p>
           </div>
           <div className="px-5 py-4">
             <div className="flex items-center gap-4">
@@ -628,7 +628,7 @@ export default function AdminConfig() {
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full"
                 />
               </div>
-              <p className="text-sm text-slate-500 mt-6">0 = 不限制；新领养实例生效</p>
+              <p className="text-sm text-slate-500 mt-6">0 = 不限制；新招聘实例生效</p>
             </div>
           </div>
         </div>

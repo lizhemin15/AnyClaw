@@ -209,22 +209,22 @@ export default function AdminStats() {
             </div>
           )}
 
-          {/* 消耗明细（管理员：用户、宠物、模型、时间、金额） */}
+          {/* 消耗明细（管理员：用户、员工、模型、时间、金额） */}
           {usageList.length > 0 && (
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                   <h2 className="font-semibold text-slate-800">消耗明细</h2>
-                  <p className="text-sm text-slate-500 mt-0.5">用户、宠物、模型、时间、金额</p>
+                  <p className="text-sm text-slate-500 mt-0.5">用户、员工、模型、时间、金额</p>
                 </div>
-                <SearchInput value={usageSearch} onChange={setUsageSearch} placeholder="搜索用户/宠物/模型" className="sm:w-48" />
+                <SearchInput value={usageSearch} onChange={setUsageSearch} placeholder="搜索用户/员工/模型" className="sm:w-48" />
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200">
                       <th className="text-left py-3 px-5 text-sm font-medium text-slate-600">用户</th>
-                      <th className="text-left py-3 px-5 text-sm font-medium text-slate-600">宠物</th>
+                      <th className="text-left py-3 px-5 text-sm font-medium text-slate-600">员工</th>
                       <th className="text-left py-3 px-5 text-sm font-medium text-slate-600">模型</th>
                       <th className="text-left py-3 px-5 text-sm font-medium text-slate-600">渠道</th>
                       <th className="text-left py-3 px-5 text-sm font-medium text-slate-600">时间</th>
@@ -290,7 +290,7 @@ export default function AdminStats() {
           {stats.total_calls === 0 && (
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-12 text-center">
               <p className="text-slate-500">暂无使用数据</p>
-              <p className="text-sm text-slate-400 mt-1">宠物实例产生对话后将在此展示</p>
+              <p className="text-sm text-slate-400 mt-1">员工实例产生对话后将在此展示</p>
             </div>
           )}
 
@@ -319,7 +319,7 @@ export default function AdminStats() {
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-semibold text-slate-800">确认重置数据库？</h3>
             <p className="mt-2 text-sm text-slate-600">
-              将清空所有用户、宠物实例、订单、消息等数据。重置后需前往设置页重新创建管理员。
+              将清空所有用户、员工实例、订单、消息等数据。重置后需前往设置页重新创建管理员。
             </p>
             <div className="mt-6 flex gap-3 justify-end">
               <button

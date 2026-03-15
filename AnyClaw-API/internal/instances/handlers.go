@@ -103,7 +103,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	ec := config.GetEnergyConfig(cfg)
 	u, _ := h.db.GetUserByID(claims.UserID)
 	if u == nil || u.Energy < ec.AdoptCost {
-		http.Error(w, `{"error":"金币不足，领养需要 `+strconv.Itoa(ec.AdoptCost)+` 金币"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"金币不足，招聘需要 `+strconv.Itoa(ec.AdoptCost)+` 金币"}`, http.StatusBadRequest)
 		return
 	}
 	token := "inst-" + uuid.New().String()
@@ -128,7 +128,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		_ = h.db.DeleteInstance(inst.ID)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "创建宠物失败：" + err.Error()})
+		json.NewEncoder(w).Encode(map[string]string{"error": "创建员工失败：" + err.Error()})
 		return
 	}
 	ok, err := h.db.DeductUserEnergy(claims.UserID, ec.AdoptCost)

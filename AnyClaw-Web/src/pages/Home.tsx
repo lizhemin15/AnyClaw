@@ -5,7 +5,6 @@ import SearchInput from '../components/SearchInput'
 import Pagination from '../components/Pagination'
 
 const PAGE_SIZE = 8
-const STATUS_ORDER = ['running', 'creating', 'error', 'stopped']
 
 export default function Home({ user, onRefresh, showGuide = false, onDismissGuide }: { user: User | null; onRefresh?: () => void; showGuide?: boolean; onDismissGuide?: () => void }) {
   const [instances, setInstances] = useState<Instance[]>([])
@@ -19,7 +18,6 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
   const [adoptCost, setAdoptCost] = useState(100)
   const [monthlyCost, setMonthlyCost] = useState(0)
   const [search, setSearch] = useState('')
-  const [viewMode, setViewMode] = useState<'board' | 'list'>('board')
   const [page, setPage] = useState(1)
 
   const navigate = useNavigate()
@@ -29,16 +27,6 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
     if (!q) return instances
     return instances.filter((i) => i.name.toLowerCase().includes(q))
   }, [instances, search])
-
-  const grouped = useMemo(() => {
-    const groups: Record<string, Instance[]> = { running: [], creating: [], error: [], stopped: [], other: [] }
-    for (const i of filtered) {
-      const key = i.status in groups ? i.status : 'other'
-      if (!groups[key]) groups[key] = []
-      groups[key].push(i)
-    }
-    return groups
-  }, [filtered])
 
   const paginated = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE
@@ -93,7 +81,7 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
     const name = newName.trim() || '小爪'
     if (!user) return
     if (user.energy < adoptCost) {
-      setError(`金币不足，领养需要 ${adoptCost} 金币`)
+      setError(`金币不足，招聘需要 ${adoptCost} 金币`)
       return
     }
     setCreating(true)
@@ -105,7 +93,7 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
       onRefresh?.()
       navigate(`/instances/${inst.id}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '领养失败')
+      setError(err instanceof Error ? err.message : '招聘失败')
     } finally {
       setCreating(false)
     }
@@ -113,14 +101,14 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
 
   const handleAbandon = async (e: React.MouseEvent, inst: Instance) => {
     e.stopPropagation()
-    if (!confirm(`确定弃养「${inst.name}」？弃养后无法恢复，系统将删除该宠物的所有聊天记录。`)) return
+    if (!confirm(`确定解雇「${inst.name}」？解雇后无法恢复，系统将删除该员工的所有聊天记录。`)) return
     setDeleting(inst.id)
     setError('')
     try {
       await deleteInstance(inst.id)
       setInstances((prev) => prev.filter((i) => i.id !== inst.id))
     } catch (err) {
-      setError(err instanceof Error ? err.message : '弃养失败')
+      setError(err instanceof Error ? err.message : '解雇失败')
     } finally {
       setDeleting(null)
     }
@@ -156,21 +144,21 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
             {guideStep === 1 && (
               <>
                 <p className="text-lg font-bold">👋 欢迎！</p>
-                <p className="text-slate-300 mt-2 text-sm">在这里领养你的第一只宠物，输入名字后点击领养</p>
+                <p className="text-slate-300 mt-2 text-sm">招聘你的第一名 AI 员工，开启一人公司效率底座，输入名字后点击招聘</p>
                 <button type="button" onClick={() => setGuideStep(2)} className="mt-4 w-full py-2 bg-white text-slate-800 rounded-lg font-medium">下一步</button>
               </>
             )}
             {guideStep === 2 && (
               <>
-                <p className="text-lg font-bold">📋 我的宠舍</p>
-                <p className="text-slate-300 mt-2 text-sm">领养的宠物会显示在这里，点击可进入对话</p>
+                <p className="text-lg font-bold">📋 我的公司</p>
+                <p className="text-slate-300 mt-2 text-sm">招聘的员工会显示在这里，点击可进入对话</p>
                 <button type="button" onClick={() => setGuideStep(3)} className="mt-4 w-full py-2 bg-white text-slate-800 rounded-lg font-medium">下一步</button>
               </>
             )}
             {guideStep === 3 && (
               <>
                 <p className="text-lg font-bold">💬 开始对话</p>
-                <p className="text-slate-300 mt-2 text-sm">点击宠物卡片即可打开对话，和你的 AI 宠物聊天</p>
+                <p className="text-slate-300 mt-2 text-sm">点击员工卡片即可打开对话，用效率工具完成复杂任务</p>
                 <button type="button" onClick={() => { onDismissGuide?.(); setGuideStep(1); }} className="mt-4 w-full py-2 bg-emerald-500 text-white rounded-lg font-medium">知道了</button>
               </>
             )}
@@ -199,13 +187,13 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
         </div>
       </div>
 
-      {/* 领养新宠物 */}
+      {/* 招聘新员工 */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-2 sm:mb-3">
           <img src="/10002.svg" alt="" className="w-12 h-12 sm:w-14 sm:h-14 flex-shrink-0" aria-hidden />
           <div>
-            <h2 className="text-base sm:text-lg font-semibold text-slate-800">领养 OpenClaw</h2>
-            <p className="text-sm text-slate-500">每只宠物都有唯一的灵魂，擅长复杂任务、拥有超长记忆，回答会稍慢一些～</p>
+            <h2 className="text-base sm:text-lg font-semibold text-slate-800">招聘 AI 员工</h2>
+            <p className="text-sm text-slate-500">OpenClaw 是效率工具、一人公司的底座。每位员工擅长复杂任务、拥有超长记忆，回答会稍慢一些～</p>
           </div>
         </div>
         <form onSubmit={handleAdopt} className="flex flex-col sm:flex-row gap-3">
@@ -213,7 +201,7 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
             type="text"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="给宠物起个名字"
+            placeholder="填写员工姓名"
             className="flex-1 px-4 py-3 border border-slate-300 rounded-xl"
           />
           <button
@@ -221,7 +209,7 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
             disabled={creating || (user?.energy ?? 0) < adoptCost}
             className="px-6 py-3 bg-slate-800 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {creating ? '领养中，请稍候（约 1–2 分钟）...' : `领养 (${adoptCost} 金币)`}
+            {creating ? '招聘中，请稍候（约 1–2 分钟）...' : `招聘 (${adoptCost} 金币)`}
           </button>
         </form>
         {(user?.energy ?? 0) < adoptCost && (
@@ -233,30 +221,12 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
         <p className="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</p>
       )}
 
-      {/* 宠舍：搜索、视图切换、分页 */}
+      {/* 公司：搜索、分页 */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-        <h2 className="text-base sm:text-lg font-semibold text-slate-800">我的宠舍</h2>
+        <h2 className="text-base sm:text-lg font-semibold text-slate-800">我的公司</h2>
         {instances.length > 0 && (
           <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-            <SearchInput value={search} onChange={setSearch} placeholder="按名称搜索宠物" className="sm:w-48" />
-            <div className="flex gap-1">
-              <button
-                type="button"
-                onClick={() => setViewMode('board')}
-                className={`px-3 py-1.5 text-sm rounded-lg ${viewMode === 'board' ? 'bg-slate-200 text-slate-800 font-medium' : 'text-slate-500 hover:bg-slate-100'}`}
-                title="看板"
-              >
-                看板
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('list')}
-                className={`px-3 py-1.5 text-sm rounded-lg ${viewMode === 'list' ? 'bg-slate-200 text-slate-800 font-medium' : 'text-slate-500 hover:bg-slate-100'}`}
-                title="列表"
-              >
-                列表
-              </button>
-            </div>
+            <SearchInput value={search} onChange={setSearch} placeholder="按名称搜索员工" className="sm:w-48" />
           </div>
         )}
       </div>
@@ -265,55 +235,13 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
       ) : instances.length === 0 ? (
         <div className="text-center py-12 bg-slate-50 rounded-xl">
           <img src="/10003.png" alt="" className="w-24 h-24 mx-auto mb-3 object-contain" aria-hidden />
-          <p className="text-slate-500 mb-2">暂无宠物</p>
-          <p className="text-sm text-slate-400">领养一只 OpenClaw 开始对话吧</p>
+          <p className="text-slate-500 mb-2">暂无员工</p>
+          <p className="text-sm text-slate-400">招聘一名 AI 员工，开启你的效率之旅</p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 bg-slate-50 rounded-xl">
-          <p className="text-slate-500">未找到匹配「{search}」的宠物</p>
+          <p className="text-slate-500">未找到匹配「{search}」的员工</p>
         </div>
-      ) : viewMode === 'board' ? (
-        <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-4">
-            {STATUS_ORDER.filter((s) => (grouped[s]?.length ?? 0) > 0).map((status) => (
-              <div key={status} className="bg-slate-50 rounded-xl p-3 border border-slate-200">
-                <div className="flex items-center justify-between mb-2">
-                  <span className={`text-sm font-medium px-2 py-0.5 rounded ${
-                    status === 'running' ? 'bg-green-100 text-green-800' :
-                    status === 'creating' ? 'bg-amber-100 text-amber-800' :
-                    status === 'error' ? 'bg-red-100 text-red-800' :
-                    'bg-slate-200 text-slate-700'
-                  }`}>
-                    {status === 'running' ? '在线' : status === 'creating' ? '创建中' : status === 'error' ? '异常' : status}
-                  </span>
-                  <span className="text-xs text-slate-500">{grouped[status]?.length ?? 0}</span>
-                </div>
-                <div className="space-y-2">
-                  {(grouped[status] ?? []).map((inst) => (
-                    <div
-                      key={inst.id}
-                      onClick={() => navigate(`/instances/${inst.id}`)}
-                      className="bg-white border border-slate-200 rounded-lg p-3 active:bg-slate-50 cursor-pointer transition-colors"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="font-medium text-slate-800 truncate text-sm flex-1 min-w-0">{inst.name}</p>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          {inst.subscribed_until && (
-                            <span className="px-1.5 py-0.5 text-[10px] rounded bg-emerald-100 text-emerald-800">包月</span>
-                          )}
-                          {monthlyCost > 0 && !inst.subscribed_until && (
-                            <button onClick={(e) => { e.stopPropagation(); handleSubscribe(e, inst) }} disabled={!!subscribing || (user?.energy ?? 0) < monthlyCost} className="px-1.5 py-0.5 text-[10px] text-emerald-600 border border-emerald-200 rounded disabled:opacity-50">包月</button>
-                          )}
-                          <button onClick={(e) => { e.stopPropagation(); handleAbandon(e, inst) }} disabled={!!deleting} className="px-1.5 py-0.5 text-[10px] text-red-600 border border-red-200 rounded disabled:opacity-50">{deleting === inst.id ? '...' : '弃养'}</button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
       ) : (
         <>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -366,9 +294,9 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
                     onClick={(e) => handleAbandon(e, inst)}
                     disabled={!!deleting}
                     className="px-2 py-1 text-xs text-red-600 border border-red-200 rounded-lg active:bg-red-50 disabled:opacity-50"
-                    title="弃养"
+                    title="解雇"
                   >
-                    {deleting === inst.id ? '弃养中...' : '弃养'}
+                    {deleting === inst.id ? '解雇中...' : '解雇'}
                   </button>
                 </div>
               </div>
