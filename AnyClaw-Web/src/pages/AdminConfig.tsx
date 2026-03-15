@@ -754,12 +754,15 @@ export default function AdminConfig() {
                       />
                     </button>
                     <span className="font-medium text-slate-800 min-w-[100px]">{ch.name}</span>
-                    <span className="text-xs text-slate-400">{ch.enabled ? '已启用' : '未启用'}</span>
-                    {channelStatus[ch.id] && (
+                    {channelStatus[ch.id] ? (
                       <span className="flex items-center gap-2 text-xs">
-                        <span className={channelStatus[ch.id].available ? 'text-emerald-600' : 'text-amber-600'}>
-                          {channelStatus[ch.id].available ? '可用' : '冷却中'}
-                        </span>
+                        {!ch.enabled ? (
+                          <span className="text-slate-500">手动关闭</span>
+                        ) : channelStatus[ch.id].available ? (
+                          <span className="text-emerald-600">可用</span>
+                        ) : (
+                          <span className="text-amber-600">系统自动关闭</span>
+                        )}
                         <span className="text-slate-500">
                           今日 {(channelStatus[ch.id].token_usage_today ?? 0).toLocaleString()} tokens
                         </span>
@@ -775,6 +778,8 @@ export default function AdminConfig() {
                           <span className="text-amber-600">恢复 {channelStatus[ch.id].cooldown_until}</span>
                         )}
                       </span>
+                    ) : (
+                      <span className="text-xs text-slate-400">{ch.enabled ? '已启用' : '手动关闭'}</span>
                     )}
                     {editingChannel === ch.id ? (
                       <div className="flex gap-2 flex-1 flex-wrap items-center">
