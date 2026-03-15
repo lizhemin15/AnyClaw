@@ -203,6 +203,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		})
 		r.Get("/stats", adminStatsHandler.GetStats)
 		r.Get("/usage", usageHandler.ListAdminUsage)
+		r.Post("/config/usage-correction", usageHandler.SetUsageCorrection)
 		r.Get("/energy/users", energyHandler.ListUsers)
 		r.Post("/energy/users", energyHandler.AdminCreateUser)
 		r.Put("/energy/users/{id}", energyHandler.AdminUpdateUser)

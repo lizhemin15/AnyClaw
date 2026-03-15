@@ -479,6 +479,25 @@ export async function getChannelStatus(): Promise<ChannelStatus[]> {
   return Array.isArray(data?.status) ? data.status : [];
 }
 
+export async function setUsageCorrection(params: {
+  provider: string;
+  tokens_delta?: number;
+  corrected_total?: number;
+}): Promise<void> {
+  const body: Record<string, unknown> = { provider: params.provider };
+  if (params.corrected_total !== undefined) {
+    body.corrected_total = params.corrected_total;
+  } else if (params.tokens_delta !== undefined) {
+    body.tokens_delta = params.tokens_delta;
+  } else {
+    throw new Error('请提供 tokens_delta 或 corrected_total');
+  }
+  await fetchApi('/admin/config/usage-correction', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
 export async function testSMTPConfig(params?: Partial<SMTPConfig>): Promise<{ ok: boolean; message: string }> {
   return fetchApi<{ ok: boolean; message: string }>('/admin/config/test-smtp', {
     method: 'POST',

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getAdminConfig, putAdminConfig, getChannelStatus, testChannelConfig, testSMTPConfig, adminReconnectInstances, type AdminConfig, type Channel, type ChannelStatus, type SMTPConfig, type PaymentConfig, type PaymentPlan, type EnergyConfig, type ContainerConfig } from '../api'
+import { getAdminConfig, putAdminConfig, getChannelStatus, setUsageCorrection, testChannelConfig, testSMTPConfig, adminReconnectInstances, type AdminConfig, type Channel, type ChannelStatus, type SMTPConfig, type PaymentConfig, type PaymentPlan, type EnergyConfig, type ContainerConfig } from '../api'
 import { useUnsavedConfig } from '../contexts/UnsavedConfigContext'
 
 function genId() {
@@ -8,6 +8,12 @@ function genId() {
 
 function genModelId() {
   return 'm-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
+}
+
+function getChannelProvider(ch: Channel): string {
+  if (ch.name?.trim()) return ch.name.trim()
+  const base = (ch.api_base || 'https://api.openai.com/v1').trim().replace(/\/$/, '')
+  return base || 'https://api.openai.com/v1'
 }
 
 /** 根据 SMTP 地址或邮箱域名返回推荐端口，无匹配则返回 null */
@@ -65,6 +71,9 @@ export default function AdminConfig() {
   const [reconnecting, setReconnecting] = useState(false)
   const [reconnectResult, setReconnectResult] = useState<{ ok: boolean; message: string; reconnected?: number } | null>(null)
   const [channelStatus, setChannelStatus] = useState<Record<string, ChannelStatus>>({})
+  const [correctingChannel, setCorrectingChannel] = useState<Channel | null>(null)
+  const [correctedTotal, setCorrectedTotal] = useState('')
+  const [correcting, setCorrecting] = useState(false)
 
   const unsavedCtx = useUnsavedConfig()
   const hasUnsaved = !!(form && config && JSON.stringify(form) !== JSON.stringify(config))
@@ -777,6 +786,16 @@ export default function AdminConfig() {
                         {channelStatus[ch.id].cooldown_until && (
                           <span className="text-amber-600">恢复 {channelStatus[ch.id].cooldown_until}</span>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCorrectingChannel(ch)
+                            setCorrectedTotal(String(channelStatus[ch.id].token_usage_today ?? 0))
+                          }}
+                          className="text-xs text-indigo-600 hover:text-indigo-700"
+                        >
+                          矫正
+                        </button>
                       </span>
                     ) : (
                       <span className="text-xs text-slate-400">{ch.enabled ? '已启用' : '手动关闭'}</span>
@@ -971,6 +990,52 @@ export default function AdminConfig() {
           </button>
         </div>
       </form>
+
+      {correctingChannel && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setCorrectingChannel(null)}>
+          <div className="bg-white rounded-lg shadow-xl p-5 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-medium text-slate-800 mb-2">矫正今日 token 用量 · {correctingChannel.name || getChannelProvider(correctingChannel)}</h3>
+            <p className="text-xs text-slate-500 mb-3">将今日显示值设为（系统会计算校正量）</p>
+            <input
+              type="number"
+              min={0}
+              value={correctedTotal}
+              onChange={(e) => setCorrectedTotal(e.target.value)}
+              placeholder="如 10000"
+              className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-full mb-4"
+            />
+            <div className="flex gap-2 justify-end">
+              <button type="button" onClick={() => setCorrectingChannel(null)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={correcting}
+                onClick={async () => {
+                  const val = parseInt(correctedTotal, 10)
+                  if (isNaN(val) || val < 0) return
+                  setCorrecting(true)
+                  try {
+                    await setUsageCorrection({
+                      provider: getChannelProvider(correctingChannel),
+                      corrected_total: val,
+                    })
+                    setCorrectingChannel(null)
+                    refreshChannelStatus()
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : '矫正失败')
+                  } finally {
+                    setCorrecting(false)
+                  }
+                }}
+                className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {correcting ? '提交中...' : '确定'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

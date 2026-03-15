@@ -194,6 +194,15 @@ func (d *DB) migrate() error {
 	if _, err := d.Exec("ALTER TABLE usage_log ADD COLUMN provider VARCHAR(128)"); err != nil && !isDuplicateColumn(err) {
 		log.Printf("[db] alter usage_log provider: %v", err)
 	}
+	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS usage_corrections (
+		provider VARCHAR(128) NOT NULL,
+		correction_date DATE NOT NULL,
+		tokens_delta BIGINT NOT NULL DEFAULT 0,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (provider, correction_date)
+	)`); err != nil {
+		log.Printf("[db] create usage_corrections: %v", err)
+	}
 	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS activation_codes (
 		code VARCHAR(32) PRIMARY KEY,
 		energy INT NOT NULL,
@@ -244,7 +253,7 @@ func (d *DB) CheckAndMigrate() error {
 // Reset 清空所有业务表并重新迁移，用于解决数据冲突。重置后需前往 /setup 创建管理员。
 func (d *DB) Reset() error {
 	tables := []string{
-		"instance_subscriptions", "usage_log", "activation_codes", "orders", "verification_codes", "messages", "invitations",
+		"instance_subscriptions", "usage_corrections", "usage_log", "activation_codes", "orders", "verification_codes", "messages", "invitations",
 		"instances", "hosts", "users", "system_config",
 	}
 	if _, err := d.Exec("SET FOREIGN_KEY_CHECKS = 0"); err != nil {

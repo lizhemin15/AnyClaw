@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// GetUsageByProviderToday 返回今日各 provider 的 tokens 总量（prompt+completion）
+// GetUsageByProviderToday 返回今日各 provider 的 tokens 总量（prompt+completion）+ 校正量
 // 「今日」按北京时间 0 点起算，与渠道配额刷新一致
 func (d *DB) GetUsageByProviderToday(providers []string) (map[string]int64, error) {
 	loc, _ := time.LoadLocation("Asia/Shanghai")
@@ -30,16 +30,65 @@ func (d *DB) GetUsageByProviderToday(providers []string) (map[string]int64, erro
 	if err != nil {
 		return nil, fmt.Errorf("get usage by provider: %w", err)
 	}
-	defer rows.Close()
 	for rows.Next() {
 		var p string
 		var sum int64
 		if err := rows.Scan(&p, &sum); err != nil {
+			rows.Close()
 			return nil, err
 		}
 		out[p] = sum
 	}
+	rows.Close()
+
+	// 叠加今日校正量
+	args2 := make([]any, 0, len(providers)+1)
+	args2 = append(args2, today)
+	for _, p := range providers {
+		args2 = append(args2, p)
+	}
+	ph2 := strings.Repeat("?,", len(providers)-1) + "?"
+	rows2, err := d.Query("SELECT provider, tokens_delta FROM usage_corrections WHERE correction_date = ? AND provider IN ("+ph2+")", args2...)
+	if err != nil {
+		return out, nil // 表可能不存在，忽略
+	}
+	for rows2.Next() {
+		var p string
+		var delta int64
+		if err := rows2.Scan(&p, &delta); err != nil {
+			rows2.Close()
+			return out, nil
+		}
+		out[p] += delta
+	}
+	rows2.Close()
 	return out, nil
+}
+
+// GetRawUsageForProviderToday 返回某 provider 今日 usage_log 的原始 SUM（不含校正）
+func (d *DB) GetRawUsageForProviderToday(provider string) (int64, error) {
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	if loc == nil {
+		loc = time.FixedZone("CST", 8*3600)
+	}
+	now := time.Now().In(loc)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	var sum int64
+	err := d.QueryRow(
+		"SELECT COALESCE(SUM(prompt_tokens + completion_tokens), 0) FROM usage_log WHERE created_at >= ? AND provider = ?",
+		today, provider,
+	).Scan(&sum)
+	return sum, err
+}
+
+// SetUsageCorrection 设置某渠道某日的 token 校正量（覆盖原有校正，非累加）
+func (d *DB) SetUsageCorrection(provider string, correctionDate time.Time, tokensDelta int64) error {
+	dateStr := correctionDate.Format("2006-01-02")
+	_, err := d.Exec(
+		"INSERT INTO usage_corrections (provider, correction_date, tokens_delta) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE tokens_delta = VALUES(tokens_delta)",
+		provider, dateStr, tokensDelta,
+	)
+	return err
 }
 
 func (d *DB) InsertUsage(instanceID, userID, model, provider string, promptTokens, completionTokens, coinsCost int) error {
