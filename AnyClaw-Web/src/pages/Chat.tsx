@@ -34,6 +34,11 @@ const PAGE_SIZE = 10
 
 const TYPING_PHRASES = ['嗯...', '想想看...', '稍等一下下～', '快好啦～', '马上就好～']
 
+function isThinkingPlaceholder(content: string): boolean {
+  const s = String(content ?? '').trim().toLowerCase()
+  return s.startsWith('thinking')
+}
+
 function MessageContent({
   content,
   isUser,
@@ -127,7 +132,8 @@ export default function Chat() {
     setLoading(true)
     const list = await loadMessages()
     const arr = Array.isArray(list) ? list : []
-    setMessages([...arr].reverse())
+    const filtered = arr.filter((m) => !(m.role === 'assistant' && isThinkingPlaceholder(m.content ?? '')))
+    setMessages([...filtered].reverse())
     setHasMore(arr.length >= PAGE_SIZE)
     setLoading(false)
   }, [loadMessages])
@@ -141,7 +147,8 @@ export default function Chat() {
     setLoadingMore(true)
     const list = await loadMessages(oldestId as number)
     const arr = Array.isArray(list) ? list : []
-    setMessages((prev) => [...[...arr].reverse(), ...prev])
+    const filtered = arr.filter((m) => !(m.role === 'assistant' && isThinkingPlaceholder(m.content ?? '')))
+    setMessages((prev) => [...[...filtered].reverse(), ...prev])
     setHasMore(arr.length >= PAGE_SIZE)
     loadingMoreRef.current = false
     setLoadingMore(false)
@@ -176,6 +183,7 @@ export default function Chat() {
         for (const m of reversed) {
           const role = m.role ?? 'assistant'
           const content = m.content ?? ''
+          if (role === 'assistant' && isThinkingPlaceholder(content)) continue
           if (role === 'user') {
             const idx = merged.findIndex((x) => x.role === 'user' && x.content === content && String(x.id).startsWith('u-'))
             if (idx >= 0) {
@@ -218,6 +226,7 @@ export default function Chat() {
           for (const m of reversed) {
             const role = m.role ?? 'assistant'
             const content = m.content ?? ''
+            if (role === 'assistant' && isThinkingPlaceholder(content)) continue
             if (role === 'user') {
               const idx = merged.findIndex((x) => x.role === 'user' && x.content === content && String(x.id).startsWith('u-'))
               if (idx >= 0) {
@@ -259,7 +268,7 @@ export default function Chat() {
             if (msg.payload?.content != null) {
               const mid = msg.payload.message_id ?? msg.id ?? String(Date.now())
               const content = String(msg.payload.content)
-              if (content.startsWith('Thinking')) return
+              if (isThinkingPlaceholder(content)) return
               setMessages((prev) => {
                 if (prev.some((m) => m.id === mid || (m.content === content && m.role === 'assistant'))) return prev
                 return [...prev, { id: mid, content, role: (msg.payload!.role as string) || 'assistant' }]
@@ -271,12 +280,17 @@ export default function Chat() {
             if (msg.payload?.content != null) {
               const targetId = msg.payload.message_id ?? msg.id
               const content = String(msg.payload.content)
-              if (content.startsWith('Thinking')) return
+              if (isThinkingPlaceholder(content)) return
               setMessages((prev) => {
                 if (targetId) {
                   const idx = prev.findIndex((m) => m.id === targetId)
                   if (idx >= 0) {
                     return prev.map((m) => (m.id === targetId ? { ...m, content } : m))
+                  }
+                  // 占位消息可能被过滤未添加，尝试替换已有的 Thinking 气泡
+                  const thinkingIdx = prev.findIndex((m) => m.role === 'assistant' && isThinkingPlaceholder(m.content))
+                  if (thinkingIdx >= 0) {
+                    return prev.map((m, i) => (i === thinkingIdx ? { ...m, id: targetId, content } : m))
                   }
                 }
                 return [...prev, { id: targetId || 'u-' + Date.now(), content, role: 'assistant' }]
@@ -301,6 +315,7 @@ export default function Chat() {
                   for (const m of reversed) {
                     const role = m.role ?? 'assistant'
                     const content = m.content ?? ''
+                    if (role === 'assistant' && isThinkingPlaceholder(content)) continue
                     if (role === 'user') {
                       const idx = merged.findIndex((x) => x.role === 'user' && x.content === content && String(x.id).startsWith('u-'))
                       if (idx >= 0) {
@@ -357,7 +372,17 @@ export default function Chat() {
   }, [typing])
 
   // 手机键盘弹出时滚动到底部，保持最新消息可见（类似微信）
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // 输入框内容变化时自动调整高度（最多约 4 行）
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    const h = Math.max(44, Math.min(el.scrollHeight, 128))
+    el.style.height = `${h}px`
+  }, [input])
+
   useEffect(() => {
     const list = listRef.current
     const input = inputRef.current
@@ -387,15 +412,18 @@ export default function Chat() {
     if (el.scrollTop < 80) loadOlder()
   }
 
-  const sendMessage = (e: React.FormEvent) => {
-    e.preventDefault()
+  const doSend = useCallback(() => {
     const content = input.trim()
     if (!content || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-
     const userMsgId = 'u-' + Date.now()
     setMessages((prev) => [...prev, { id: userMsgId, content, role: 'user' }])
     wsRef.current.send(JSON.stringify({ type: 'message.send', payload: { content } }))
     setInput('')
+  }, [input])
+
+  const sendMessage = (e: React.FormEvent) => {
+    e.preventDefault()
+    doSend()
   }
 
   if (isNaN(instanceId)) {
@@ -407,44 +435,51 @@ export default function Chat() {
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col overflow-hidden bg-slate-50 sm:bg-white sm:max-w-2xl sm:mx-auto sm:my-4 sm:rounded-2xl sm:shadow-lg sm:border sm:border-slate-200 sm:min-h-[80vh] z-10 chat-mobile-h sm:h-auto">
-      {/* 顶部栏 - 显示宠物名，移动端连接时隐藏状态 */}
-      <div className="flex items-center gap-3 px-3 py-2.5 sm:py-3 sm:px-4 bg-white border-b border-slate-200 flex-shrink-0">
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-gradient-to-b from-slate-50 to-white sm:bg-white sm:max-w-2xl sm:mx-auto sm:my-4 sm:rounded-2xl sm:shadow-xl sm:border sm:border-slate-200/80 sm:min-h-[80vh] z-10 chat-mobile-h sm:h-auto sm:overflow-hidden">
+      {/* 顶部栏 - 简洁紧凑 */}
+      <div className="flex items-center gap-2 px-3 py-2.5 sm:py-3 sm:px-4 bg-white/95 backdrop-blur-sm border-b border-slate-200/80 flex-shrink-0">
         <button
           onClick={() => navigate('/')}
-          className="flex items-center gap-1 px-2 py-2 -ml-1 text-slate-600 active:bg-slate-100 rounded-lg min-h-[40px] min-w-[40px] touch-manipulation sm:min-h-[44px] sm:min-w-[44px]"
+          className="flex items-center justify-center w-9 h-9 -ml-1 text-slate-600 hover:text-slate-800 hover:bg-slate-100 active:bg-slate-200 rounded-xl transition-colors touch-manipulation"
           aria-label="返回"
         >
-          <span className="text-xl">←</span>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
         </button>
-        <span className="flex-1 font-medium text-slate-800 truncate">
-          {instanceName || '...'}
-        </span>
-        <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${connected ? 'bg-green-500' : 'bg-red-500'} ${connected ? 'hidden sm:block' : ''}`} />
-        <span className={`text-sm text-slate-500 ${connected ? 'hidden sm:block' : ''}`}>
-          {connected ? '在线' : '离线'}
-        </span>
+        <div className="flex-1 min-w-0 flex items-center gap-2">
+          <span className="font-semibold text-slate-800 truncate">{instanceName || '...'}</span>
+          <span className={`flex items-center gap-1.5 text-xs ${connected ? 'text-emerald-600' : 'text-slate-400'}`}>
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${connected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+            <span className="hidden sm:inline">{connected ? '在线' : '离线'}</span>
+          </span>
+        </div>
         <button
           type="button"
           onClick={() => loadMessages().then((list) => mergeMessagesFromServer(list, setMessages))}
-          className="text-xs px-2 py-1 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded"
+          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
           title="刷新消息"
         >
-          刷新
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
         </button>
       </div>
 
       {error && (
-        <div className="px-4 py-2 bg-red-50 border-b border-red-100 text-red-700 text-sm flex-shrink-0">
+        <div className="px-4 py-2.5 bg-rose-50/95 border-b border-rose-100 text-rose-700 text-sm flex-shrink-0 flex items-center gap-2">
+          <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
           {error}
         </div>
       )}
 
-      {/* 消息列表 - 可滚动，支持上拉加载；ErrorBoundary 防止 Safari 渲染异常导致白屏 */}
+      {/* 消息列表 */}
       <div
         ref={listRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4 min-h-0 chat-scroll"
+        className="flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-5 min-h-0 chat-scroll"
       >
         <ErrorBoundary fallback={
           <div className="py-8 px-4 text-center text-slate-600 text-sm">
@@ -456,28 +491,34 @@ export default function Chat() {
           </div>
         }>
         {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-pulse text-slate-400 text-sm">马上就好～</div>
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <div className="w-10 h-10 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin" />
+            <p className="text-slate-500 text-sm">马上就好～</p>
           </div>
         ) : (
           <>
             {loadingMore && (
-              <div className="flex justify-center py-2 text-slate-400 text-xs">
-                <span className="sm:hidden">···</span>
-                <span className="hidden sm:inline">加载更多...</span>
+              <div className="flex justify-center py-3">
+                <span className="inline-flex items-center gap-1.5 text-slate-400 text-xs">
+                  <span className="w-3 h-3 rounded-full border border-slate-300 border-t-slate-500 animate-spin" />
+                  加载更多...
+                </span>
               </div>
             )}
             {messages.length === 0 && !typing && (
               <ErrorBoundary fallback={
-                <div className="py-8 px-4 text-center">
+                <div className="py-12 px-4 text-center">
                   <p className="text-slate-600 text-sm">打个招呼吧～</p>
                 </div>
               }>
-                <div className="py-8 px-4 text-center space-y-4">
-                  <img src="/10003.png" alt="" className="w-20 h-20 mx-auto mb-2 object-contain" aria-hidden />
-                  <p className="text-slate-600 text-sm">打个招呼吧～</p>
-                  <div className="text-left max-w-sm mx-auto p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500 space-y-2">
-                    <p className="font-medium text-slate-600">OpenClaw 与普通 AI 不同</p>
+                <div className="py-12 px-4 text-center">
+                  <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-indigo-100 to-slate-100 flex items-center justify-center shadow-inner">
+                    <img src="/10003.png" alt="" className="w-14 h-14 object-contain" aria-hidden />
+                  </div>
+                  <p className="text-slate-700 font-medium mb-1">打个招呼吧～</p>
+                  <p className="text-slate-500 text-sm mb-6">发送任意消息开始对话</p>
+                  <div className="text-left max-w-sm mx-auto p-4 bg-white/80 rounded-2xl border border-slate-200/80 shadow-sm text-xs text-slate-600 space-y-2.5">
+                    <p className="font-semibold text-slate-700">OpenClaw 与普通 AI 不同</p>
                     <p>· 擅长复杂任务，会调用工具、查资料、执行操作</p>
                     <p>· 拥有超长记忆，会记住你们的对话与约定</p>
                     <p>· 每只宠物都有唯一的灵魂，会随相处而成长</p>
@@ -486,8 +527,8 @@ export default function Chat() {
                 </div>
               </ErrorBoundary>
             )}
-            <div className="space-y-3">
-              {messages.map((m) => {
+            <div className="space-y-4">
+              {messages.filter((m) => !isThinkingPlaceholder(m.content ?? '')).map((m) => {
                 const isUser = m.role === 'user'
                 const expanded = expandedIds.has(m.id)
                 const toggleExpand = () => {
@@ -501,13 +542,18 @@ export default function Chat() {
                 return (
                   <div
                     key={String(m.id)}
-                    className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+                    className={`flex gap-2 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
                   >
+                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm ${
+                      isUser ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-600'
+                    }`}>
+                      {isUser ? '我' : '🦞'}
+                    </div>
                     <div
-                      className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 ${
+                      className={`max-w-[78%] sm:max-w-[70%] rounded-2xl px-4 py-3 transition-shadow ${
                         isUser
-                          ? 'bg-indigo-600 text-white rounded-br-md'
-                          : 'bg-white border border-slate-200 text-slate-800 rounded-bl-md shadow-sm'
+                          ? 'bg-indigo-600 text-white rounded-br-md shadow-md shadow-indigo-200/50'
+                          : 'bg-white border border-slate-200/80 text-slate-800 rounded-bl-md shadow-sm hover:shadow-md'
                       }`}
                     >
                       <MessageContent
@@ -523,19 +569,21 @@ export default function Chat() {
             </div>
             {typing && (
               <ErrorBoundary fallback={
-                <div className="flex justify-start mt-3">
-                  <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-md px-4 py-2.5 shadow-sm">
-                    <span className="text-slate-500 text-sm italic">思考中...</span>
+                <div className="flex gap-2 mt-4">
+                  <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-sm">🦞</div>
+                  <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-md px-4 py-3 shadow-sm">
+                    <span className="text-slate-500 text-sm">思考中...</span>
                   </div>
                 </div>
               }>
-                <div className="flex flex-col gap-2 mt-3">
-                  <div className="flex justify-start">
-                    <div className="typing-breathe bg-white border border-slate-200 rounded-2xl rounded-bl-md px-4 py-2.5 shadow-sm flex items-center gap-1">
-                      <span className="text-slate-500 text-sm italic">{TYPING_PHRASES[typingPhraseIndex]}</span>
-                      <span className="flex gap-0.5">
+                <div className="flex flex-col gap-2 mt-4">
+                  <div className="flex gap-2">
+                    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-sm flex-shrink-0">🦞</div>
+                    <div className="typing-breathe bg-white border border-slate-200/80 rounded-2xl rounded-bl-md px-4 py-3 shadow-sm flex items-center gap-2 min-w-[120px]">
+                      <span className="text-slate-500 text-sm">{TYPING_PHRASES[typingPhraseIndex]}</span>
+                      <span className="flex gap-1">
                         {[1, 2, 3].map((i) => (
-                          <span key={i} className="typing-dot w-1 h-1 rounded-full bg-slate-400 inline-block" />
+                          <span key={i} className="typing-dot w-1.5 h-1.5 rounded-full bg-indigo-400 inline-block" />
                         ))}
                       </span>
                     </div>
@@ -551,26 +599,38 @@ export default function Chat() {
         </ErrorBoundary>
       </div>
 
-      {/* 输入区 - 移动端大按钮，底部安全区 */}
+      {/* 输入区 */}
       <form
         onSubmit={sendMessage}
-        className="flex gap-2 p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white border-t border-slate-200 flex-shrink-0"
+        className="flex gap-2 p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white/95 backdrop-blur-sm border-t border-slate-200/80 flex-shrink-0"
       >
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="说点什么～"
-          disabled={!connected}
-          className="flex-1 px-4 py-3.5 sm:py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50 text-base min-h-[48px]"
-        />
+        <div className="flex-1 min-w-0 flex items-end gap-2 bg-slate-100 rounded-2xl px-4 py-2 focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:bg-white transition-all">
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                doSend()
+              }
+            }}
+            placeholder="说点什么～"
+            disabled={!connected}
+            rows={1}
+            className="flex-1 min-h-[44px] max-h-32 py-2.5 bg-transparent border-none focus:outline-none resize-none disabled:opacity-50 text-base text-slate-800 placeholder-slate-400"
+            style={{ fontSize: '16px' }}
+          />
+        </div>
         <button
           type="submit"
           disabled={!connected || !input.trim()}
-          className="px-5 py-3.5 sm:py-3 bg-indigo-600 text-white rounded-xl active:bg-indigo-700 disabled:opacity-50 font-medium min-h-[48px] touch-manipulation"
+          className="flex-shrink-0 w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50 disabled:hover:bg-indigo-600 transition-colors touch-manipulation"
+          aria-label="发送"
         >
-          发送
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+          </svg>
         </button>
       </form>
     </div>
