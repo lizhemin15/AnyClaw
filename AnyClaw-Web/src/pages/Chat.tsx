@@ -528,7 +528,14 @@ export default function Chat() {
               </ErrorBoundary>
             )}
             <div className="space-y-4">
-              {messages.filter((m) => !isThinkingPlaceholder(m.content ?? '')).map((m) => {
+              {messages
+                .filter((m) => !isThinkingPlaceholder(m.content ?? ''))
+                .filter((m, i, arr) => {
+                  if (i === 0) return true
+                  const prev = arr[i - 1]
+                  return !(m.role === 'assistant' && prev.role === 'assistant' && m.content === prev.content)
+                })
+                .map((m) => {
                 const isUser = m.role === 'user'
                 const expanded = expandedIds.has(m.id)
                 const toggleExpand = () => {
