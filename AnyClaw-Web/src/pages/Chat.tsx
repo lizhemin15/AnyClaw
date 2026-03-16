@@ -302,6 +302,7 @@ export default function Chat() {
   const listRef = useRef<HTMLDivElement>(null)
   const loadingMoreRef = useRef(false)
   const markReadTimeoutRef = useRef<number | null>(null)
+  const shouldScrollToBottomRef = useRef(true)
 
   const instanceId = parseInt(id ?? '', 10)
 
@@ -349,14 +350,23 @@ export default function Chat() {
     const oldestId = oldest?.id as number | undefined
     if (oldestId == null) return
     loadingMoreRef.current = true
+    shouldScrollToBottomRef.current = false
     setLoadingMore(true)
+    const el = listRef.current
+    const prevScrollHeight = el?.scrollHeight ?? 0
+    const prevScrollTop = el?.scrollTop ?? 0
     const list = await loadMessages(oldestId as number)
     const arr = Array.isArray(list) ? list : []
     const filtered = arr.filter((m) => !(m.role === 'assistant' && isThinkingPlaceholder(m.content ?? '')))
     setMessages((prev) => [...[...filtered].reverse(), ...prev])
     setHasMore(arr.length >= PAGE_SIZE)
-    loadingMoreRef.current = false
-    setLoadingMore(false)
+    requestAnimationFrame(() => {
+      if (el) {
+        el.scrollTop = el.scrollHeight - prevScrollHeight + prevScrollTop
+      }
+      loadingMoreRef.current = false
+      setLoadingMore(false)
+    })
   }, [loadMessages, hasMore, messages])
 
   useEffect(() => {
@@ -526,7 +536,10 @@ export default function Chat() {
   }, [instanceId, scheduleMarkRead, loadMessages, mergeMessagesFromServer])
 
   useEffect(() => {
-    listRef.current?.scrollTo(0, listRef.current?.scrollHeight ?? 0)
+    if (shouldScrollToBottomRef.current) {
+      listRef.current?.scrollTo(0, listRef.current?.scrollHeight ?? 0)
+    }
+    shouldScrollToBottomRef.current = true
   }, [messages, typing])
 
   // 等待回答时轮换提示语，减少干等感
@@ -670,6 +683,11 @@ export default function Chat() {
                   <span className="w-3 h-3 rounded-full border border-slate-300 border-t-slate-500 animate-spin" />
                   加载更多...
                 </span>
+              </div>
+            )}
+            {!hasMore && messages.length > 0 && (
+              <div className="flex justify-center py-3">
+                <span className="text-slate-300 text-xs">— 没有更多消息了 —</span>
               </div>
             )}
             {messages.length === 0 && !typing && (
