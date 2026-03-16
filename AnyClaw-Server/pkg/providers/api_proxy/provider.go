@@ -50,15 +50,18 @@ func NewProvider(apiURL, instanceID, token string) *Provider {
 }
 
 // Chat forwards the request to the API.
+// Model selection is delegated to the manager; server does not specify model.
 func (p *Provider) Chat(
 	ctx context.Context,
 	messages []Message,
 	tools []ToolDefinition,
-	model string,
+	_ string, // model is ignored - manager decides which model to use
 	options map[string]any,
 ) (*LLMResponse, error) {
+	// Model selection is handled by the manager (anyclaw-api).
+	// The manager uses its configured channels to select the appropriate model.
+	// This allows centralized model management across all instances.
 	requestBody := map[string]any{
-		"model":    model,
 		"messages": serializeMessages(messages),
 	}
 
