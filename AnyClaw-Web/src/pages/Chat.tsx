@@ -376,39 +376,18 @@ export default function Chat() {
     markInstanceRead(instanceId).catch(() => {})
   }, [instanceId, navigate, loadInitial])
 
-  // 合并服务端消息，避免 DB 与 WS 重复：user 按 content+u- 替换；assistant 按 content 替换或去重
+  // 以 API 为权威来源：API 是 DB 合并后的结果，直接采用；仅追加未落库的乐观 user
   const mergeMessagesFromServer = useCallback(
     (list: ChatMessage[], setter: React.Dispatch<React.SetStateAction<ChatMessage[]>>) => {
-      const arr = mergeMediaIntoPrevious(Array.isArray(list) ? list : [])
-      if (arr.length === 0) return
-      const reversed = [...arr].reverse()
+      const apiList = mergeMediaIntoPrevious(Array.isArray(list) ? list : []).filter(
+        (m) => !(m.role === 'assistant' && isThinkingPlaceholder(m.content ?? ''))
+      )
+      if (apiList.length === 0) return
+      const apiChronological = [...apiList].reverse()
       setter((prev) => {
-        const prevIds = new Set(prev.map((m) => m.id))
-        let merged = [...prev]
-        for (const m of reversed) {
-          const role = m.role ?? 'assistant'
-          const content = m.content ?? ''
-          if (role === 'assistant' && isThinkingPlaceholder(content)) continue
-          if (role === 'user') {
-            const idx = merged.findIndex((x) => x.role === 'user' && x.content === content && String(x.id).startsWith('u-'))
-            if (idx >= 0) {
-              merged[idx] = { id: m.id, content, role, created_at: m.created_at }
-              continue
-            }
-          }
-          if (role === 'assistant') {
-            const sameContentIdx = merged.findIndex((x) => x.role === 'assistant' && x.content === content)
-            if (sameContentIdx >= 0) {
-              merged[sameContentIdx] = { ...merged[sameContentIdx], id: m.id, created_at: m.created_at }
-              continue
-            }
-          }
-          if (!prevIds.has(m.id)) {
-            merged = [...merged, { id: m.id, content, role, created_at: m.created_at }]
-            prevIds.add(m.id)
-          }
-        }
-        return merged
+        const apiUserContents = new Set(apiChronological.filter((m) => m.role === 'user').map((m) => (m.content ?? '').trim()))
+        const optimisticUsers = prev.filter((m) => m.role === 'user' && String(m.id).startsWith('u-') && !apiUserContents.has((m.content ?? '').trim()))
+        return [...apiChronological, ...optimisticUsers]
       })
     },
     []
@@ -470,10 +449,14 @@ export default function Chat() {
                 if (lastIdx != null && isThinkingPlaceholder(prev[lastIdx]?.content ?? '')) {
                   return prev.map((m, i) => (i === lastIdx ? { ...m, id: mid, content } : m))
                 }
-                // 媒体消息且上一条 assistant 是纯文本：追加到上一条，不单独成条
-                if (isMediaContent(content) && lastIdx != null && !isMediaContent(prev[lastIdx]?.content ?? '')) {
-                  const merged = (prev[lastIdx]!.content + '\n\n' + content).trim()
-                  return prev.map((m, i) => (i === lastIdx ? { ...m, content: merged } : m))
+                // 媒体消息且上一条 assistant 是纯文本：追加到上一条，不单独成条；若上一条已含此媒体则跳过
+                if (isMediaContent(content) && lastIdx != null) {
+                  const lastContent = prev[lastIdx]?.content ?? ''
+                  if (lastContent.includes(content)) return prev
+                  if (!isMediaContent(lastContent)) {
+                    const merged = (lastContent + '\n\n' + content).trim()
+                    return prev.map((m, i) => (i === lastIdx ? { ...m, content: merged } : m))
+                  }
                 }
                 return [...prev, { id: mid, content, role: (msg.payload!.role as string) || 'assistant' }]
               })
@@ -717,6 +700,14 @@ export default function Chat() {
                   (acc: { list: ChatMessage[]; ids: Set<string | number> }, m) => {
                     if (acc.ids.has(m.id as string | number)) return acc
                     const last = acc.list[acc.list.length - 1]
+                    if (last && m.role === 'assistant' && last.role === 'assistant' && m.content !== last.content) {
+                      const lastTrim = (last.content ?? '').trim()
+                      if (lastTrim && (m.content ?? '').startsWith(lastTrim) && (m.content ?? '').length > lastTrim.length) {
+                        acc.list[acc.list.length - 1] = m
+                        acc.ids.add(m.id as string | number)
+                        return acc
+                      }
+                    }
                     if (last && m.role === 'assistant' && last.role === 'assistant' && m.content === last.content) return acc
                     acc.ids.add(m.id as string | number)
                     return { list: [...acc.list, m], ids: acc.ids }
