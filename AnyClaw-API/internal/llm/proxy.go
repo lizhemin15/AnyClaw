@@ -137,6 +137,7 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	model, _ := req["model"].(string)
+	log.Printf("[llm] request model=%q", model)
 	cfg, cfgErr := p.loadConfig()
 	if cfgErr != nil {
 		http.Error(w, `{"error":{"message":"config error"}}`, http.StatusInternalServerError)
