@@ -73,15 +73,30 @@ function formatMessageTime(iso: string): string {
   try {
     const d = new Date(iso)
     if (isNaN(d.getTime())) return ''
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const msgDate = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-    const diffDays = Math.floor((today.getTime() - msgDate.getTime()) / 86400000)
-    const time = d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
-    if (diffDays === 0) return time
+
+    const tz = 'Asia/Shanghai'
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(d)
+    const get = (t: string) => parts.find(p => p.type === t)?.value ?? ''
+    const time = `${get('hour').padStart(2, '0')}:${get('minute').padStart(2, '0')}`
+    const msgYmd = `${get('year')}-${get('month')}-${get('day')}`
+
+    const nowParts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(new Date())
+    const getN = (t: string) => nowParts.find(p => p.type === t)?.value ?? ''
+    const todayYmd = `${getN('year')}-${getN('month')}-${getN('day')}`
+
+    if (msgYmd === todayYmd) return time
+    const diffDays = Math.round(
+      (new Date(todayYmd).getTime() - new Date(msgYmd).getTime()) / 86400000
+    )
     if (diffDays === 1) return `昨天 ${time}`
-    if (diffDays < 7) return `${diffDays}天前 ${time}`
-    return d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' }) + ' ' + time
+    if (diffDays > 1 && diffDays < 7) return `${diffDays}天前 ${time}`
+    return `${parseInt(get('month'))}月${parseInt(get('day'))}日 ${time}`
   } catch {
     return ''
   }
@@ -609,7 +624,7 @@ export default function Chat() {
     const content = input.trim()
     if (!content || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
     const userMsgId = 'u-' + Date.now()
-    setMessages((prev) => [...prev, { id: userMsgId, content, role: 'user' }])
+    setMessages((prev) => [...prev, { id: userMsgId, content, role: 'user', created_at: new Date().toISOString() }])
     wsRef.current.send(JSON.stringify({ type: 'message.send', payload: { content } }))
     setInput('')
   }, [input])
