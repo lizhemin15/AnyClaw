@@ -315,8 +315,8 @@ export default function Chat() {
   }, [instanceId])
 
   const loadMessages = useCallback(
-    async (before?: number) => {
-      if (isNaN(instanceId)) return []
+    async (before?: number): Promise<{ list: ChatMessage[]; rawCount: number }> => {
+      if (isNaN(instanceId)) return { list: [], rawCount: 0 }
       try {
         const { messages: list } = await getMessages(instanceId, PAGE_SIZE, before)
         const arr = Array.isArray(list) ? list : []
@@ -326,9 +326,9 @@ export default function Chat() {
           role: m.role,
           created_at: m.created_at,
         }))
-        return mergeMediaIntoPrevious(mapped)
+        return { list: mergeMediaIntoPrevious(mapped), rawCount: arr.length }
       } catch {
-        return []
+        return { list: [], rawCount: 0 }
       }
     },
     [instanceId]
@@ -336,11 +336,10 @@ export default function Chat() {
 
   const loadInitial = useCallback(async () => {
     setLoading(true)
-    const list = await loadMessages()
-    const arr = Array.isArray(list) ? list : []
-    const filtered = arr.filter((m) => !(m.role === 'assistant' && isThinkingPlaceholder(m.content ?? '')))
+    const { list, rawCount } = await loadMessages()
+    const filtered = list.filter((m) => !(m.role === 'assistant' && isThinkingPlaceholder(m.content ?? '')))
     setMessages([...filtered].reverse())
-    setHasMore(arr.length >= PAGE_SIZE)
+    setHasMore(rawCount >= PAGE_SIZE)
     setLoading(false)
   }, [loadMessages])
 
@@ -355,11 +354,10 @@ export default function Chat() {
     const el = listRef.current
     const prevScrollHeight = el?.scrollHeight ?? 0
     const prevScrollTop = el?.scrollTop ?? 0
-    const list = await loadMessages(oldestId as number)
-    const arr = Array.isArray(list) ? list : []
-    const filtered = arr.filter((m) => !(m.role === 'assistant' && isThinkingPlaceholder(m.content ?? '')))
+    const { list, rawCount } = await loadMessages(oldestId as number)
+    const filtered = list.filter((m) => !(m.role === 'assistant' && isThinkingPlaceholder(m.content ?? '')))
     setMessages((prev) => [...[...filtered].reverse(), ...prev])
-    if (arr.length > 0) setHasMore(arr.length >= PAGE_SIZE)
+    setHasMore(rawCount >= PAGE_SIZE)
     requestAnimationFrame(() => {
       if (el) {
         el.scrollTop = el.scrollHeight - prevScrollHeight + prevScrollTop
@@ -406,7 +404,7 @@ export default function Chat() {
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible' && !isNaN(instanceId)) {
-        loadMessages().then((list) => mergeMessagesFromServer(list, setMessages))
+        loadMessages().then(({ list }) => mergeMessagesFromServer(list, setMessages))
       }
     }
     document.addEventListener('visibilitychange', onVisible)
@@ -417,7 +415,7 @@ export default function Chat() {
   useEffect(() => {
     if (!typing || isNaN(instanceId)) return
     const timer = setInterval(() => {
-      loadMessages().then((list) => mergeMessagesFromServer(list, setMessages))
+      loadMessages().then(({ list }) => mergeMessagesFromServer(list, setMessages))
     }, 3000)
     return () => clearInterval(timer)
   }, [typing, instanceId, loadMessages, mergeMessagesFromServer])
@@ -508,7 +506,7 @@ export default function Chat() {
             break
           case 'typing.stop':
             setTyping(false)
-            loadMessages().then((list) => mergeMessagesFromServer(list, setMessages))
+            loadMessages().then(({ list }) => mergeMessagesFromServer(list, setMessages))
             break
         }
       } catch {
@@ -541,6 +539,15 @@ export default function Chat() {
     }
     shouldScrollToBottomRef.current = true
   }, [messages, typing])
+
+  useEffect(() => {
+    if (loading || loadingMore || !hasMore) return
+    const el = listRef.current
+    if (!el) return
+    if (el.scrollHeight <= el.clientHeight) {
+      loadOlder()
+    }
+  }, [loading, loadingMore, hasMore, messages, loadOlder])
 
   // 等待回答时轮换提示语，减少干等感
   useEffect(() => {
@@ -636,7 +643,7 @@ export default function Chat() {
         </div>
         <button
           type="button"
-          onClick={() => loadMessages().then((list) => mergeMessagesFromServer(list, setMessages))}
+          onClick={() => loadMessages().then(({ list }) => mergeMessagesFromServer(list, setMessages))}
           className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
           title="刷新消息"
         >
