@@ -424,7 +424,12 @@ export default function Chat() {
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible' && !isNaN(instanceId)) {
-        loadMessages().then(({ list }) => mergeMessagesFromServer(list, setMessages))
+        shouldScrollToBottomRef.current = false
+        loadMessages().then(({ list }) => {
+          shouldScrollToBottomRef.current = false
+          mergeMessagesFromServer(list, setMessages)
+          requestAnimationFrame(() => { shouldScrollToBottomRef.current = true })
+        })
       }
     }
     document.addEventListener('visibilitychange', onVisible)
@@ -662,7 +667,14 @@ export default function Chat() {
         </div>
         <button
           type="button"
-          onClick={() => loadMessages().then(({ list }) => mergeMessagesFromServer(list, setMessages))}
+          onClick={() => {
+            shouldScrollToBottomRef.current = false
+            loadMessages().then(({ list }) => {
+              shouldScrollToBottomRef.current = false
+              mergeMessagesFromServer(list, setMessages)
+              requestAnimationFrame(() => { shouldScrollToBottomRef.current = true })
+            })
+          }}
           className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
           title="刷新消息"
         >
