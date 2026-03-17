@@ -359,7 +359,7 @@ export default function Chat() {
     const arr = Array.isArray(list) ? list : []
     const filtered = arr.filter((m) => !(m.role === 'assistant' && isThinkingPlaceholder(m.content ?? '')))
     setMessages((prev) => [...[...filtered].reverse(), ...prev])
-    setHasMore(arr.length >= PAGE_SIZE)
+    if (arr.length > 0) setHasMore(arr.length >= PAGE_SIZE)
     requestAnimationFrame(() => {
       if (el) {
         el.scrollTop = el.scrollHeight - prevScrollHeight + prevScrollTop
