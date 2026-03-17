@@ -20,6 +20,7 @@ const COLLAPSE_THRESHOLD = 400
 interface PicoMessage {
   type: string
   id?: string
+  timestamp?: number
   payload?: { content?: string; role?: string; message_id?: string; [key: string]: unknown }
 }
 
@@ -456,6 +457,7 @@ export default function Chat() {
     ws.onmessage = (event) => {
       try {
         const msg: PicoMessage = JSON.parse(event.data)
+        const wsTime = msg.timestamp ? new Date(msg.timestamp).toISOString() : new Date().toISOString()
         switch (msg.type) {
           case 'message.create':
             if (msg.payload?.content != null) {
@@ -465,18 +467,15 @@ export default function Chat() {
                 if (prev.some((m) => m.id === mid)) return prev
                 const sameContentIdx = prev.findIndex((m) => m.role === 'assistant' && m.content === content)
                 if (sameContentIdx >= 0) {
-                  return prev.map((m, i) => (i === sameContentIdx ? { ...m, id: mid } : m))
+                  return prev.map((m, i) => (i === sameContentIdx ? { ...m, id: mid, created_at: m.created_at || wsTime } : m))
                 }
                 const lastIdx = prev.map((m, i) => (m.role === 'assistant' ? i : -1)).filter((i) => i >= 0).pop()
-                // Thinking 占位符：添加，等待正式消息替换
                 if (isThinkingPlaceholder(content)) {
-                  return [...prev, { id: mid, content, role: (msg.payload!.role as string) || 'assistant' }]
+                  return [...prev, { id: mid, content, role: (msg.payload!.role as string) || 'assistant', created_at: wsTime }]
                 }
-                // 正式消息来了：若上一条是 Thinking，替换而非追加
                 if (lastIdx != null && isThinkingPlaceholder(prev[lastIdx]?.content ?? '')) {
-                  return prev.map((m, i) => (i === lastIdx ? { ...m, id: mid, content } : m))
+                  return prev.map((m, i) => (i === lastIdx ? { ...m, id: mid, content, created_at: m.created_at || wsTime } : m))
                 }
-                // 媒体消息且上一条 assistant 是纯文本：追加到上一条，不单独成条；若上一条已含此媒体则跳过
                 if (isMediaContent(content) && lastIdx != null) {
                   const lastContent = prev[lastIdx]?.content ?? ''
                   if (lastContent.includes(content)) return prev
@@ -485,7 +484,7 @@ export default function Chat() {
                     return prev.map((m, i) => (i === lastIdx ? { ...m, content: merged } : m))
                   }
                 }
-                return [...prev, { id: mid, content, role: (msg.payload!.role as string) || 'assistant' }]
+                return [...prev, { id: mid, content, role: (msg.payload!.role as string) || 'assistant', created_at: wsTime }]
               })
               scheduleMarkRead()
             }
@@ -502,19 +501,18 @@ export default function Chat() {
                   }
                   const thinkingIdx = prev.findIndex((m) => m.role === 'assistant' && isThinkingPlaceholder(m.content))
                   if (thinkingIdx >= 0) {
-                    return prev.map((m, i) => (i === thinkingIdx ? { ...m, id: targetId, content } : m))
+                    return prev.map((m, i) => (i === thinkingIdx ? { ...m, id: targetId, content, created_at: m.created_at || wsTime } : m))
                   }
                 }
-                // 无 targetId 时：若最后一条是媒体消息，不覆盖，追加新消息；否则更新最后一条
                 const lastAssistantIdx = prev.map((m, i) => (m.role === 'assistant' ? i : -1)).filter((i) => i >= 0).pop()
                 if (lastAssistantIdx != null) {
                   const lastContent = prev[lastAssistantIdx]?.content ?? ''
                   if (isMediaContent(lastContent)) {
-                    return [...prev, { id: targetId || 'a-' + Date.now(), content, role: 'assistant' }]
+                    return [...prev, { id: targetId || 'a-' + Date.now(), content, role: 'assistant', created_at: wsTime }]
                   }
                   return prev.map((m, i) => (i === lastAssistantIdx ? { ...m, content } : m))
                 }
-                return [...prev, { id: targetId || 'a-' + Date.now(), content, role: 'assistant' }]
+                return [...prev, { id: targetId || 'a-' + Date.now(), content, role: 'assistant', created_at: wsTime }]
               })
               scheduleMarkRead()
             }

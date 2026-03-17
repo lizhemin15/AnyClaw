@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/go-sql-driver/mysql"
 )
@@ -13,10 +14,24 @@ type DB struct {
 	*sql.DB
 }
 
+// ensureDSNLoc appends loc=Asia%2FShanghai to the DSN if no loc is specified,
+// so that go-mysql-driver interprets DATETIME as Beijing time (matching typical Chinese MySQL servers).
+func ensureDSNLoc(dsn string) string {
+	if strings.Contains(dsn, "loc=") {
+		return dsn
+	}
+	sep := "&"
+	if !strings.Contains(dsn, "?") {
+		sep = "?"
+	}
+	return dsn + sep + "loc=Asia%2FShanghai"
+}
+
 func Open(dsn string) (*DB, error) {
 	if dsn == "" {
 		dsn = "anyclaw:anyclaw@tcp(localhost:3306)/anyclaw?parseTime=true&charset=utf8mb4"
 	}
+	dsn = ensureDSNLoc(dsn)
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open mysql: %w", err)
