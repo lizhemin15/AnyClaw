@@ -362,6 +362,7 @@ export default function Chat() {
       if (el) {
         el.scrollTop = el.scrollHeight - prevScrollHeight + prevScrollTop
       }
+      shouldScrollToBottomRef.current = true
       loadingMoreRef.current = false
       setLoadingMore(false)
     })
@@ -393,9 +394,12 @@ export default function Chat() {
       if (apiList.length === 0) return
       const apiChronological = [...apiList].reverse()
       setter((prev) => {
+        const apiNumericIds = apiChronological.filter((m) => typeof m.id === 'number').map((m) => m.id as number)
+        const apiMinId = apiNumericIds.length > 0 ? Math.min(...apiNumericIds) : Infinity
+        const olderMessages = prev.filter((m) => typeof m.id === 'number' && (m.id as number) < apiMinId)
         const apiUserContents = new Set(apiChronological.filter((m) => m.role === 'user').map((m) => (m.content ?? '').trim()))
         const optimisticUsers = prev.filter((m) => m.role === 'user' && String(m.id).startsWith('u-') && !apiUserContents.has((m.content ?? '').trim()))
-        return [...apiChronological, ...optimisticUsers]
+        return [...olderMessages, ...apiChronological, ...optimisticUsers]
       })
     },
     []
@@ -534,10 +538,12 @@ export default function Chat() {
   }, [instanceId, scheduleMarkRead, loadMessages, mergeMessagesFromServer])
 
   useEffect(() => {
-    if (shouldScrollToBottomRef.current) {
+    if (shouldScrollToBottomRef.current && !loadingMoreRef.current) {
       listRef.current?.scrollTo(0, listRef.current?.scrollHeight ?? 0)
     }
-    shouldScrollToBottomRef.current = true
+    if (!loadingMoreRef.current) {
+      shouldScrollToBottomRef.current = true
+    }
   }, [messages, typing])
 
   useEffect(() => {
@@ -826,7 +832,7 @@ export default function Chat() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault()
                 doSend()
               }
