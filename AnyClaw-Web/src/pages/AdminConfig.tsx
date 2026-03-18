@@ -79,7 +79,7 @@ export default function AdminConfig() {
   const [correctedTotal, setCorrectedTotal] = useState('')
   const [correcting, setCorrecting] = useState(false)
   const [addingVoiceEndpoint, setAddingVoiceEndpoint] = useState(false)
-  const [newVoiceEndpoint, setNewVoiceEndpoint] = useState({ name: '', endpoint: '', api_key: '', daily_tokens_limit: 0, qps_limit: 0 })
+  const [newVoiceEndpoint, setNewVoiceEndpoint] = useState({ name: '', endpoint: '', api_key: '' })
   const [editingVoiceEndpoint, setEditingVoiceEndpoint] = useState<string | null>(null)
   const [testingVoiceEndpoint, setTestingVoiceEndpoint] = useState<string | null>(null)
   const [voiceTestResult, setVoiceTestResult] = useState<{ id: string; ok: boolean; message: string; latency?: number } | null>(null)
@@ -752,7 +752,7 @@ export default function AdminConfig() {
                 type="button"
                 onClick={() => {
                   setAddingVoiceEndpoint(true)
-                  setNewVoiceEndpoint({ name: '', endpoint: '', api_key: '', daily_tokens_limit: 0, qps_limit: 0 })
+                  setNewVoiceEndpoint({ name: '', endpoint: '', api_key: '' })
                 }}
                 className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
               >
@@ -781,29 +781,6 @@ export default function AdminConfig() {
                   placeholder="API Key"
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-40 font-mono"
                 />
-                <div className="flex flex-col">
-                  <label className="text-xs text-slate-500 mb-0.5">日 tokens 上限</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={newVoiceEndpoint.daily_tokens_limit ?? 0}
-                    onChange={(e) => setNewVoiceEndpoint((p) => ({ ...p, daily_tokens_limit: parseInt(e.target.value, 10) || 0 }))}
-                    placeholder="0=不限制"
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-28"
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <label className="text-xs text-slate-500 mb-0.5">QPS 上限</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.1}
-                    value={newVoiceEndpoint.qps_limit ?? 0}
-                    onChange={(e) => setNewVoiceEndpoint((p) => ({ ...p, qps_limit: parseFloat(e.target.value) || 0 }))}
-                    placeholder="0=不限制"
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-24"
-                  />
-                </div>
                 <button
                   type="button"
                   onClick={() => {
@@ -814,11 +791,9 @@ export default function AdminConfig() {
                       endpoint: newVoiceEndpoint.endpoint.trim(),
                       api_key: newVoiceEndpoint.api_key.trim(),
                       enabled: true,
-                      daily_tokens_limit: newVoiceEndpoint.daily_tokens_limit ?? 0,
-                      qps_limit: newVoiceEndpoint.qps_limit ?? 0,
                     }
                     setForm({ ...form, voice_api: [...(form.voice_api || []), ep] })
-                    setNewVoiceEndpoint({ name: '', endpoint: '', api_key: '', daily_tokens_limit: 0, qps_limit: 0 })
+                    setNewVoiceEndpoint({ name: '', endpoint: '', api_key: '' })
                     setAddingVoiceEndpoint(false)
                   }}
                   className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
@@ -876,18 +851,8 @@ export default function AdminConfig() {
                         ) : (
                           <span className="text-amber-600">系统自动关闭</span>
                         )}
-                        <span className="text-slate-600">
-                          {(voiceApiStatus[ep.id].token_usage_today ?? 0).toLocaleString()}
-                          {(ep.daily_tokens_limit ?? 0) > 0 && (
-                            <span className="text-slate-400">/{(ep.daily_tokens_limit ?? 0).toLocaleString()}</span>
-                          )}{' '}
-                          tokens
-                        </span>
                         {(voiceApiStatus[ep.id].in_flight ?? 0) > 0 && (
                           <span className="text-indigo-500">进行中 {voiceApiStatus[ep.id].in_flight}</span>
-                        )}
-                        {voiceApiStatus[ep.id].cooldown_until && (
-                          <span className="text-amber-600">恢复 {voiceApiStatus[ep.id].cooldown_until}</span>
                         )}
                       </span>
                     ) : (
@@ -925,45 +890,6 @@ export default function AdminConfig() {
                           placeholder="API Key"
                           className="px-3 py-1.5 border border-slate-300 rounded text-sm font-mono w-40"
                         />
-                        <div className="flex flex-col">
-                          <label className="text-xs text-slate-500 mb-0.5">日 tokens 上限</label>
-                          <input
-                            type="number"
-                            min={0}
-                            value={ep.daily_tokens_limit ?? 0}
-                            onChange={(e) => {
-                              if (!form) return
-                              setForm({
-                                ...form,
-                                voice_api: (form.voice_api || []).map((a) =>
-                                  a.id === ep.id ? { ...a, daily_tokens_limit: parseInt(e.target.value, 10) || 0 } : a
-                                ),
-                              })
-                            }}
-                            placeholder="0=不限制"
-                            className="px-3 py-1.5 border border-slate-300 rounded text-sm w-28"
-                          />
-                        </div>
-                        <div className="flex flex-col">
-                          <label className="text-xs text-slate-500 mb-0.5">QPS 上限</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.1}
-                            value={ep.qps_limit ?? 0}
-                            onChange={(e) => {
-                              if (!form) return
-                              setForm({
-                                ...form,
-                                voice_api: (form.voice_api || []).map((a) =>
-                                  a.id === ep.id ? { ...a, qps_limit: parseFloat(e.target.value) || 0 } : a
-                                ),
-                              })
-                            }}
-                            placeholder="0=不限制"
-                            className="px-3 py-1.5 border border-slate-300 rounded text-sm w-24"
-                          />
-                        </div>
                         <button type="button" onClick={() => setEditingVoiceEndpoint(null)} className="text-sm text-slate-600">
                           完成
                         </button>
@@ -971,8 +897,6 @@ export default function AdminConfig() {
                     ) : (
                       <span className="text-sm text-slate-500 truncate max-w-[300px]">
                         {ep.api_key ? '****' + ep.api_key.slice(-4) : '—'} · {ep.endpoint || '—'}
-                        {(ep.daily_tokens_limit ?? 0) > 0 && ` · 日限 ${(ep.daily_tokens_limit ?? 0).toLocaleString()} tokens`}
-                        {(ep.qps_limit ?? 0) > 0 && ` · QPS ${ep.qps_limit}`}
                       </span>
                     )}
                     {editingVoiceEndpoint !== ep.id && (
