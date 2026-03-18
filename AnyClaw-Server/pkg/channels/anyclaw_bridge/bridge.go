@@ -29,6 +29,8 @@ import (
 	"github.com/anyclaw/anyclaw-server/pkg/config"
 	"github.com/anyclaw/anyclaw-server/pkg/identity"
 	"github.com/anyclaw/anyclaw-server/pkg/logger"
+	"github.com/anyclaw/anyclaw-server/pkg/media"
+	"github.com/anyclaw/anyclaw-server/pkg/utils"
 
 	"github.com/anyclaw/anyclaw-server/pkg/channels/pico"
 )
@@ -273,7 +275,10 @@ func (c *BridgeChannel) handleMessage(bc *bridgeConn, msg pico.PicoMessage) {
 
 func (c *BridgeChannel) handleMessageSend(bc *bridgeConn, msg pico.PicoMessage) {
 	content, _ := msg.Payload["content"].(string)
-	if strings.TrimSpace(content) == "" {
+	mediaURL, _ := msg.Payload["media_url"].(string)
+	mediaType, _ := msg.Payload["media_type"].(string)
+
+	if strings.TrimSpace(content) == "" && mediaURL == "" {
 		errMsg := pico.NewError("empty_content", "message content is empty")
 		bc.writeJSON(errMsg)
 		return
@@ -300,12 +305,58 @@ func (c *BridgeChannel) handleMessageSend(bc *bridgeConn, msg pico.PicoMessage) 
 		CanonicalID: identity.BuildCanonicalID("anyclaw_web", senderID),
 	}
 
+	var mediaRefs []string
+	if mediaURL != "" && (mediaType == "audio" || mediaType == "") {
+		if store := c.GetMediaStore(); store != nil {
+			filename := "voice.webm"
+			if u, err := url.Parse(mediaURL); err == nil {
+				base := filepath.Base(u.Path)
+				if base != "" && base != "." && base != "/" {
+					filename = base
+				}
+			}
+			localPath := utils.DownloadFileSimple(mediaURL, filename)
+			if localPath != "" {
+				ct := "audio/webm"
+				ext := strings.ToLower(filepath.Ext(filename))
+				switch ext {
+				case ".wav":
+					ct = "audio/wav"
+				case ".ogg":
+					ct = "audio/ogg"
+				case ".mp3":
+					ct = "audio/mpeg"
+				case ".m4a":
+					ct = "audio/mp4"
+				}
+				scope := channels.BuildMediaScope(channelName, chatID, msg.ID)
+				ref, err := store.Store(localPath, media.MediaMeta{
+					Filename:    filename,
+					ContentType: ct,
+					Source:      "anyclaw_web",
+				}, scope)
+				if err == nil {
+					mediaRefs = append(mediaRefs, ref)
+					logger.DebugCF(channelName, "Stored web audio in media store", map[string]any{
+						"ref": ref, "filename": filename,
+					})
+				} else {
+					logger.WarnCF(channelName, "Failed to store web audio", map[string]any{"error": err.Error()})
+				}
+			}
+		}
+		if strings.TrimSpace(content) == "" {
+			content = "[audio]"
+		}
+	}
+
 	logger.DebugCF(channelName, "Received message", map[string]any{
-		"session_id": sessionID,
-		"preview":    truncate(content, 50),
+		"session_id":  sessionID,
+		"preview":     truncate(content, 50),
+		"has_media":   len(mediaRefs) > 0,
 	})
 
-	c.HandleMessage(c.ctx, peer, msg.ID, senderID, chatID, content, nil, metadata, sender)
+	c.HandleMessage(c.ctx, peer, msg.ID, senderID, chatID, content, mediaRefs, metadata, sender)
 }
 
 // MirrorChatID returns the chat ID for mirroring outbound messages from other channels to the web.

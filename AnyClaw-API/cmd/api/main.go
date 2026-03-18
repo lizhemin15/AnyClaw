@@ -153,6 +153,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Post("/", instHandler.Create)
 		r.Get("/{id}/ws", wsHandler.HandleUserWS)
 		r.Get("/{id}/messages", msgHandler.List)
+		r.Post("/{id}/upload", mediaHandler.UploadMediaAsUser)
 		r.Put("/{id}/read", instHandler.MarkRead)
 		r.Post("/{id}/subscribe", instHandler.Subscribe)
 		r.Get("/{id}", instHandler.Get)

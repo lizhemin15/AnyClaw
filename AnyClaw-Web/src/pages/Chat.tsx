@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react
 import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { getToken, getWebSocketUrl, getMessages, getInstance, markInstanceRead, fetchProxyText, type ChatMessage as ApiMessage } from '../api'
+import { getToken, getWebSocketUrl, getMessages, getInstance, markInstanceRead, fetchProxyText, uploadMedia, type ChatMessage as ApiMessage } from '../api'
 
 // remark-gfm 使用 lookbehind 正则，Safari 16.4 以下不支持，会报 invalid group specifier name
 const supportsGfm = typeof window !== 'undefined' && (() => {
@@ -340,6 +340,14 @@ export default function Chat() {
   const [instanceName, setInstanceName] = useState('')
   const [expandedIds, setExpandedIds] = useState<Set<string | number>>(new Set())
   const [showScrollBtn, setShowScrollBtn] = useState(false)
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordingDuration, setRecordingDuration] = useState(0)
+  const [isCancelGesture, setIsCancelGesture] = useState(false)
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
+  const [voiceUploading, setVoiceUploading] = useState(false)
+  const [voiceError, setVoiceError] = useState('')
+
   const wsRef = useRef<WebSocket | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const loadingMoreRef = useRef(false)
@@ -348,6 +356,15 @@ export default function Chat() {
   const scrollRestorationRef = useRef<{ prevScrollHeight: number; prevScrollTop: number } | null>(null)
   const knownMsgIdsRef = useRef(new Set<string | number>())
   const initialLoadDoneRef = useRef(false)
+  // Voice recording refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const recordingTimerRef = useRef<number | null>(null)
+  const recordingStartYRef = useRef(0)
+  const touchUsedRef = useRef(false)
+  const streamRef = useRef<MediaStream | null>(null)
+  const isMobile = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
+  const MAX_RECORDING_SECONDS = 60
 
   const instanceId = parseInt(id ?? '', 10)
 
@@ -693,6 +710,181 @@ export default function Chat() {
     doSend()
   }
 
+  const cleanupRecording = useCallback(() => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current)
+      recordingTimerRef.current = null
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop()
+    }
+    mediaRecorderRef.current = null
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop())
+      streamRef.current = null
+    }
+    audioChunksRef.current = []
+  }, [])
+
+  useEffect(() => {
+    return () => cleanupRecording()
+  }, [cleanupRecording])
+
+  const sendVoiceBlob = useCallback(async (blob: Blob) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    setVoiceUploading(true)
+    setVoiceError('')
+    try {
+      const ext = blob.type.includes('ogg') ? 'ogg' : 'webm'
+      const filename = `voice_${Date.now()}.${ext}`
+      const { url } = await uploadMedia(instanceId, blob, filename)
+
+      isAtBottomRef.current = true
+      const userMsgId = 'u-' + Date.now()
+      const content = `[🔊 语音消息](${url})`
+      setMessages((prev) => [...prev, { id: userMsgId, content, role: 'user', created_at: new Date().toISOString() }])
+      wsRef.current.send(JSON.stringify({
+        type: 'message.send',
+        payload: { content, media_url: url, media_type: 'audio' },
+      }))
+      setRecordedBlob(null)
+    } catch (e) {
+      setVoiceError(e instanceof Error ? e.message : '语音发送失败')
+    } finally {
+      setVoiceUploading(false)
+    }
+  }, [instanceId])
+
+  const sendVoiceBlobRef = useRef(sendVoiceBlob)
+  sendVoiceBlobRef.current = sendVoiceBlob
+
+  const stopRecordingRef = useRef<(cancel: boolean) => void>(() => {})
+
+  const stopRecording = useCallback((cancel: boolean) => {
+    if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
+      cleanupRecording()
+      setIsRecording(false)
+      return
+    }
+
+    const recorder = mediaRecorderRef.current
+    recorder.onstop = () => {
+      if (cancel) {
+        cleanupRecording()
+        setIsRecording(false)
+        return
+      }
+      const mimeType = recorder.mimeType || 'audio/webm'
+      const blob = new Blob(audioChunksRef.current, { type: mimeType })
+      if (blob.size < 1000) {
+        cleanupRecording()
+        setIsRecording(false)
+        return
+      }
+      if (isMobile) {
+        sendVoiceBlobRef.current(blob)
+      } else {
+        setRecordedBlob(blob)
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop())
+        streamRef.current = null
+      }
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current)
+        recordingTimerRef.current = null
+      }
+      mediaRecorderRef.current = null
+      audioChunksRef.current = []
+      setIsRecording(false)
+    }
+    recorder.stop()
+  }, [cleanupRecording, isMobile])
+
+  stopRecordingRef.current = stopRecording
+
+  const startRecording = useCallback(async () => {
+    setVoiceError('')
+    setRecordedBlob(null)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream
+      let mimeType = 'audio/webm;codecs=opus'
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm'
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'audio/ogg;codecs=opus'
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = ''
+          }
+        }
+      }
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream)
+      mediaRecorderRef.current = recorder
+      audioChunksRef.current = []
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data)
+      }
+
+      recorder.start(200)
+      setIsRecording(true)
+      setRecordingDuration(0)
+      setIsCancelGesture(false)
+
+      const startTime = Date.now()
+      recordingTimerRef.current = window.setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000)
+        setRecordingDuration(elapsed)
+        if (elapsed >= MAX_RECORDING_SECONDS) {
+          stopRecordingRef.current(false)
+        }
+      }, 200)
+    } catch {
+      setVoiceError('无法访问麦克风')
+    }
+  }, [])
+
+  const cancelPreview = useCallback(() => {
+    setRecordedBlob(null)
+    setVoiceError('')
+  }, [])
+
+  const handleMicTouchStart = useCallback((e: React.TouchEvent) => {
+    e.preventDefault()
+    touchUsedRef.current = true
+    recordingStartYRef.current = e.touches[0].clientY
+    startRecording()
+  }, [startRecording])
+
+  const handleMicTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!isRecording) return
+    const dy = recordingStartYRef.current - e.touches[0].clientY
+    setIsCancelGesture(dy > 60)
+  }, [isRecording])
+
+  const handleMicTouchEnd = useCallback(() => {
+    if (!isRecording) return
+    stopRecording(isCancelGesture)
+    setIsCancelGesture(false)
+  }, [isRecording, isCancelGesture, stopRecording])
+
+  const handleMicClick = useCallback(() => {
+    if (touchUsedRef.current) {
+      touchUsedRef.current = false
+      return
+    }
+    if (isRecording) {
+      stopRecording(false)
+    } else {
+      startRecording()
+    }
+  }, [isRecording, startRecording, stopRecording])
+
+  const supportsRecording = typeof window !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined'
+
   if (isNaN(instanceId)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -926,40 +1118,135 @@ export default function Chat() {
       </button>
       </div>
 
-      {/* 输入区 */}
-      <form
-        onSubmit={sendMessage}
-        className="flex gap-2 p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white/95 backdrop-blur-sm border-t border-slate-200/80 flex-shrink-0"
-      >
-        <div className="flex-1 min-w-0 flex items-end gap-2 bg-slate-100 rounded-2xl px-4 py-2 focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:bg-white transition-all">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault()
-                doSend()
-              }
-            }}
-            placeholder="说点什么～"
-            disabled={!connected}
-            rows={1}
-            className="flex-1 min-h-[44px] max-h-32 py-2.5 bg-transparent border-none focus:outline-none resize-none disabled:opacity-50 text-base text-slate-800 placeholder-slate-400"
-            style={{ fontSize: '16px' }}
-          />
+      {/* 手机端录音全屏覆盖层 */}
+      {isRecording && isMobile && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-end pb-32 bg-black/40 voice-overlay-in">
+          <div className={`flex flex-col items-center gap-4 transition-transform ${isCancelGesture ? 'scale-90 opacity-60' : ''}`}>
+            <div className="voice-wave-container">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="voice-wave-bar" style={{ animationDelay: `${i * 0.12}s` }} />
+              ))}
+            </div>
+            <span className="text-white text-2xl font-medium tabular-nums">
+              {Math.floor(recordingDuration / 60)}:{String(recordingDuration % 60).padStart(2, '0')}
+            </span>
+            <span className={`text-sm transition-all ${isCancelGesture ? 'text-red-400 font-medium' : 'text-white/70'}`}>
+              {isCancelGesture ? '松开取消' : '上滑取消'}
+            </span>
+          </div>
         </div>
-        <button
-          type="submit"
-          disabled={!connected || !input.trim()}
-          className="flex-shrink-0 w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50 disabled:hover:bg-indigo-600 transition-colors touch-manipulation"
-          aria-label="发送"
+      )}
+
+      {/* 输入区 */}
+      {recordedBlob && !isMobile ? (
+        <div className="flex items-center gap-2 p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white/95 backdrop-blur-sm border-t border-slate-200/80 flex-shrink-0">
+          <audio src={URL.createObjectURL(recordedBlob)} controls className="flex-1 min-w-0 h-10" />
+          <button
+            type="button"
+            onClick={cancelPreview}
+            disabled={voiceUploading}
+            className="flex-shrink-0 w-11 h-11 flex items-center justify-center text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors touch-manipulation"
+            aria-label="取消"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => sendVoiceBlob(recordedBlob)}
+            disabled={voiceUploading || !connected}
+            className="flex-shrink-0 w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50 transition-colors touch-manipulation"
+            aria-label="发送语音"
+          >
+            {voiceUploading ? (
+              <span className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            )}
+          </button>
+        </div>
+      ) : (
+        <form
+          onSubmit={sendMessage}
+          className="flex gap-2 p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white/95 backdrop-blur-sm border-t border-slate-200/80 flex-shrink-0"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-          </svg>
-        </button>
-      </form>
+          <div className="flex-1 min-w-0 flex items-end gap-2 bg-slate-100 rounded-2xl px-4 py-2 focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:bg-white transition-all">
+            {isRecording && !isMobile ? (
+              <div className="flex-1 flex items-center gap-3 min-h-[44px] py-2.5">
+                <span className="voice-rec-dot" />
+                <span className="text-slate-700 text-base tabular-nums">
+                  {Math.floor(recordingDuration / 60)}:{String(recordingDuration % 60).padStart(2, '0')}
+                </span>
+                <span className="text-slate-400 text-sm">录音中...</span>
+              </div>
+            ) : (
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault()
+                    doSend()
+                  }
+                }}
+                placeholder="说点什么～"
+                disabled={!connected}
+                rows={1}
+                className="flex-1 min-h-[44px] max-h-32 py-2.5 bg-transparent border-none focus:outline-none resize-none disabled:opacity-50 text-base text-slate-800 placeholder-slate-400"
+                style={{ fontSize: '16px' }}
+              />
+            )}
+          </div>
+          {input.trim() || !supportsRecording ? (
+            <button
+              type="submit"
+              disabled={!connected || !input.trim()}
+              className="flex-shrink-0 w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50 disabled:hover:bg-indigo-600 transition-colors touch-manipulation"
+              aria-label="发送"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={!connected || voiceUploading}
+              onTouchStart={isMobile ? handleMicTouchStart : undefined}
+              onTouchMove={isMobile ? handleMicTouchMove : undefined}
+              onTouchEnd={isMobile ? handleMicTouchEnd : undefined}
+              onClick={handleMicClick}
+              className={`flex-shrink-0 w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center rounded-xl transition-colors touch-manipulation select-none ${
+                isRecording
+                  ? 'bg-red-500 text-white hover:bg-red-600 active:bg-red-700 voice-rec-pulse'
+                  : 'bg-slate-200 text-slate-600 hover:bg-slate-300 active:bg-slate-400'
+              } disabled:opacity-50`}
+              aria-label={isRecording ? '停止录音' : '语音消息'}
+            >
+              {voiceUploading ? (
+                <span className="w-5 h-5 rounded-full border-2 border-current border-t-transparent animate-spin" />
+              ) : isRecording ? (
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4M12 15a3 3 0 003-3V5a3 3 0 00-6 0v7a3 3 0 003 3z" />
+                </svg>
+              )}
+            </button>
+          )}
+        </form>
+      )}
+      {(voiceError || voiceUploading) && (
+        <div className={`px-4 py-1.5 text-xs text-center flex-shrink-0 ${voiceError ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'}`}>
+          {voiceError || '语音上传中...'}
+        </div>
+      )}
     </div>
   )
 }

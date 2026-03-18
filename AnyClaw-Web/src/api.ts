@@ -612,6 +612,38 @@ export async function getRechargePlans(): Promise<PaymentPlan[]> {
   return Array.isArray(list) ? list : [];
 }
 
+export async function uploadMedia(instanceId: number, file: Blob, filename: string): Promise<{ url: string; filename: string }> {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append('file', file, filename);
+
+  const headers: HeadersInit = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE}/instances/${instanceId}/upload`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      clearToken();
+      const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `/login?expired=1&return_to=${returnTo}`;
+      throw new Error('登录已过期，请重新登录');
+    }
+    const text = await res.text();
+    let msg = text;
+    try { msg = (JSON.parse(text) as { error?: string }).error || text; } catch {}
+    throw new Error(msg);
+  }
+
+  return res.json();
+}
+
 export async function getSetupStatus(): Promise<{ configured: boolean }> {
   const res = await fetch(`${API_BASE}/api/setup/status`);
   const data = await res.json();
