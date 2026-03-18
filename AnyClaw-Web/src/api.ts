@@ -479,8 +479,19 @@ export interface COSConfig {
   path_prefix: string;
 }
 
+export interface AnyclawAPIEndpoint {
+  id: string;
+  name: string;
+  endpoint: string;
+  api_key: string;
+  enabled: boolean;
+  daily_tokens_limit?: number;
+  qps_limit?: number;
+}
+
 export interface AdminConfig {
   channels: Channel[];
+  anyclaw_api?: AnyclawAPIEndpoint[];
   smtp?: SMTPConfig;
   payment?: PaymentConfig;
   energy?: EnergyConfig;
@@ -508,9 +519,12 @@ export interface ChannelStatus {
   in_flight: number;
 }
 
-export async function getChannelStatus(): Promise<ChannelStatus[]> {
-  const data = await fetchApi<{ status: ChannelStatus[] }>('/admin/config/channel-status');
-  return Array.isArray(data?.status) ? data.status : [];
+export async function getChannelStatus(): Promise<{ status: ChannelStatus[]; anyclaw_api_status?: ChannelStatus[] }> {
+  const data = await fetchApi<{ status: ChannelStatus[]; anyclaw_api_status?: ChannelStatus[] }>('/admin/config/channel-status');
+  return {
+    status: Array.isArray(data?.status) ? data.status : [],
+    anyclaw_api_status: Array.isArray(data?.anyclaw_api_status) ? data.anyclaw_api_status : [],
+  };
 }
 
 export async function setUsageCorrection(params: {

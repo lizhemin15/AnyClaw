@@ -82,6 +82,23 @@ func (k *KeepAlive) probeAll() {
 	}
 	var targets []target
 	seen := make(map[string]bool)
+	// AnyClaw API 统一代理端点保活检测
+	for _, ep := range cfg.AnyclawAPI {
+		if !ep.Enabled || ep.Endpoint == "" || ep.APIKey == "" {
+			continue
+		}
+		base := strings.TrimSuffix(ep.Endpoint, "/")
+		key := ep.ID + "|" + base
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		model := cfg.GetEnabledModel()
+		if model == "" {
+			model = "gpt-4o"
+		}
+		targets = append(targets, target{channelID: ep.ID, apiBase: base, apiKey: ep.APIKey, model: model})
+	}
 	// 仅对用户启用的渠道做保活检测；用户手动关闭的不参与检测、不自动禁用
 	for _, ch := range cfg.Channels {
 		if !ch.Enabled || ch.APIKey == "" {

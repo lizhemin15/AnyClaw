@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getAdminConfig, putAdminConfig, getChannelStatus, setUsageCorrection, testChannelConfig, testSMTPConfig, adminReconnectInstances, type AdminConfig, type Channel, type ChannelStatus, type SMTPConfig, type PaymentConfig, type PaymentPlan, type EnergyConfig, type ContainerConfig, type COSConfig } from '../api'
+import { getAdminConfig, putAdminConfig, getChannelStatus, setUsageCorrection, testChannelConfig, testSMTPConfig, adminReconnectInstances, type AdminConfig, type Channel, type ChannelStatus, type SMTPConfig, type PaymentConfig, type PaymentPlan, type EnergyConfig, type ContainerConfig, type COSConfig, type AnyclawAPIEndpoint } from '../api'
 import { useUnsavedConfig } from '../contexts/UnsavedConfigContext'
 
 function genId() {
@@ -8,6 +8,10 @@ function genId() {
 
 function genModelId() {
   return 'm-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
+}
+
+function genApiId() {
+  return 'a-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
 }
 
 function getChannelProvider(ch: Channel): string {
@@ -74,6 +78,10 @@ export default function AdminConfig() {
   const [correctingChannel, setCorrectingChannel] = useState<Channel | null>(null)
   const [correctedTotal, setCorrectedTotal] = useState('')
   const [correcting, setCorrecting] = useState(false)
+  const [addingApiEndpoint, setAddingApiEndpoint] = useState(false)
+  const [newApiEndpoint, setNewApiEndpoint] = useState({ name: '', endpoint: '', api_key: '', daily_tokens_limit: 0, qps_limit: 0 })
+  const [editingApiEndpoint, setEditingApiEndpoint] = useState<string | null>(null)
+  const [anyclawApiStatus, setAnyclawApiStatus] = useState<Record<string, ChannelStatus>>({})
 
   const unsavedCtx = useUnsavedConfig()
   const hasUnsaved = !!(form && config && JSON.stringify(form) !== JSON.stringify(config))
@@ -144,8 +152,9 @@ export default function AdminConfig() {
         const container: ContainerConfig = c.container ? { ...c.container } : { workspace_size_gb: 0 }
         const cos: COSConfig | undefined = (c as { cos?: COSConfig }).cos
         const api_url = (c as { api_url?: string }).api_url ?? ''
-        setConfig({ channels, smtp, payment, energy, container, cos, api_url })
-        setForm({ channels: JSON.parse(JSON.stringify(channels)), smtp, payment: JSON.parse(JSON.stringify(payment)), energy: { ...energy }, container: { ...container }, cos: cos ? { ...cos } : undefined, api_url })
+        const anyclaw_api: AnyclawAPIEndpoint[] = Array.isArray((c as { anyclaw_api?: AnyclawAPIEndpoint[] }).anyclaw_api) ? (c as { anyclaw_api?: AnyclawAPIEndpoint[] }).anyclaw_api! : []
+        setConfig({ channels, smtp, payment, energy, container, cos, api_url, anyclaw_api })
+        setForm({ channels: JSON.parse(JSON.stringify(channels)), smtp, payment: JSON.parse(JSON.stringify(payment)), energy: { ...energy }, container: { ...container }, cos: cos ? { ...cos } : undefined, api_url, anyclaw_api: JSON.parse(JSON.stringify(anyclaw_api)) })
       })
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
       .finally(() => setLoading(false))
@@ -153,22 +162,27 @@ export default function AdminConfig() {
 
   const refreshChannelStatus = useCallback(async () => {
     try {
-      const list = await getChannelStatus()
+      const data = await getChannelStatus()
       const map: Record<string, ChannelStatus> = {}
-      for (const s of list) map[s.channel_id] = s
+      for (const s of data.status) map[s.channel_id] = s
       setChannelStatus(map)
+      const apiMap: Record<string, ChannelStatus> = {}
+      if (data.anyclaw_api_status) {
+        for (const s of data.anyclaw_api_status) apiMap[s.channel_id] = s
+      }
+      setAnyclawApiStatus(apiMap)
     } catch {
       // 静默失败
     }
   }, [])
 
   useEffect(() => {
-    const count = form?.channels?.length ?? 0
+    const count = (form?.channels?.length ?? 0) + (form?.anyclaw_api?.length ?? 0)
     if (count === 0) return
     refreshChannelStatus()
     const t = setInterval(refreshChannelStatus, 30000)
     return () => clearInterval(t)
-  }, [form?.channels?.length, refreshChannelStatus])
+  }, [form?.channels?.length, form?.anyclaw_api?.length, refreshChannelStatus])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -720,6 +734,268 @@ export default function AdminConfig() {
                   />
                 </div>
               </div>
+            )}
+          </div>
+        </div>
+
+        {/* AnyClaw API 统一代理 */}
+        <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-slate-800">AnyClaw API 代理</h2>
+              <p className="text-xs text-slate-500 mt-0.5">配置后所有 AI 请求（LLM/ASR/TTS）统一走 AnyClaw API 入口，自动负载均衡。未配置则走下方直连渠道。</p>
+            </div>
+            {!addingApiEndpoint ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setAddingApiEndpoint(true)
+                  setNewApiEndpoint({ name: '', endpoint: '', api_key: '', daily_tokens_limit: 0, qps_limit: 0 })
+                }}
+                className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+              >
+                + 添加端点
+              </button>
+            ) : (
+              <div className="flex gap-2 items-center flex-wrap">
+                <input
+                  type="text"
+                  value={newApiEndpoint.name}
+                  onChange={(e) => setNewApiEndpoint((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="名称，如 API-1"
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-28"
+                />
+                <input
+                  type="url"
+                  value={newApiEndpoint.endpoint}
+                  onChange={(e) => setNewApiEndpoint((p) => ({ ...p, endpoint: e.target.value }))}
+                  placeholder="API 地址，如 https://api.example.com/v1"
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-72"
+                />
+                <input
+                  type="password"
+                  value={newApiEndpoint.api_key}
+                  onChange={(e) => setNewApiEndpoint((p) => ({ ...p, api_key: e.target.value }))}
+                  placeholder="API Key"
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-40 font-mono"
+                />
+                <div className="flex flex-col">
+                  <label className="text-xs text-slate-500 mb-0.5">日 tokens 上限</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={newApiEndpoint.daily_tokens_limit ?? 0}
+                    onChange={(e) => setNewApiEndpoint((p) => ({ ...p, daily_tokens_limit: parseInt(e.target.value, 10) || 0 }))}
+                    placeholder="0=不限制"
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-28"
+                  />
+                </div>
+                <div className="flex flex-col">
+                  <label className="text-xs text-slate-500 mb-0.5">QPS 上限</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={newApiEndpoint.qps_limit ?? 0}
+                    onChange={(e) => setNewApiEndpoint((p) => ({ ...p, qps_limit: parseFloat(e.target.value) || 0 }))}
+                    placeholder="0=不限制"
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-24"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!form || !newApiEndpoint.endpoint.trim() || !newApiEndpoint.api_key.trim()) return
+                    const ep: AnyclawAPIEndpoint = {
+                      id: genApiId(),
+                      name: newApiEndpoint.name.trim() || '端点',
+                      endpoint: newApiEndpoint.endpoint.trim(),
+                      api_key: newApiEndpoint.api_key.trim(),
+                      enabled: true,
+                      daily_tokens_limit: newApiEndpoint.daily_tokens_limit ?? 0,
+                      qps_limit: newApiEndpoint.qps_limit ?? 0,
+                    }
+                    setForm({ ...form, anyclaw_api: [...(form.anyclaw_api || []), ep] })
+                    setNewApiEndpoint({ name: '', endpoint: '', api_key: '', daily_tokens_limit: 0, qps_limit: 0 })
+                    setAddingApiEndpoint(false)
+                  }}
+                  className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                >
+                  添加
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAddingApiEndpoint(false)}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+                >
+                  取消
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="divide-y divide-slate-100">
+            {(form?.anyclaw_api ?? []).length === 0 ? (
+              <div className="px-5 py-8 text-center text-slate-500 text-sm">未配置 AnyClaw API 端点，请求将直连 AI 渠道</div>
+            ) : (
+              (form?.anyclaw_api ?? []).map((ep) => (
+                <div key={ep.id} className="px-5 py-4">
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={ep.enabled}
+                      onClick={() => {
+                        if (!form) return
+                        setForm({
+                          ...form,
+                          anyclaw_api: (form.anyclaw_api || []).map((e) =>
+                            e.id === ep.id ? { ...e, enabled: !e.enabled } : e
+                          ),
+                        })
+                      }}
+                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${
+                        ep.enabled ? 'bg-indigo-600' : 'bg-slate-200'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
+                          ep.enabled ? 'translate-x-4' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                    <span className="font-medium text-slate-800 min-w-[80px]">{ep.name}</span>
+                    {anyclawApiStatus[ep.id] ? (
+                      <span className="flex items-center gap-3 text-xs flex-wrap">
+                        {!ep.enabled ? (
+                          <span className="text-slate-500">手动关闭</span>
+                        ) : anyclawApiStatus[ep.id].available ? (
+                          <span className="text-emerald-600">可用</span>
+                        ) : (
+                          <span className="text-amber-600">系统自动关闭</span>
+                        )}
+                        <span className="text-slate-600">
+                          {(anyclawApiStatus[ep.id].token_usage_today ?? 0).toLocaleString()}
+                          {(ep.daily_tokens_limit ?? 0) > 0 && (
+                            <span className="text-slate-400">/{(ep.daily_tokens_limit ?? 0).toLocaleString()}</span>
+                          )}{' '}
+                          tokens
+                        </span>
+                        {(anyclawApiStatus[ep.id].in_flight ?? 0) > 0 && (
+                          <span className="text-indigo-500">进行中 {anyclawApiStatus[ep.id].in_flight}</span>
+                        )}
+                        {anyclawApiStatus[ep.id].cooldown_until && (
+                          <span className="text-amber-600">恢复 {anyclawApiStatus[ep.id].cooldown_until}</span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400">{ep.enabled ? '已启用' : '手动关闭'}</span>
+                    )}
+                    {editingApiEndpoint === ep.id ? (
+                      <div className="flex gap-2 flex-1 flex-wrap items-center">
+                        <input
+                          type="url"
+                          value={ep.endpoint}
+                          onChange={(e) => {
+                            if (!form) return
+                            setForm({
+                              ...form,
+                              anyclaw_api: (form.anyclaw_api || []).map((a) =>
+                                a.id === ep.id ? { ...a, endpoint: e.target.value } : a
+                              ),
+                            })
+                          }}
+                          placeholder="API 地址"
+                          className="px-3 py-1.5 border border-slate-300 rounded text-sm w-56"
+                        />
+                        <input
+                          type="password"
+                          value={ep.api_key}
+                          onChange={(e) => {
+                            if (!form) return
+                            setForm({
+                              ...form,
+                              anyclaw_api: (form.anyclaw_api || []).map((a) =>
+                                a.id === ep.id ? { ...a, api_key: e.target.value } : a
+                              ),
+                            })
+                          }}
+                          placeholder="API Key"
+                          className="px-3 py-1.5 border border-slate-300 rounded text-sm font-mono w-40"
+                        />
+                        <div className="flex flex-col">
+                          <label className="text-xs text-slate-500 mb-0.5">日 tokens 上限</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={ep.daily_tokens_limit ?? 0}
+                            onChange={(e) => {
+                              if (!form) return
+                              setForm({
+                                ...form,
+                                anyclaw_api: (form.anyclaw_api || []).map((a) =>
+                                  a.id === ep.id ? { ...a, daily_tokens_limit: parseInt(e.target.value, 10) || 0 } : a
+                                ),
+                              })
+                            }}
+                            placeholder="0=不限制"
+                            className="px-3 py-1.5 border border-slate-300 rounded text-sm w-28"
+                          />
+                        </div>
+                        <div className="flex flex-col">
+                          <label className="text-xs text-slate-500 mb-0.5">QPS 上限</label>
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.1}
+                            value={ep.qps_limit ?? 0}
+                            onChange={(e) => {
+                              if (!form) return
+                              setForm({
+                                ...form,
+                                anyclaw_api: (form.anyclaw_api || []).map((a) =>
+                                  a.id === ep.id ? { ...a, qps_limit: parseFloat(e.target.value) || 0 } : a
+                                ),
+                              })
+                            }}
+                            placeholder="0=不限制"
+                            className="px-3 py-1.5 border border-slate-300 rounded text-sm w-24"
+                          />
+                        </div>
+                        <button type="button" onClick={() => setEditingApiEndpoint(null)} className="text-sm text-slate-600">
+                          完成
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-slate-500 truncate max-w-[300px]">
+                        {ep.api_key ? '****' + ep.api_key.slice(-4) : '—'} · {ep.endpoint || '—'}
+                        {(ep.daily_tokens_limit ?? 0) > 0 && ` · 日限 ${(ep.daily_tokens_limit ?? 0).toLocaleString()} tokens`}
+                        {(ep.qps_limit ?? 0) > 0 && ` · QPS ${ep.qps_limit}`}
+                      </span>
+                    )}
+                    {editingApiEndpoint !== ep.id && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingApiEndpoint(ep.id)}
+                        className="text-sm text-indigo-600 hover:text-indigo-700"
+                      >
+                        编辑
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!form) return
+                        setForm({ ...form, anyclaw_api: (form.anyclaw_api || []).filter((a) => a.id !== ep.id) })
+                        setEditingApiEndpoint(null)
+                      }}
+                      className="text-sm text-red-600 hover:text-red-700"
+                    >
+                      删除
+                    </button>
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </div>

@@ -155,6 +155,59 @@ func (s *ModelScheduler) GetChannelStatus(channels []config.Channel) []ChannelSt
 	return out
 }
 
+// GetAnyclawAPIStatus 返回 AnyClaw API 端点的实时状态
+func (s *ModelScheduler) GetAnyclawAPIStatus(endpoints []config.AnyclawAPIEndpoint) []ChannelStatus {
+	if len(endpoints) == 0 {
+		return nil
+	}
+	providers := make([]string, 0, len(endpoints)*2)
+	for _, ep := range endpoints {
+		if ep.Name != "" {
+			providers = append(providers, ep.Name)
+		}
+		base := strings.TrimSuffix(ep.Endpoint, "/")
+		if base != "" {
+			providers = append(providers, base)
+		}
+	}
+	usageMap := make(map[string]int64)
+	if s.db != nil && len(providers) > 0 {
+		if m, err := s.db.GetUsageByProviderToday(providers); err == nil {
+			usageMap = m
+		}
+	}
+	s.mu.Lock()
+	now := time.Now()
+	out := make([]ChannelStatus, 0, len(endpoints))
+	for _, ep := range endpoints {
+		base := strings.TrimSuffix(ep.Endpoint, "/")
+		key := ep.ID + "|" + base
+		until, inCooldown := s.failures[key]
+		available := !inCooldown || now.After(until)
+		cooldownUntil := ""
+		if inCooldown && until.After(now) {
+			cooldownUntil = until.Format("2006-01-02 15:04")
+		}
+		pk := ep.Name
+		if pk == "" {
+			pk = base
+		}
+		tokens := usageMap[pk]
+		if tokens == 0 && ep.Name != "" {
+			tokens = usageMap[base]
+		}
+		out = append(out, ChannelStatus{
+			ChannelID:       ep.ID,
+			TokenUsageToday: tokens,
+			Available:       available,
+			CooldownUntil:   cooldownUntil,
+			InFlight:        s.usage[key],
+		})
+	}
+	s.mu.Unlock()
+	return out
+}
+
 // Pick 从候选列表中选择最优渠道。
 func (s *ModelScheduler) Pick(model string, candidates []config.ChannelEndpoint) (config.ChannelEndpoint, bool) {
 	if len(candidates) == 0 {

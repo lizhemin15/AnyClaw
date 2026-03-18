@@ -15,6 +15,7 @@ type Config struct {
 	DockerImage  string         `json:"docker_image"`
 	DefaultModel string         `json:"default_model"` // deprecated
 	Channels     []Channel      `json:"channels"`     // 用户添加的渠道，每个渠道可配置、启用、添加多个模型
+	AnyclawAPI   []AnyclawAPIEndpoint `json:"anyclaw_api,omitempty"` // AnyClaw API 统一代理入口，启用后所有请求走此路由
 	KeyPool      KeyPool        `json:"key_pool"`     // deprecated, migrate to channels
 	InstanceMap  InstanceMap    `json:"instance_map"`
 	SMTP         *SMTPConfig    `json:"smtp,omitempty"` // 注册验证码邮件
@@ -22,6 +23,17 @@ type Config struct {
 	Energy       *EnergyConfig  `json:"energy,omitempty"` // 金币/活力经济参数，即时生效
 	Container    *ContainerConfig `json:"container,omitempty"` // 员工容器配置
 	COS          *COSConfig      `json:"cos,omitempty"`       // 腾讯云 COS 对象存储，用于媒体文件
+}
+
+// AnyclawAPIEndpoint AnyClaw API 统一代理端点，配置后所有 LLM/ASR/TTS 等请求都走此入口
+type AnyclawAPIEndpoint struct {
+	ID               string  `json:"id"`
+	Name             string  `json:"name"`
+	Endpoint         string  `json:"endpoint"`          // API 地址，如 https://api.anyclaw.com/v1
+	APIKey           string  `json:"api_key"`
+	Enabled          bool    `json:"enabled"`
+	DailyTokensLimit int64   `json:"daily_tokens_limit"` // 日 tokens 上限，0 不限
+	QPSLimit         float64 `json:"qps_limit"`          // QPS 上限，0 不限
 }
 
 // COSConfig 腾讯云 COS 配置，用于上传 AI 发送的图片/音视频/文件
@@ -202,6 +214,35 @@ type ChannelEndpoint struct {
 	QPSLimit          float64 // 0=不限制
 }
 
+// HasAnyclawAPI 判断是否配置了启用的 AnyClaw API 端点
+func (c *Config) HasAnyclawAPI() bool {
+	for _, ep := range c.AnyclawAPI {
+		if ep.Enabled && ep.Endpoint != "" && ep.APIKey != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// FindAnyclawAPIEndpoints 返回已启用的 AnyClaw API 端点列表，转为 ChannelEndpoint 供调度器使用
+func (c *Config) FindAnyclawAPIEndpoints() []ChannelEndpoint {
+	var out []ChannelEndpoint
+	for _, ep := range c.AnyclawAPI {
+		if !ep.Enabled || ep.Endpoint == "" || ep.APIKey == "" {
+			continue
+		}
+		out = append(out, ChannelEndpoint{
+			ChannelID:        ep.ID,
+			ChannelName:      ep.Name,
+			APIBase:          strings.TrimSuffix(ep.Endpoint, "/"),
+			APIKey:           ep.APIKey,
+			DailyTokensLimit: ep.DailyTokensLimit,
+			QPSLimit:         ep.QPSLimit,
+		})
+	}
+	return out
+}
+
 // FindChannelsForModel 返回能提供该模型的所有已启用渠道（用于负载均衡）
 func (c *Config) FindChannelsForModel(model string) []ChannelEndpoint {
 	model = strings.ToLower(strings.TrimSpace(model))
@@ -340,21 +381,25 @@ func Load(path string) (*Config, error) {
 	if len(cfg.Channels) == 0 {
 		migrateToChannels(cfg)
 	}
-	// 优先从 DB 加载 admin 配置（channels/smtp/payment/energy），DB 为唯一数据源
+	// 优先从 DB 加载 admin 配置（channels/smtp/payment/energy/anyclaw_api），DB 为唯一数据源
 	if LoadFromDB != nil {
 		if b, err := LoadFromDB(); err == nil && len(b) > 0 {
 			var dbCfg struct {
-				Channels   []Channel          `json:"channels"`
-				SMTP       *SMTPConfig        `json:"smtp"`
-				Payment    *PaymentConfig     `json:"payment"`
-				Energy     *EnergyConfig      `json:"energy"`
-				Container  *ContainerConfig   `json:"container"`
-				COS        *COSConfig         `json:"cos"`
-				APIURL     string             `json:"api_url"`
+				Channels   []Channel              `json:"channels"`
+				AnyclawAPI []AnyclawAPIEndpoint    `json:"anyclaw_api"`
+				SMTP       *SMTPConfig             `json:"smtp"`
+				Payment    *PaymentConfig          `json:"payment"`
+				Energy     *EnergyConfig           `json:"energy"`
+				Container  *ContainerConfig        `json:"container"`
+				COS        *COSConfig              `json:"cos"`
+				APIURL     string                  `json:"api_url"`
 			}
 			if json.Unmarshal(b, &dbCfg) == nil {
 				if len(dbCfg.Channels) > 0 {
 					cfg.Channels = dbCfg.Channels
+				}
+				if len(dbCfg.AnyclawAPI) > 0 {
+					cfg.AnyclawAPI = dbCfg.AnyclawAPI
 				}
 				if dbCfg.SMTP != nil {
 					cfg.SMTP = dbCfg.SMTP

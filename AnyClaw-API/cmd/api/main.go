@@ -181,8 +181,13 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 				channels = []config.Channel{}
 			}
 			status := proxy.GetChannelStatus(channels)
+			apiStatus := proxy.GetAnyclawAPIStatus(cfg.AnyclawAPI)
+			resp := map[string]any{"status": status}
+			if len(apiStatus) > 0 {
+				resp["anyclaw_api_status"] = apiStatus
+			}
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]any{"status": status})
+			json.NewEncoder(w).Encode(resp)
 		})
 		r.Put("/config", adminConfigHandler.PutConfig)
 		r.Post("/config/test", adminConfigHandler.TestChannel)
