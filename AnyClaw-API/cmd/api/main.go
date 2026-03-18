@@ -21,6 +21,7 @@ import (
 	"github.com/anyclaw/anyclaw-api/internal/proxy"
 	"github.com/anyclaw/anyclaw-api/internal/messages"
 	"github.com/anyclaw/anyclaw-api/internal/usage"
+	"github.com/anyclaw/anyclaw-api/internal/voice"
 	"github.com/anyclaw/anyclaw-api/internal/scheduler"
 	"github.com/anyclaw/anyclaw-api/internal/setup"
 	"github.com/anyclaw/anyclaw-api/internal/web"
@@ -250,6 +251,10 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	r.Get("/containers/connect", wsHandler.HandleContainerConnect)
 
 	r.HandleFunc("/llm/v1/chat/completions", proxy.HandleChatCompletions)
+
+	voiceHandler := voice.New(configPath, proxy.Scheduler(), database)
+	r.HandleFunc("/asr/v1/audio/transcriptions", voiceHandler.HandleASR)
+	r.HandleFunc("/tts/v1/audio/speech", voiceHandler.HandleTTS)
 
 	if h, err := web.SPAHandler(); err == nil {
 		r.NotFound(func(w http.ResponseWriter, r *http.Request) { h.ServeHTTP(w, r) })

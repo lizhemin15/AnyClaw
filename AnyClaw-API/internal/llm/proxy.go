@@ -69,6 +69,11 @@ func (p *Proxy) GetVoiceAPIStatus(endpoints []config.VoiceAPIEndpoint) []Channel
 	return p.scheduler.GetVoiceAPIStatus(endpoints)
 }
 
+// Scheduler 返回内部调度器，供语音桥接等共享使用
+func (p *Proxy) Scheduler() *ModelScheduler {
+	return p.scheduler
+}
+
 func (p *Proxy) loadConfig() (*config.Config, error) {
 	return config.Load(p.configPath)
 }
