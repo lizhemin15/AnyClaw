@@ -209,7 +209,8 @@ function MessageContent({
   const hasEmbeddedMedia = /\]\(data:/.test(s)
   const isLong = !hasEmbeddedMedia && s.length > COLLAPSE_THRESHOLD
   const showCollapsed = isLong && !expanded
-  const displayContent = showCollapsed ? s.slice(0, COLLAPSE_THRESHOLD) + '...' : s
+  const remainingChars = s.length - COLLAPSE_THRESHOLD
+  const displayContent = showCollapsed ? s.slice(0, COLLAPSE_THRESHOLD) : s
 
   const wrapClass = isUser ? 'msg-md-user' : 'msg-md-assistant'
 
@@ -271,19 +272,43 @@ function MessageContent({
   <>
     <ErrorBoundary fallback={
       <div className={`msg-markdown ${wrapClass}`}>
-        <div className="whitespace-pre-wrap break-words">{displayContent || '\u00A0'}</div>
+        <div className={`msg-content-inner${showCollapsed ? ' msg-content-collapsed' : ''}`}>
+          <div className="whitespace-pre-wrap break-words">{displayContent || '\u00A0'}</div>
+        </div>
         {isLong && (
           <button type="button" onClick={onToggleExpand} className="msg-expand-btn">
-            {expanded ? '收起' : '展开'}
+            {expanded ? (
+              <>
+                <svg className="msg-expand-icon msg-expand-icon-up" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" /></svg>
+                <span>收起</span>
+              </>
+            ) : (
+              <>
+                <svg className="msg-expand-icon" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                <span>展开剩余 {remainingChars} 字</span>
+              </>
+            )}
           </button>
         )}
       </div>
     }>
       <div className={`msg-markdown ${wrapClass}`}>
-        <ReactMarkdown remarkPlugins={supportsGfm ? [remarkGfm] : []} components={markdownComponents}>{displayContent || '\u00A0'}</ReactMarkdown>
+        <div className={`msg-content-inner${showCollapsed ? ' msg-content-collapsed' : ''}${isLong && expanded ? ' msg-content-expanded' : ''}`}>
+          <ReactMarkdown remarkPlugins={supportsGfm ? [remarkGfm] : []} components={markdownComponents}>{displayContent || '\u00A0'}</ReactMarkdown>
+        </div>
         {isLong && (
           <button type="button" onClick={onToggleExpand} className="msg-expand-btn">
-            {expanded ? '收起' : '展开'}
+            {expanded ? (
+              <>
+                <svg className="msg-expand-icon msg-expand-icon-up" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" /></svg>
+                <span>收起</span>
+              </>
+            ) : (
+              <>
+                <svg className="msg-expand-icon" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                <span>展开剩余 {remainingChars} 字</span>
+              </>
+            )}
           </button>
         )}
       </div>

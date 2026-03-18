@@ -86,11 +86,71 @@
 .msg-markdown.msg-md-assistant a { color: rgb(79 70 229); }
 .msg-markdown.msg-md-assistant a:hover { color: rgb(67 56 202); }
 .msg-markdown.msg-md-assistant blockquote { border-color: rgb(203 213 225); color: rgb(71 85 105); }
-.msg-expand-btn { margin-top: 0.35rem; font-size: 0.75rem; cursor: pointer; background: none; border: none; padding: 0.15em 0; }
-.msg-markdown.msg-md-user .msg-expand-btn { color: rgba(255,255,255,0.85); }
-.msg-markdown.msg-md-user .msg-expand-btn:hover { color: white; }
-.msg-markdown.msg-md-assistant .msg-expand-btn { color: rgb(99 102 241); }
-.msg-markdown.msg-md-assistant .msg-expand-btn:hover { color: rgb(79 70 229); }
+/* 消息内容收起/展开 */
+.msg-content-inner { position: relative; }
+.msg-content-collapsed::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: -0.25rem;
+  right: -0.25rem;
+  height: 3rem;
+  pointer-events: none;
+  border-radius: 0 0 0.25rem 0.25rem;
+}
+.msg-md-user .msg-content-collapsed::after {
+  background: linear-gradient(to bottom, transparent, rgb(79 70 229));
+}
+.msg-md-assistant .msg-content-collapsed::after {
+  background: linear-gradient(to bottom, transparent, white);
+}
+@keyframes msg-expand-in {
+  from { opacity: 0.6; }
+  to { opacity: 1; }
+}
+.msg-content-expanded {
+  animation: msg-expand-in 0.3s ease-out;
+}
+.msg-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  padding: 0.3em 0.75em;
+  border-radius: 1rem;
+  transition: all 0.2s ease;
+  line-height: 1.5;
+}
+.msg-expand-btn:active { transform: scale(0.95); }
+.msg-expand-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+  transition: transform 0.25s ease;
+}
+.msg-expand-btn:hover .msg-expand-icon { transform: translateY(2px); }
+.msg-expand-btn:hover .msg-expand-icon-up { transform: translateY(-2px); }
+.msg-md-user .msg-expand-btn {
+  background: rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.9);
+  backdrop-filter: blur(4px);
+}
+.msg-md-user .msg-expand-btn:hover {
+  background: rgba(255,255,255,0.3);
+  color: white;
+}
+.msg-md-assistant .msg-expand-btn {
+  background: rgb(238 242 255);
+  color: rgb(99 102 241);
+}
+.msg-md-assistant .msg-expand-btn:hover {
+  background: rgb(224 231 255);
+  color: rgb(79 70 229);
+}
 
 /* 消息淡入动画 */
 @keyframes msg-fade-in {
