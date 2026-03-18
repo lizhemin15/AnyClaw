@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -319,6 +319,9 @@ export default function Chat() {
   const loadingMoreRef = useRef(false)
   const markReadTimeoutRef = useRef<number | null>(null)
   const isAtBottomRef = useRef(true)
+  const scrollRestorationRef = useRef<{ prevScrollHeight: number; prevScrollTop: number } | null>(null)
+  const knownMsgIdsRef = useRef(new Set<string | number>())
+  const initialLoadDoneRef = useRef(false)
 
   const instanceId = parseInt(id ?? '', 10)
 
@@ -371,15 +374,15 @@ export default function Chat() {
     const prevScrollTop = el?.scrollTop ?? 0
     const { list, rawCount } = await loadMessages(oldestId as number)
     const filtered = list.filter((m) => !(m.role === 'assistant' && isThinkingPlaceholder(m.content ?? '')))
-    setMessages((prev) => [...[...filtered].reverse(), ...prev])
-    setHasMore(rawCount >= PAGE_SIZE)
-    requestAnimationFrame(() => {
-      if (el) {
-        el.scrollTop = el.scrollHeight - prevScrollHeight + prevScrollTop
-      }
+    if (filtered.length === 0) {
       loadingMoreRef.current = false
       setLoadingMore(false)
-    })
+      setHasMore(rawCount >= PAGE_SIZE)
+      return
+    }
+    scrollRestorationRef.current = { prevScrollHeight, prevScrollTop }
+    setMessages((prev) => [...[...filtered].reverse(), ...prev])
+    setHasMore(rawCount >= PAGE_SIZE)
   }, [loadMessages, hasMore, messages])
 
   useEffect(() => {
@@ -550,6 +553,26 @@ export default function Chat() {
     }
   }, [instanceId, scheduleMarkRead, loadMessages, mergeMessagesFromServer])
 
+  // loadOlder 滚动恢复：在浏览器绘制前同步调整，避免可见跳动
+  useLayoutEffect(() => {
+    const restore = scrollRestorationRef.current
+    const el = listRef.current
+    if (restore && el) {
+      el.scrollTop = el.scrollHeight - restore.prevScrollHeight + restore.prevScrollTop
+      scrollRestorationRef.current = null
+      loadingMoreRef.current = false
+      setLoadingMore(false)
+    }
+  }, [messages])
+
+  // 追踪已知消息 ID，用于判断哪些消息需要淡入动画
+  useLayoutEffect(() => {
+    knownMsgIdsRef.current = new Set(messages.map(m => m.id))
+    if (!initialLoadDoneRef.current && !loading && messages.length > 0) {
+      initialLoadDoneRef.current = true
+    }
+  }, [messages, loading])
+
   useEffect(() => {
     if (loadingMoreRef.current) return
     if (isAtBottomRef.current) {
@@ -703,12 +726,22 @@ export default function Chat() {
           </div>
         }>
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <div className="w-10 h-10 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin" />
-            <p className="text-slate-500 text-sm">马上就好～</p>
+          <div className="space-y-4 py-2">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className={`flex gap-2 ${i % 3 === 0 ? 'flex-row-reverse' : 'flex-row'}`}>
+                <div className="w-8 h-8 rounded-full bg-slate-200/60 flex-shrink-0 msg-skeleton-bar" />
+                <div
+                  className={`rounded-2xl px-4 py-3 ${i % 3 === 0 ? 'bg-indigo-50/40 rounded-br-md' : 'bg-slate-100/60 rounded-bl-md'}`}
+                  style={{ width: `${45 + (i * 13) % 30}%` }}
+                >
+                  <div className="h-3.5 msg-skeleton-bar mb-2" style={{ width: `${60 + (i * 17) % 40}%`, animationDelay: `${i * 0.15}s` }} />
+                  {i % 2 === 0 && <div className="h-3.5 msg-skeleton-bar" style={{ width: `${40 + (i * 23) % 30}%`, animationDelay: `${i * 0.15 + 0.1}s` }} />}
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
-          <>
+          <div className="msg-list-appear">
             {loadingMore && (
               <div className="flex justify-center py-3">
                 <span className="inline-flex items-center gap-1.5 text-slate-400 text-xs">
@@ -775,10 +808,11 @@ export default function Chat() {
                     return next
                   })
                 }
+                const isNewMsg = initialLoadDoneRef.current && !loadingMoreRef.current && !knownMsgIdsRef.current.has(m.id)
                 return (
                   <div
                     key={String(m.id)}
-                    className={`flex gap-2 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
+                    className={`flex gap-2 ${isUser ? 'flex-row-reverse' : 'flex-row'}${isNewMsg ? ' msg-fade-in' : ''}`}
                   >
                     <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm ${
                       isUser ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-600'
@@ -835,7 +869,7 @@ export default function Chat() {
                 </div>
               </ErrorBoundary>
             )}
-          </>
+          </div>
         )}
         </ErrorBoundary>
       </div>

@@ -92,6 +92,36 @@
 .msg-markdown.msg-md-assistant .msg-expand-btn { color: rgb(99 102 241); }
 .msg-markdown.msg-md-assistant .msg-expand-btn:hover { color: rgb(79 70 229); }
 
+/* 消息淡入动画 */
+@keyframes msg-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.msg-fade-in {
+  animation: msg-fade-in 0.35s ease-out both;
+}
+
+/* 消息列表整体淡入（初始加载完成后） */
+@keyframes msg-list-appear {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.msg-list-appear {
+  animation: msg-list-appear 0.3s ease-out;
+}
+
+/* 骨架屏闪烁 */
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.msg-skeleton-bar {
+  background: linear-gradient(90deg, rgb(226 232 240) 25%, rgb(241 245 249) 50%, rgb(226 232 240) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: 0.25rem;
+}
+
 /* iOS Safari：固定高度 fallback（dvh 在部分 iOS 不支持会导致 0 高度） */
 .chat-mobile-h {
   height: 100vh;
