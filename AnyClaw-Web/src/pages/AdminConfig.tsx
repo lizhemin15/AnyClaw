@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getAdminConfig, putAdminConfig, getChannelStatus, setUsageCorrection, testChannelConfig, testSMTPConfig, adminReconnectInstances, type AdminConfig, type Channel, type ChannelStatus, type SMTPConfig, type PaymentConfig, type PaymentPlan, type EnergyConfig, type ContainerConfig, type COSConfig, type VoiceAPIEndpoint } from '../api'
+import { getAdminConfig, putAdminConfig, getChannelStatus, setUsageCorrection, testChannelConfig, testSMTPConfig, testVoiceAPIConfig, adminReconnectInstances, type AdminConfig, type Channel, type ChannelStatus, type SMTPConfig, type PaymentConfig, type PaymentPlan, type EnergyConfig, type ContainerConfig, type COSConfig, type VoiceAPIEndpoint } from '../api'
 import { useUnsavedConfig } from '../contexts/UnsavedConfigContext'
 
 function genId() {
@@ -81,6 +81,8 @@ export default function AdminConfig() {
   const [addingVoiceEndpoint, setAddingVoiceEndpoint] = useState(false)
   const [newVoiceEndpoint, setNewVoiceEndpoint] = useState({ name: '', endpoint: '', api_key: '', daily_tokens_limit: 0, qps_limit: 0 })
   const [editingVoiceEndpoint, setEditingVoiceEndpoint] = useState<string | null>(null)
+  const [testingVoiceEndpoint, setTestingVoiceEndpoint] = useState<string | null>(null)
+  const [voiceTestResult, setVoiceTestResult] = useState<{ id: string; ok: boolean; message: string; latency?: number } | null>(null)
   const [voiceApiStatus, setVoiceApiStatus] = useState<Record<string, ChannelStatus>>({})
 
   const unsavedCtx = useUnsavedConfig()
@@ -984,6 +986,34 @@ export default function AdminConfig() {
                     )}
                     <button
                       type="button"
+                      onClick={async () => {
+                        const apiKeyMasked = (ep.api_key?.trim() || '').startsWith('****')
+                        if (!ep.api_key?.trim()) {
+                          setVoiceTestResult({ id: ep.id, ok: false, message: '请先填写 API Key' })
+                          return
+                        }
+                        setTestingVoiceEndpoint(ep.id)
+                        setVoiceTestResult(null)
+                        try {
+                          const res = await testVoiceAPIConfig(
+                            apiKeyMasked
+                              ? { endpoint_id: ep.id }
+                              : { endpoint_id: ep.id, endpoint: ep.endpoint?.trim(), api_key: ep.api_key.trim() }
+                          )
+                          setVoiceTestResult({ id: ep.id, ok: res.ok, message: res.message + (res.latency != null ? ` (${res.latency}ms)` : ''), latency: res.latency })
+                        } catch (err) {
+                          setVoiceTestResult({ id: ep.id, ok: false, message: err instanceof Error ? err.message : '测试失败' })
+                        } finally {
+                          setTestingVoiceEndpoint(null)
+                        }
+                      }}
+                      disabled={testingVoiceEndpoint === ep.id || !ep.api_key?.trim()}
+                      className="text-sm text-slate-600 hover:text-slate-800 disabled:opacity-50"
+                    >
+                      {testingVoiceEndpoint === ep.id ? '测试中...' : '测试连通性'}
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => {
                         if (!form) return
                         setForm({ ...form, voice_api: (form.voice_api || []).filter((a) => a.id !== ep.id) })
@@ -994,6 +1024,16 @@ export default function AdminConfig() {
                       删除
                     </button>
                   </div>
+                  {voiceTestResult?.id === ep.id && (
+                    <div
+                      className={`mt-2 text-xs px-3 py-1.5 rounded ${
+                        voiceTestResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+                      }`}
+                    >
+                      {voiceTestResult.ok ? '✓ ' : '✗ '}
+                      {voiceTestResult.message}
+                    </div>
+                  )}
                 </div>
               ))
             )}

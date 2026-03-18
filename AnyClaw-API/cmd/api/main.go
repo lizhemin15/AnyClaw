@@ -191,6 +191,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		})
 		r.Put("/config", adminConfigHandler.PutConfig)
 		r.Post("/config/test", adminConfigHandler.TestChannel)
+		r.Post("/config/test-voice-api", adminConfigHandler.TestVoiceAPI)
 		r.Post("/config/test-smtp", adminConfigHandler.TestSMTP)
 		r.Post("/db/check-and-migrate", func(w http.ResponseWriter, r *http.Request) {
 			if err := database.CheckAndMigrate(); err != nil {

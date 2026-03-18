@@ -373,6 +373,103 @@ func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// TestVoiceAPIRequest 测试语音 API 端点连通性
+type TestVoiceAPIRequest struct {
+	EndpointID string `json:"endpoint_id"` // 从已保存配置查找
+	Endpoint   string `json:"endpoint"`    // 或直接传
+	APIKey     string `json:"api_key"`
+}
+
+func (h *Handler) TestVoiceAPI(w http.ResponseWriter, r *http.Request) {
+	claims := request.FromContext(r.Context())
+	if claims == nil || claims.Role != "admin" {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	var req TestVoiceAPIRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+
+	endpoint, apiKey := "", ""
+	if req.Endpoint != "" && req.APIKey != "" {
+		endpoint = strings.TrimSuffix(strings.TrimSpace(req.Endpoint), "/")
+		apiKey = strings.TrimSpace(req.APIKey)
+	} else if req.EndpointID != "" {
+		cfg, err := config.Load(h.configPath)
+		if err != nil {
+			http.Error(w, `{"error":"failed to load config"}`, http.StatusInternalServerError)
+			return
+		}
+		for _, ep := range cfg.VoiceAPI {
+			if ep.ID != req.EndpointID {
+				continue
+			}
+			apiKey = ep.APIKey
+			endpoint = strings.TrimSuffix(strings.TrimSpace(ep.Endpoint), "/")
+			break
+		}
+		if apiKey == "" {
+			http.Error(w, `{"error":"voice api endpoint not found or no api key"}`, http.StatusBadRequest)
+			return
+		}
+	} else {
+		http.Error(w, `{"error":"provide endpoint_id or endpoint+api_key"}`, http.StatusBadRequest)
+		return
+	}
+
+	reqURL := endpoint + "/models"
+	start := time.Now()
+	proxyReq, err := http.NewRequestWithContext(r.Context(), "GET", reqURL, nil)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	proxyReq.Header.Set("Authorization", "Bearer "+apiKey)
+	if u, err := url.Parse(reqURL); err == nil && u.Host != "" {
+		host := u.Hostname()
+		if p := u.Port(); p != "" && p != "443" && p != "80" {
+			host = u.Host
+		}
+		proxyReq.Host = host
+	}
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(proxyReq)
+	latency := time.Since(start).Milliseconds()
+	if err != nil {
+		log.Printf("[admin] voice api test failed: url=%s err=%v", reqURL, err)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"ok":      false,
+			"message": "连接失败: " + err.Error(),
+			"latency": latency,
+		})
+		return
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[admin] voice api test non-200: url=%s status=%d body=%s", reqURL, resp.StatusCode, string(respBody))
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"ok":      false,
+			"message": "上游返回 " + http.StatusText(resp.StatusCode) + ": " + string(respBody),
+			"latency": latency,
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"ok":      true,
+		"message": "连接正常",
+		"latency": latency,
+	})
+}
+
 // TestSMTPRequest 测试 SMTP 连通性
 type TestSMTPRequest struct {
 	Host string `json:"host"`

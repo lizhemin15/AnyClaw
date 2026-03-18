@@ -556,6 +556,17 @@ export async function testSMTPConfig(params?: Partial<SMTPConfig>): Promise<{ ok
   });
 }
 
+export async function testVoiceAPIConfig(params: {
+  endpoint_id?: string;
+  endpoint?: string;
+  api_key?: string;
+}): Promise<{ ok: boolean; message: string; latency?: number }> {
+  return fetchApi<{ ok: boolean; message: string; latency?: number }>('/admin/config/test-voice-api', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
 export async function testChannelConfig(params: {
   channel_id?: string;
   model?: string;
