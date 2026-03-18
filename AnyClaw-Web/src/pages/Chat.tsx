@@ -318,7 +318,7 @@ export default function Chat() {
   const listRef = useRef<HTMLDivElement>(null)
   const loadingMoreRef = useRef(false)
   const markReadTimeoutRef = useRef<number | null>(null)
-  const shouldScrollToBottomRef = useRef(true)
+  const isAtBottomRef = useRef(true)
 
   const instanceId = parseInt(id ?? '', 10)
 
@@ -365,7 +365,6 @@ export default function Chat() {
     const oldestId = oldest?.id as number | undefined
     if (oldestId == null) return
     loadingMoreRef.current = true
-    shouldScrollToBottomRef.current = false
     setLoadingMore(true)
     const el = listRef.current
     const prevScrollHeight = el?.scrollHeight ?? 0
@@ -378,7 +377,6 @@ export default function Chat() {
       if (el) {
         el.scrollTop = el.scrollHeight - prevScrollHeight + prevScrollTop
       }
-      shouldScrollToBottomRef.current = true
       loadingMoreRef.current = false
       setLoadingMore(false)
     })
@@ -424,11 +422,8 @@ export default function Chat() {
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible' && !isNaN(instanceId)) {
-        shouldScrollToBottomRef.current = false
         loadMessages().then(({ list }) => {
-          shouldScrollToBottomRef.current = false
           mergeMessagesFromServer(list, setMessages)
-          requestAnimationFrame(() => { shouldScrollToBottomRef.current = true })
         })
       }
     }
@@ -556,11 +551,9 @@ export default function Chat() {
   }, [instanceId, scheduleMarkRead, loadMessages, mergeMessagesFromServer])
 
   useEffect(() => {
-    if (shouldScrollToBottomRef.current && !loadingMoreRef.current) {
+    if (loadingMoreRef.current) return
+    if (isAtBottomRef.current) {
       listRef.current?.scrollTo(0, listRef.current?.scrollHeight ?? 0)
-    }
-    if (!loadingMoreRef.current) {
-      shouldScrollToBottomRef.current = true
     }
   }, [messages, typing])
 
@@ -599,6 +592,7 @@ export default function Chat() {
     const input = inputRef.current
     if (!list || !input) return
     const scrollToBottom = () => {
+      isAtBottomRef.current = true
       requestAnimationFrame(() => list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' }))
     }
     const onFocus = () => scrollToBottom()
@@ -619,13 +613,16 @@ export default function Chat() {
 
   const handleScroll = () => {
     const el = listRef.current
-    if (!el || loadingMoreRef.current || !hasMore) return
-    if (el.scrollTop < 80) loadOlder()
+    if (!el) return
+    const threshold = 100
+    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+    if (!loadingMoreRef.current && hasMore && el.scrollTop < 80) loadOlder()
   }
 
   const doSend = useCallback(() => {
     const content = input.trim()
     if (!content || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    isAtBottomRef.current = true
     const userMsgId = 'u-' + Date.now()
     setMessages((prev) => [...prev, { id: userMsgId, content, role: 'user', created_at: new Date().toISOString() }])
     wsRef.current.send(JSON.stringify({ type: 'message.send', payload: { content } }))
@@ -668,11 +665,8 @@ export default function Chat() {
         <button
           type="button"
           onClick={() => {
-            shouldScrollToBottomRef.current = false
             loadMessages().then(({ list }) => {
-              shouldScrollToBottomRef.current = false
               mergeMessagesFromServer(list, setMessages)
-              requestAnimationFrame(() => { shouldScrollToBottomRef.current = true })
             })
           }}
           className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
