@@ -314,6 +314,7 @@ export default function Chat() {
   const [error, setError] = useState('')
   const [instanceName, setInstanceName] = useState('')
   const [expandedIds, setExpandedIds] = useState<Set<string | number>>(new Set())
+  const [showScrollBtn, setShowScrollBtn] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const loadingMoreRef = useRef(false)
@@ -638,9 +639,19 @@ export default function Chat() {
     const el = listRef.current
     if (!el) return
     const threshold = 100
-    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    isAtBottomRef.current = distFromBottom < threshold
+    setShowScrollBtn(distFromBottom > 400)
     if (!loadingMoreRef.current && hasMore && el.scrollTop < 80) loadOlder()
   }
+
+  const scrollToBottom = useCallback(() => {
+    const el = listRef.current
+    if (!el) return
+    isAtBottomRef.current = true
+    setShowScrollBtn(false)
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+  }, [])
 
   const doSend = useCallback(() => {
     const content = input.trim()
@@ -711,10 +722,11 @@ export default function Chat() {
       )}
 
       {/* 消息列表 */}
+      <div className="relative flex-1 min-h-0">
       <div
         ref={listRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-5 min-h-0 chat-scroll"
+        className="h-full overflow-y-auto overscroll-contain px-3 py-4 sm:px-5 chat-scroll"
       >
         <ErrorBoundary fallback={
           <div className="py-8 px-4 text-center text-slate-600 text-sm">
@@ -872,6 +884,21 @@ export default function Chat() {
           </div>
         )}
         </ErrorBoundary>
+      </div>
+
+      {/* 跳转到最新消息 */}
+      <button
+        type="button"
+        onClick={scrollToBottom}
+        className={`absolute right-3 bottom-3 w-10 h-10 rounded-full bg-white border border-slate-200 shadow-lg flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:border-indigo-200 active:bg-indigo-50 transition-all touch-manipulation ${
+          showScrollBtn ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'
+        }`}
+        aria-label="跳转到最新消息"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+        </svg>
+      </button>
       </div>
 
       {/* 输入区 */}
