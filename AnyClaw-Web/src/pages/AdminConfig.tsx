@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getAdminConfig, putAdminConfig, getChannelStatus, setUsageCorrection, testChannelConfig, testSMTPConfig, adminReconnectInstances, type AdminConfig, type Channel, type ChannelStatus, type SMTPConfig, type PaymentConfig, type PaymentPlan, type EnergyConfig, type ContainerConfig, type COSConfig, type AnyclawAPIEndpoint } from '../api'
+import { getAdminConfig, putAdminConfig, getChannelStatus, setUsageCorrection, testChannelConfig, testSMTPConfig, adminReconnectInstances, type AdminConfig, type Channel, type ChannelStatus, type SMTPConfig, type PaymentConfig, type PaymentPlan, type EnergyConfig, type ContainerConfig, type COSConfig, type VoiceAPIEndpoint } from '../api'
 import { useUnsavedConfig } from '../contexts/UnsavedConfigContext'
 
 function genId() {
@@ -78,10 +78,10 @@ export default function AdminConfig() {
   const [correctingChannel, setCorrectingChannel] = useState<Channel | null>(null)
   const [correctedTotal, setCorrectedTotal] = useState('')
   const [correcting, setCorrecting] = useState(false)
-  const [addingApiEndpoint, setAddingApiEndpoint] = useState(false)
-  const [newApiEndpoint, setNewApiEndpoint] = useState({ name: '', endpoint: '', api_key: '', daily_tokens_limit: 0, qps_limit: 0 })
-  const [editingApiEndpoint, setEditingApiEndpoint] = useState<string | null>(null)
-  const [anyclawApiStatus, setAnyclawApiStatus] = useState<Record<string, ChannelStatus>>({})
+  const [addingVoiceEndpoint, setAddingVoiceEndpoint] = useState(false)
+  const [newVoiceEndpoint, setNewVoiceEndpoint] = useState({ name: '', endpoint: '', api_key: '', daily_tokens_limit: 0, qps_limit: 0 })
+  const [editingVoiceEndpoint, setEditingVoiceEndpoint] = useState<string | null>(null)
+  const [voiceApiStatus, setVoiceApiStatus] = useState<Record<string, ChannelStatus>>({})
 
   const unsavedCtx = useUnsavedConfig()
   const hasUnsaved = !!(form && config && JSON.stringify(form) !== JSON.stringify(config))
@@ -152,9 +152,9 @@ export default function AdminConfig() {
         const container: ContainerConfig = c.container ? { ...c.container } : { workspace_size_gb: 0 }
         const cos: COSConfig | undefined = (c as { cos?: COSConfig }).cos
         const api_url = (c as { api_url?: string }).api_url ?? ''
-        const anyclaw_api: AnyclawAPIEndpoint[] = Array.isArray((c as { anyclaw_api?: AnyclawAPIEndpoint[] }).anyclaw_api) ? (c as { anyclaw_api?: AnyclawAPIEndpoint[] }).anyclaw_api! : []
-        setConfig({ channels, smtp, payment, energy, container, cos, api_url, anyclaw_api })
-        setForm({ channels: JSON.parse(JSON.stringify(channels)), smtp, payment: JSON.parse(JSON.stringify(payment)), energy: { ...energy }, container: { ...container }, cos: cos ? { ...cos } : undefined, api_url, anyclaw_api: JSON.parse(JSON.stringify(anyclaw_api)) })
+        const voice_api: VoiceAPIEndpoint[] = Array.isArray((c as { voice_api?: VoiceAPIEndpoint[] }).voice_api) ? (c as { voice_api?: VoiceAPIEndpoint[] }).voice_api! : []
+        setConfig({ channels, smtp, payment, energy, container, cos, api_url, voice_api })
+        setForm({ channels: JSON.parse(JSON.stringify(channels)), smtp, payment: JSON.parse(JSON.stringify(payment)), energy: { ...energy }, container: { ...container }, cos: cos ? { ...cos } : undefined, api_url, voice_api: JSON.parse(JSON.stringify(voice_api)) })
       })
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
       .finally(() => setLoading(false))
@@ -167,22 +167,22 @@ export default function AdminConfig() {
       for (const s of data.status) map[s.channel_id] = s
       setChannelStatus(map)
       const apiMap: Record<string, ChannelStatus> = {}
-      if (data.anyclaw_api_status) {
-        for (const s of data.anyclaw_api_status) apiMap[s.channel_id] = s
+      if (data.voice_api_status) {
+        for (const s of data.voice_api_status) apiMap[s.channel_id] = s
       }
-      setAnyclawApiStatus(apiMap)
+      setVoiceApiStatus(apiMap)
     } catch {
       // 静默失败
     }
   }, [])
 
   useEffect(() => {
-    const count = (form?.channels?.length ?? 0) + (form?.anyclaw_api?.length ?? 0)
+    const count = (form?.channels?.length ?? 0) + (form?.voice_api?.length ?? 0)
     if (count === 0) return
     refreshChannelStatus()
     const t = setInterval(refreshChannelStatus, 30000)
     return () => clearInterval(t)
-  }, [form?.channels?.length, form?.anyclaw_api?.length, refreshChannelStatus])
+  }, [form?.channels?.length, form?.voice_api?.length, refreshChannelStatus])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -738,19 +738,19 @@ export default function AdminConfig() {
           </div>
         </div>
 
-        {/* AnyClaw API 统一代理 */}
+        {/* 语音 API 配置 */}
         <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
             <div>
-              <h2 className="font-semibold text-slate-800">AnyClaw API 代理</h2>
-              <p className="text-xs text-slate-500 mt-0.5">配置后所有 AI 请求（LLM/ASR/TTS）统一走 AnyClaw API 入口，自动负载均衡。未配置则走下方直连渠道。</p>
+              <h2 className="font-semibold text-slate-800">语音 API 配置</h2>
+              <p className="text-xs text-slate-500 mt-0.5">配置语音识别（ASR）和语音合成（TTS）的 API 端点，支持多端点负载均衡。</p>
             </div>
-            {!addingApiEndpoint ? (
+            {!addingVoiceEndpoint ? (
               <button
                 type="button"
                 onClick={() => {
-                  setAddingApiEndpoint(true)
-                  setNewApiEndpoint({ name: '', endpoint: '', api_key: '', daily_tokens_limit: 0, qps_limit: 0 })
+                  setAddingVoiceEndpoint(true)
+                  setNewVoiceEndpoint({ name: '', endpoint: '', api_key: '', daily_tokens_limit: 0, qps_limit: 0 })
                 }}
                 className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
               >
@@ -760,22 +760,22 @@ export default function AdminConfig() {
               <div className="flex gap-2 items-center flex-wrap">
                 <input
                   type="text"
-                  value={newApiEndpoint.name}
-                  onChange={(e) => setNewApiEndpoint((p) => ({ ...p, name: e.target.value }))}
+                  value={newVoiceEndpoint.name}
+                  onChange={(e) => setNewVoiceEndpoint((p) => ({ ...p, name: e.target.value }))}
                   placeholder="名称，如 API-1"
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-28"
                 />
                 <input
                   type="url"
-                  value={newApiEndpoint.endpoint}
-                  onChange={(e) => setNewApiEndpoint((p) => ({ ...p, endpoint: e.target.value }))}
+                  value={newVoiceEndpoint.endpoint}
+                  onChange={(e) => setNewVoiceEndpoint((p) => ({ ...p, endpoint: e.target.value }))}
                   placeholder="API 地址，如 https://api.example.com/v1"
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-72"
                 />
                 <input
                   type="password"
-                  value={newApiEndpoint.api_key}
-                  onChange={(e) => setNewApiEndpoint((p) => ({ ...p, api_key: e.target.value }))}
+                  value={newVoiceEndpoint.api_key}
+                  onChange={(e) => setNewVoiceEndpoint((p) => ({ ...p, api_key: e.target.value }))}
                   placeholder="API Key"
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-40 font-mono"
                 />
@@ -784,8 +784,8 @@ export default function AdminConfig() {
                   <input
                     type="number"
                     min={0}
-                    value={newApiEndpoint.daily_tokens_limit ?? 0}
-                    onChange={(e) => setNewApiEndpoint((p) => ({ ...p, daily_tokens_limit: parseInt(e.target.value, 10) || 0 }))}
+                    value={newVoiceEndpoint.daily_tokens_limit ?? 0}
+                    onChange={(e) => setNewVoiceEndpoint((p) => ({ ...p, daily_tokens_limit: parseInt(e.target.value, 10) || 0 }))}
                     placeholder="0=不限制"
                     className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-28"
                   />
@@ -796,8 +796,8 @@ export default function AdminConfig() {
                     type="number"
                     min={0}
                     step={0.1}
-                    value={newApiEndpoint.qps_limit ?? 0}
-                    onChange={(e) => setNewApiEndpoint((p) => ({ ...p, qps_limit: parseFloat(e.target.value) || 0 }))}
+                    value={newVoiceEndpoint.qps_limit ?? 0}
+                    onChange={(e) => setNewVoiceEndpoint((p) => ({ ...p, qps_limit: parseFloat(e.target.value) || 0 }))}
                     placeholder="0=不限制"
                     className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-24"
                   />
@@ -805,19 +805,19 @@ export default function AdminConfig() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (!form || !newApiEndpoint.endpoint.trim() || !newApiEndpoint.api_key.trim()) return
-                    const ep: AnyclawAPIEndpoint = {
+                    if (!form || !newVoiceEndpoint.endpoint.trim() || !newVoiceEndpoint.api_key.trim()) return
+                    const ep: VoiceAPIEndpoint = {
                       id: genApiId(),
-                      name: newApiEndpoint.name.trim() || '端点',
-                      endpoint: newApiEndpoint.endpoint.trim(),
-                      api_key: newApiEndpoint.api_key.trim(),
+                      name: newVoiceEndpoint.name.trim() || '端点',
+                      endpoint: newVoiceEndpoint.endpoint.trim(),
+                      api_key: newVoiceEndpoint.api_key.trim(),
                       enabled: true,
-                      daily_tokens_limit: newApiEndpoint.daily_tokens_limit ?? 0,
-                      qps_limit: newApiEndpoint.qps_limit ?? 0,
+                      daily_tokens_limit: newVoiceEndpoint.daily_tokens_limit ?? 0,
+                      qps_limit: newVoiceEndpoint.qps_limit ?? 0,
                     }
-                    setForm({ ...form, anyclaw_api: [...(form.anyclaw_api || []), ep] })
-                    setNewApiEndpoint({ name: '', endpoint: '', api_key: '', daily_tokens_limit: 0, qps_limit: 0 })
-                    setAddingApiEndpoint(false)
+                    setForm({ ...form, voice_api: [...(form.voice_api || []), ep] })
+                    setNewVoiceEndpoint({ name: '', endpoint: '', api_key: '', daily_tokens_limit: 0, qps_limit: 0 })
+                    setAddingVoiceEndpoint(false)
                   }}
                   className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                 >
@@ -825,7 +825,7 @@ export default function AdminConfig() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setAddingApiEndpoint(false)}
+                  onClick={() => setAddingVoiceEndpoint(false)}
                   className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
                 >
                   取消
@@ -835,10 +835,10 @@ export default function AdminConfig() {
           </div>
 
           <div className="divide-y divide-slate-100">
-            {(form?.anyclaw_api ?? []).length === 0 ? (
-              <div className="px-5 py-8 text-center text-slate-500 text-sm">未配置 AnyClaw API 端点，请求将直连 AI 渠道</div>
+            {(form?.voice_api ?? []).length === 0 ? (
+              <div className="px-5 py-8 text-center text-slate-500 text-sm">未配置语音 API 端点，请点击上方添加</div>
             ) : (
-              (form?.anyclaw_api ?? []).map((ep) => (
+              (form?.voice_api ?? []).map((ep) => (
                 <div key={ep.id} className="px-5 py-4">
                   <div className="flex items-center gap-4 flex-wrap">
                     <button
@@ -849,7 +849,7 @@ export default function AdminConfig() {
                         if (!form) return
                         setForm({
                           ...form,
-                          anyclaw_api: (form.anyclaw_api || []).map((e) =>
+                          voice_api: (form.voice_api || []).map((e) =>
                             e.id === ep.id ? { ...e, enabled: !e.enabled } : e
                           ),
                         })
@@ -865,33 +865,33 @@ export default function AdminConfig() {
                       />
                     </button>
                     <span className="font-medium text-slate-800 min-w-[80px]">{ep.name}</span>
-                    {anyclawApiStatus[ep.id] ? (
+                    {voiceApiStatus[ep.id] ? (
                       <span className="flex items-center gap-3 text-xs flex-wrap">
                         {!ep.enabled ? (
                           <span className="text-slate-500">手动关闭</span>
-                        ) : anyclawApiStatus[ep.id].available ? (
+                        ) : voiceApiStatus[ep.id].available ? (
                           <span className="text-emerald-600">可用</span>
                         ) : (
                           <span className="text-amber-600">系统自动关闭</span>
                         )}
                         <span className="text-slate-600">
-                          {(anyclawApiStatus[ep.id].token_usage_today ?? 0).toLocaleString()}
+                          {(voiceApiStatus[ep.id].token_usage_today ?? 0).toLocaleString()}
                           {(ep.daily_tokens_limit ?? 0) > 0 && (
                             <span className="text-slate-400">/{(ep.daily_tokens_limit ?? 0).toLocaleString()}</span>
                           )}{' '}
                           tokens
                         </span>
-                        {(anyclawApiStatus[ep.id].in_flight ?? 0) > 0 && (
-                          <span className="text-indigo-500">进行中 {anyclawApiStatus[ep.id].in_flight}</span>
+                        {(voiceApiStatus[ep.id].in_flight ?? 0) > 0 && (
+                          <span className="text-indigo-500">进行中 {voiceApiStatus[ep.id].in_flight}</span>
                         )}
-                        {anyclawApiStatus[ep.id].cooldown_until && (
-                          <span className="text-amber-600">恢复 {anyclawApiStatus[ep.id].cooldown_until}</span>
+                        {voiceApiStatus[ep.id].cooldown_until && (
+                          <span className="text-amber-600">恢复 {voiceApiStatus[ep.id].cooldown_until}</span>
                         )}
                       </span>
                     ) : (
                       <span className="text-xs text-slate-400">{ep.enabled ? '已启用' : '手动关闭'}</span>
                     )}
-                    {editingApiEndpoint === ep.id ? (
+                    {editingVoiceEndpoint === ep.id ? (
                       <div className="flex gap-2 flex-1 flex-wrap items-center">
                         <input
                           type="url"
@@ -900,7 +900,7 @@ export default function AdminConfig() {
                             if (!form) return
                             setForm({
                               ...form,
-                              anyclaw_api: (form.anyclaw_api || []).map((a) =>
+                              voice_api: (form.voice_api || []).map((a) =>
                                 a.id === ep.id ? { ...a, endpoint: e.target.value } : a
                               ),
                             })
@@ -915,7 +915,7 @@ export default function AdminConfig() {
                             if (!form) return
                             setForm({
                               ...form,
-                              anyclaw_api: (form.anyclaw_api || []).map((a) =>
+                              voice_api: (form.voice_api || []).map((a) =>
                                 a.id === ep.id ? { ...a, api_key: e.target.value } : a
                               ),
                             })
@@ -933,7 +933,7 @@ export default function AdminConfig() {
                               if (!form) return
                               setForm({
                                 ...form,
-                                anyclaw_api: (form.anyclaw_api || []).map((a) =>
+                                voice_api: (form.voice_api || []).map((a) =>
                                   a.id === ep.id ? { ...a, daily_tokens_limit: parseInt(e.target.value, 10) || 0 } : a
                                 ),
                               })
@@ -953,7 +953,7 @@ export default function AdminConfig() {
                               if (!form) return
                               setForm({
                                 ...form,
-                                anyclaw_api: (form.anyclaw_api || []).map((a) =>
+                                voice_api: (form.voice_api || []).map((a) =>
                                   a.id === ep.id ? { ...a, qps_limit: parseFloat(e.target.value) || 0 } : a
                                 ),
                               })
@@ -962,7 +962,7 @@ export default function AdminConfig() {
                             className="px-3 py-1.5 border border-slate-300 rounded text-sm w-24"
                           />
                         </div>
-                        <button type="button" onClick={() => setEditingApiEndpoint(null)} className="text-sm text-slate-600">
+                        <button type="button" onClick={() => setEditingVoiceEndpoint(null)} className="text-sm text-slate-600">
                           完成
                         </button>
                       </div>
@@ -973,10 +973,10 @@ export default function AdminConfig() {
                         {(ep.qps_limit ?? 0) > 0 && ` · QPS ${ep.qps_limit}`}
                       </span>
                     )}
-                    {editingApiEndpoint !== ep.id && (
+                    {editingVoiceEndpoint !== ep.id && (
                       <button
                         type="button"
-                        onClick={() => setEditingApiEndpoint(ep.id)}
+                        onClick={() => setEditingVoiceEndpoint(ep.id)}
                         className="text-sm text-indigo-600 hover:text-indigo-700"
                       >
                         编辑
@@ -986,8 +986,8 @@ export default function AdminConfig() {
                       type="button"
                       onClick={() => {
                         if (!form) return
-                        setForm({ ...form, anyclaw_api: (form.anyclaw_api || []).filter((a) => a.id !== ep.id) })
-                        setEditingApiEndpoint(null)
+                        setForm({ ...form, voice_api: (form.voice_api || []).filter((a) => a.id !== ep.id) })
+                        setEditingVoiceEndpoint(null)
                       }}
                       className="text-sm text-red-600 hover:text-red-700"
                     >

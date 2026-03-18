@@ -479,7 +479,7 @@ export interface COSConfig {
   path_prefix: string;
 }
 
-export interface AnyclawAPIEndpoint {
+export interface VoiceAPIEndpoint {
   id: string;
   name: string;
   endpoint: string;
@@ -491,7 +491,7 @@ export interface AnyclawAPIEndpoint {
 
 export interface AdminConfig {
   channels: Channel[];
-  anyclaw_api?: AnyclawAPIEndpoint[];
+  voice_api?: VoiceAPIEndpoint[];
   smtp?: SMTPConfig;
   payment?: PaymentConfig;
   energy?: EnergyConfig;
@@ -519,11 +519,11 @@ export interface ChannelStatus {
   in_flight: number;
 }
 
-export async function getChannelStatus(): Promise<{ status: ChannelStatus[]; anyclaw_api_status?: ChannelStatus[] }> {
-  const data = await fetchApi<{ status: ChannelStatus[]; anyclaw_api_status?: ChannelStatus[] }>('/admin/config/channel-status');
+export async function getChannelStatus(): Promise<{ status: ChannelStatus[]; voice_api_status?: ChannelStatus[] }> {
+  const data = await fetchApi<{ status: ChannelStatus[]; voice_api_status?: ChannelStatus[] }>('/admin/config/channel-status');
   return {
     status: Array.isArray(data?.status) ? data.status : [],
-    anyclaw_api_status: Array.isArray(data?.anyclaw_api_status) ? data.anyclaw_api_status : [],
+    voice_api_status: Array.isArray(data?.voice_api_status) ? data.voice_api_status : [],
   };
 }
 

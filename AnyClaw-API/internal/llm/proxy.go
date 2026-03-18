@@ -64,9 +64,9 @@ func (p *Proxy) GetChannelStatus(channels []config.Channel) []ChannelStatus {
 	return p.scheduler.GetChannelStatus(channels)
 }
 
-// GetAnyclawAPIStatus 返回 AnyClaw API 端点的实时状态
-func (p *Proxy) GetAnyclawAPIStatus(endpoints []config.AnyclawAPIEndpoint) []ChannelStatus {
-	return p.scheduler.GetAnyclawAPIStatus(endpoints)
+// GetVoiceAPIStatus 返回语音 API 端点的实时状态
+func (p *Proxy) GetVoiceAPIStatus(endpoints []config.VoiceAPIEndpoint) []ChannelStatus {
+	return p.scheduler.GetVoiceAPIStatus(endpoints)
 }
 
 func (p *Proxy) loadConfig() (*config.Config, error) {
@@ -155,14 +155,8 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		model = "gpt-4o"
 	}
 	req["model"] = model
-	// 优先使用 AnyClaw API 统一代理入口；未配置时回退到直连渠道
 	var candidates []config.ChannelEndpoint
-	if cfg.HasAnyclawAPI() {
-		candidates = cfg.FindAnyclawAPIEndpoints()
-	}
-	if len(candidates) == 0 {
-		candidates = cfg.FindChannelsForModel(model)
-	}
+	candidates = cfg.FindChannelsForModel(model)
 	if len(candidates) == 0 {
 		log.Printf("[llm] no channel for model %q", model)
 		http.Error(w, `{"error":{"message":"no provider configured for model"}}`, http.StatusServiceUnavailable)

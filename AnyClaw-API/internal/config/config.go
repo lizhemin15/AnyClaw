@@ -15,7 +15,7 @@ type Config struct {
 	DockerImage  string         `json:"docker_image"`
 	DefaultModel string         `json:"default_model"` // deprecated
 	Channels     []Channel      `json:"channels"`     // 用户添加的渠道，每个渠道可配置、启用、添加多个模型
-	AnyclawAPI   []AnyclawAPIEndpoint `json:"anyclaw_api,omitempty"` // AnyClaw API 统一代理入口，启用后所有请求走此路由
+	VoiceAPI     []VoiceAPIEndpoint `json:"voice_api,omitempty"` // 语音 API（ASR/TTS）端点配置
 	KeyPool      KeyPool        `json:"key_pool"`     // deprecated, migrate to channels
 	InstanceMap  InstanceMap    `json:"instance_map"`
 	SMTP         *SMTPConfig    `json:"smtp,omitempty"` // 注册验证码邮件
@@ -25,8 +25,8 @@ type Config struct {
 	COS          *COSConfig      `json:"cos,omitempty"`       // 腾讯云 COS 对象存储，用于媒体文件
 }
 
-// AnyclawAPIEndpoint AnyClaw API 统一代理端点，配置后所有 LLM/ASR/TTS 等请求都走此入口
-type AnyclawAPIEndpoint struct {
+// VoiceAPIEndpoint 语音 API 端点，用于 ASR（语音识别）和 TTS（语音合成）
+type VoiceAPIEndpoint struct {
 	ID               string  `json:"id"`
 	Name             string  `json:"name"`
 	Endpoint         string  `json:"endpoint"`          // API 地址，如 https://api.anyclaw.com/v1
@@ -214,9 +214,9 @@ type ChannelEndpoint struct {
 	QPSLimit          float64 // 0=不限制
 }
 
-// HasAnyclawAPI 判断是否配置了启用的 AnyClaw API 端点
-func (c *Config) HasAnyclawAPI() bool {
-	for _, ep := range c.AnyclawAPI {
+// HasVoiceAPI 判断是否配置了启用的语音 API 端点
+func (c *Config) HasVoiceAPI() bool {
+	for _, ep := range c.VoiceAPI {
 		if ep.Enabled && ep.Endpoint != "" && ep.APIKey != "" {
 			return true
 		}
@@ -224,10 +224,10 @@ func (c *Config) HasAnyclawAPI() bool {
 	return false
 }
 
-// FindAnyclawAPIEndpoints 返回已启用的 AnyClaw API 端点列表，转为 ChannelEndpoint 供调度器使用
-func (c *Config) FindAnyclawAPIEndpoints() []ChannelEndpoint {
+// FindVoiceAPIEndpoints 返回已启用的语音 API 端点列表，转为 ChannelEndpoint 供调度器使用
+func (c *Config) FindVoiceAPIEndpoints() []ChannelEndpoint {
 	var out []ChannelEndpoint
-	for _, ep := range c.AnyclawAPI {
+	for _, ep := range c.VoiceAPI {
 		if !ep.Enabled || ep.Endpoint == "" || ep.APIKey == "" {
 			continue
 		}
@@ -381,12 +381,13 @@ func Load(path string) (*Config, error) {
 	if len(cfg.Channels) == 0 {
 		migrateToChannels(cfg)
 	}
-	// 优先从 DB 加载 admin 配置（channels/smtp/payment/energy/anyclaw_api），DB 为唯一数据源
+	// 优先从 DB 加载 admin 配置（channels/smtp/payment/energy/voice_api），DB 为唯一数据源
 	if LoadFromDB != nil {
 		if b, err := LoadFromDB(); err == nil && len(b) > 0 {
 			var dbCfg struct {
 				Channels   []Channel              `json:"channels"`
-				AnyclawAPI []AnyclawAPIEndpoint    `json:"anyclaw_api"`
+				VoiceAPI   []VoiceAPIEndpoint      `json:"voice_api"`
+				AnyclawAPI []VoiceAPIEndpoint      `json:"anyclaw_api"`
 				SMTP       *SMTPConfig             `json:"smtp"`
 				Payment    *PaymentConfig          `json:"payment"`
 				Energy     *EnergyConfig           `json:"energy"`
@@ -398,8 +399,12 @@ func Load(path string) (*Config, error) {
 				if len(dbCfg.Channels) > 0 {
 					cfg.Channels = dbCfg.Channels
 				}
-				if len(dbCfg.AnyclawAPI) > 0 {
-					cfg.AnyclawAPI = dbCfg.AnyclawAPI
+				voiceEndpoints := dbCfg.VoiceAPI
+				if len(voiceEndpoints) == 0 {
+					voiceEndpoints = dbCfg.AnyclawAPI
+				}
+				if len(voiceEndpoints) > 0 {
+					cfg.VoiceAPI = voiceEndpoints
 				}
 				if dbCfg.SMTP != nil {
 					cfg.SMTP = dbCfg.SMTP

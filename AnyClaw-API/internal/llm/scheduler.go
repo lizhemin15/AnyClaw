@@ -155,8 +155,8 @@ func (s *ModelScheduler) GetChannelStatus(channels []config.Channel) []ChannelSt
 	return out
 }
 
-// GetAnyclawAPIStatus 返回 AnyClaw API 端点的实时状态
-func (s *ModelScheduler) GetAnyclawAPIStatus(endpoints []config.AnyclawAPIEndpoint) []ChannelStatus {
+// GetVoiceAPIStatus 返回语音 API 端点的实时状态
+func (s *ModelScheduler) GetVoiceAPIStatus(endpoints []config.VoiceAPIEndpoint) []ChannelStatus {
 	if len(endpoints) == 0 {
 		return nil
 	}

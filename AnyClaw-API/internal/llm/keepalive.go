@@ -82,8 +82,8 @@ func (k *KeepAlive) probeAll() {
 	}
 	var targets []target
 	seen := make(map[string]bool)
-	// AnyClaw API 统一代理端点保活检测
-	for _, ep := range cfg.AnyclawAPI {
+	// 语音 API 端点保活检测
+	for _, ep := range cfg.VoiceAPI {
 		if !ep.Enabled || ep.Endpoint == "" || ep.APIKey == "" {
 			continue
 		}

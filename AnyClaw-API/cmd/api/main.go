@@ -181,10 +181,10 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 				channels = []config.Channel{}
 			}
 			status := proxy.GetChannelStatus(channels)
-			apiStatus := proxy.GetAnyclawAPIStatus(cfg.AnyclawAPI)
+			voiceStatus := proxy.GetVoiceAPIStatus(cfg.VoiceAPI)
 			resp := map[string]any{"status": status}
-			if len(apiStatus) > 0 {
-				resp["anyclaw_api_status"] = apiStatus
+			if len(voiceStatus) > 0 {
+				resp["voice_api_status"] = voiceStatus
 			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(resp)

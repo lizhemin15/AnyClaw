@@ -114,12 +114,12 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	} else {
 		resp["cos"] = map[string]any{"enabled": false, "bucket": "", "region": "", "domain": "", "path_prefix": "media/"}
 	}
-	anyclawAPI := cfg.AnyclawAPI
-	if anyclawAPI == nil {
-		anyclawAPI = []config.AnyclawAPIEndpoint{}
+	voiceAPI := cfg.VoiceAPI
+	if voiceAPI == nil {
+		voiceAPI = []config.VoiceAPIEndpoint{}
 	}
-	maskedAPI := make([]map[string]any, len(anyclawAPI))
-	for i, ep := range anyclawAPI {
+	maskedAPI := make([]map[string]any, len(voiceAPI))
+	for i, ep := range voiceAPI {
 		maskedAPI[i] = map[string]any{
 			"id":                 ep.ID,
 			"name":               ep.Name,
@@ -130,7 +130,7 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 			"qps_limit":          ep.QPSLimit,
 		}
 	}
-	resp["anyclaw_api"] = maskedAPI
+	resp["voice_api"] = maskedAPI
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -143,7 +143,7 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		Channels   []config.Channel              `json:"channels"`
-		AnyclawAPI []config.AnyclawAPIEndpoint   `json:"anyclaw_api"`
+		VoiceAPI   []config.VoiceAPIEndpoint     `json:"voice_api"`
 		SMTP       *config.SMTPConfig            `json:"smtp"`
 		Payment    *config.PaymentConfig         `json:"payment"`
 		Energy     *config.EnergyConfig          `json:"energy"`
@@ -174,18 +174,18 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 			channels[i].APIKey = k
 		}
 	}
-	// Merge AnyclawAPI: preserve existing api_key if client sent masked value
-	anyclawAPI := req.AnyclawAPI
-	if anyclawAPI == nil {
-		anyclawAPI = []config.AnyclawAPIEndpoint{}
+	// Merge VoiceAPI: preserve existing api_key if client sent masked value
+	voiceAPI := req.VoiceAPI
+	if voiceAPI == nil {
+		voiceAPI = []config.VoiceAPIEndpoint{}
 	}
 	existingAPI := make(map[string]string)
-	for _, ep := range cfg.AnyclawAPI {
+	for _, ep := range cfg.VoiceAPI {
 		existingAPI[ep.ID] = ep.APIKey
 	}
-	for i := range anyclawAPI {
-		if k, ok := existingAPI[anyclawAPI[i].ID]; ok && (anyclawAPI[i].APIKey == "" || strings.HasPrefix(anyclawAPI[i].APIKey, "****")) {
-			anyclawAPI[i].APIKey = k
+	for i := range voiceAPI {
+		if k, ok := existingAPI[voiceAPI[i].ID]; ok && (voiceAPI[i].APIKey == "" || strings.HasPrefix(voiceAPI[i].APIKey, "****")) {
+			voiceAPI[i].APIKey = k
 		}
 	}
 	// Merge SMTP: preserve existing if not sent; clear if host empty; preserve pass if masked
@@ -240,7 +240,7 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	apiURL := strings.TrimSpace(req.APIURL)
 	// 全部写入数据库，DB 为唯一数据源
-	dbPayload := map[string]any{"channels": channels, "anyclaw_api": anyclawAPI, "smtp": smtp, "payment": payment, "energy": energy, "container": container, "cos": cos, "api_url": apiURL}
+	dbPayload := map[string]any{"channels": channels, "voice_api": voiceAPI, "smtp": smtp, "payment": payment, "energy": energy, "container": container, "cos": cos, "api_url": apiURL}
 	dbBytes, _ := json.Marshal(dbPayload)
 	if h.database == nil {
 		http.Error(w, `{"error":"database not configured"}`, http.StatusInternalServerError)
