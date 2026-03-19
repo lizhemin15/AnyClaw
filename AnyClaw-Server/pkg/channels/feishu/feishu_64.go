@@ -33,6 +33,14 @@ import (
 	"github.com/anyclaw/anyclaw-server/pkg/voice"
 )
 
+// lastVoicePairEntry tracks the last processed text/audio in a chat for voice-message deduplication.
+// Feishu may push both an audio message and a text (transcription) for the same voice; we process only one.
+type lastVoicePairEntry struct {
+	senderID    string
+	messageType string
+	at          time.Time
+}
+
 type FeishuChannel struct {
 	*channels.BaseChannel
 	config   config.FeishuConfig
@@ -44,6 +52,12 @@ type FeishuChannel struct {
 	mu                    sync.Mutex
 	cancel                context.CancelFunc
 	pendingTypingMessageID string // set before HandleMessage for StartTyping to use
+
+	// Voice message deduplication: Feishu may push both audio and text (transcription) for one voice message.
+	lastVoicePair map[string]lastVoicePairEntry // key: chatID
+	processedMsg  map[string]struct{}           // message_id dedup
+	processedRing []string
+	processedIdx   int
 }
 
 func NewFeishuChannel(cfg config.FeishuConfig, bus *bus.MessageBus) (*FeishuChannel, error) {
@@ -52,10 +66,14 @@ func NewFeishuChannel(cfg config.FeishuConfig, bus *bus.MessageBus) (*FeishuChan
 		channels.WithReasoningChannelID(cfg.ReasoningChannelID),
 	)
 
+	const dedupSize = 1024
 	ch := &FeishuChannel{
-		BaseChannel: base,
-		config:      cfg,
-		client:      lark.NewClient(cfg.AppID, cfg.AppSecret),
+		BaseChannel:   base,
+		config:        cfg,
+		client:        lark.NewClient(cfg.AppID, cfg.AppSecret),
+		lastVoicePair: make(map[string]lastVoicePairEntry),
+		processedMsg:  make(map[string]struct{}, dedupSize),
+		processedRing: make([]string, dedupSize),
 	}
 	ch.SetOwner(ch)
 	return ch, nil
@@ -395,6 +413,21 @@ func (c *FeishuChannel) handleMessageReceive(ctx context.Context, event *larkim.
 	messageID := stringValue(message.MessageId)
 	rawContent := stringValue(message.Content)
 
+	// Message ID deduplication: Feishu may push the same event twice.
+	if c.isDuplicateMessage(messageID) {
+		logger.DebugCF("feishu", "Skipping duplicate message", map[string]any{"message_id": messageID})
+		return nil
+	}
+
+	// Voice message deduplication: Feishu may push both audio and text (transcription) for one voice message.
+	// Process only one to avoid duplicate replies.
+	if c.shouldSkipVoicePair(chatID, senderID, messageType) {
+		logger.DebugCF("feishu", "Skipping voice pair duplicate", map[string]any{
+			"chat_id": chatID, "message_type": messageType,
+		})
+		return nil
+	}
+
 	// Check allowlist early to avoid downloading media for rejected senders.
 	// BaseChannel.HandleMessage will check again, but this avoids wasted network I/O.
 	senderInfo := bus.SenderInfo{
@@ -481,12 +514,63 @@ func (c *FeishuChannel) handleMessageReceive(ctx context.Context, event *larkim.
 
 	c.mu.Lock()
 	c.pendingTypingMessageID = messageID
+	c.markMessageProcessed(messageID, chatID, senderID, messageType)
 	c.mu.Unlock()
 	c.HandleMessage(ctx, peer, messageID, senderID, chatID, content, mediaRefs, metadata, senderInfo)
 	c.mu.Lock()
 	c.pendingTypingMessageID = ""
 	c.mu.Unlock()
 	return nil
+}
+
+// isDuplicateMessage returns true if this message_id was already processed.
+func (c *FeishuChannel) isDuplicateMessage(messageID string) bool {
+	if messageID == "" {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, ok := c.processedMsg[messageID]; ok {
+		return true
+	}
+	return false
+}
+
+// shouldSkipVoicePair returns true if this text/audio should be skipped because we recently
+// processed the paired message (Feishu sends both audio and text transcription for voice messages).
+func (c *FeishuChannel) shouldSkipVoicePair(chatID, senderID, messageType string) bool {
+	if messageType != larkim.MsgTypeAudio && messageType != larkim.MsgTypeText {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.lastVoicePair[chatID]
+	if !ok {
+		return false
+	}
+	if entry.senderID != senderID {
+		return false
+	}
+	if time.Since(entry.at) > 3*time.Second {
+		return false
+	}
+	// Skip if the other type was just processed (audio+text pair for same voice)
+	return entry.messageType != messageType
+}
+
+// markMessageProcessed updates dedup state. Must be called with c.mu held.
+func (c *FeishuChannel) markMessageProcessed(messageID, chatID, senderID, messageType string) {
+	if messageID != "" {
+		if old := c.processedRing[c.processedIdx]; old != "" {
+			delete(c.processedMsg, old)
+		}
+		c.processedRing[c.processedIdx] = messageID
+		c.processedMsg[messageID] = struct{}{}
+		c.processedIdx = (c.processedIdx + 1) % len(c.processedRing)
+	}
+	if (messageType == larkim.MsgTypeAudio || messageType == larkim.MsgTypeText) && chatID != "" {
+		c.lastVoicePair[chatID] = lastVoicePairEntry{senderID: senderID, messageType: messageType, at: time.Now()}
+	}
 }
 
 // --- Internal helpers ---
