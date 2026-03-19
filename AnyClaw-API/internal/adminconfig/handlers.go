@@ -470,12 +470,33 @@ func (h *Handler) TestVoiceAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reqURL := endpoint + "/models"
-	start := time.Now()
-	proxyReq, err := http.NewRequestWithContext(r.Context(), "GET", reqURL, nil)
-	if err != nil {
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-		return
+	// TTS 端点用 POST /audio/speech 测试，ASR 用 GET /models
+	useTTS := req.APIType == "tts" || strings.Contains(strings.ToLower(endpoint), "xiaomimimo.com")
+
+	var reqURL string
+	var proxyReq *http.Request
+	var reqErr error
+	if useTTS {
+		reqURL = endpoint + "/audio/speech"
+		var body []byte
+		if strings.Contains(strings.ToLower(endpoint), "xiaomimimo.com") {
+			body, _ = json.Marshal(map[string]any{"model": "mimo-v2-tts", "input": "测", "voice": "default", "format": "mp3"})
+		} else {
+			body, _ = json.Marshal(map[string]string{"model": "tts-1", "input": "test", "voice": "alloy"})
+		}
+		proxyReq, reqErr = http.NewRequestWithContext(r.Context(), "POST", reqURL, bytes.NewReader(body))
+		if reqErr != nil {
+			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+			return
+		}
+		proxyReq.Header.Set("Content-Type", "application/json")
+	} else {
+		reqURL = endpoint + "/models"
+		proxyReq, reqErr = http.NewRequestWithContext(r.Context(), "GET", reqURL, nil)
+		if reqErr != nil {
+			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+			return
+		}
 	}
 	proxyReq.Header.Set("Authorization", "Bearer "+apiKey)
 	if u, err := url.Parse(reqURL); err == nil && u.Host != "" {
@@ -487,6 +508,7 @@ func (h *Handler) TestVoiceAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := &http.Client{Timeout: 15 * time.Second}
+	start := time.Now()
 	resp, err := client.Do(proxyReq)
 	latency := time.Since(start).Milliseconds()
 	if err != nil {
@@ -504,19 +526,28 @@ func (h *Handler) TestVoiceAPI(w http.ResponseWriter, r *http.Request) {
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("[admin] voice api test non-200: url=%s status=%d body=%s", reqURL, resp.StatusCode, string(respBody))
+		msg := "上游返回 " + http.StatusText(resp.StatusCode)
+		if useTTS {
+			msg += "（TTS 测试，请检查 API Key 是否有效）"
+		}
+		msg += ": " + string(respBody)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
 			"ok":      false,
-			"message": "上游返回 " + http.StatusText(resp.StatusCode) + ": " + string(respBody),
+			"message": msg,
 			"latency": latency,
 		})
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	msg := "连接正常"
+	if useTTS {
+		msg = "TTS 连通性正常"
+	}
 	json.NewEncoder(w).Encode(map[string]any{
 		"ok":      true,
-		"message": "连接正常",
+		"message": msg,
 		"latency": latency,
 	})
 }

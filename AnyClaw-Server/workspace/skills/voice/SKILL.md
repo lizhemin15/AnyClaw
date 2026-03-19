@@ -119,6 +119,14 @@ cron(
 
 **错误做法（deliver=true）：** 会直接发文字，不会触发语音合成。
 
+## speak 失败时的正确说明
+
+**重要：** 当 speak 工具返回错误时，按以下说明回复，**不要编造**：
+
+- **小米 MiMo TTS** 使用 **API Key**（在 platform.xiaomimimo.com 控制台创建），**不是** OAuth 或「小米账号授权」。
+- **不要说**「Token 过期」「点击链接重新登录」「小米账号授权」——这些不适用于 MiMo API。
+- **正确说法**：请管理员在管理后台 → 配置 → 语音合成 (TTS) 中检查 Xiaomi MiMo 的 API Key 是否正确，保存后需**重启实例**使新配置生效。API Key 在 https://platform.xiaomimimo.com/#/console/api-keys 创建。
+
 ## 注意事项
 
 - `text` 参数只传要说的内容，不要包含 markdown、表情符号等非朗读文本
