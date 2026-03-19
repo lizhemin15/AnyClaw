@@ -13,25 +13,30 @@ import (
 	"github.com/anyclaw/anyclaw-api/internal/db"
 )
 
+// shellEscapeSingleQuoted 转义单引号，使值在 shell 单引号内安全。
+func shellEscapeSingleQuoted(s string) string {
+	return strings.ReplaceAll(s, "'", "'\\''")
+}
+
 // buildDockerRunCmd 构建统一的 docker run 命令，新建、重启、迁移等操作均使用此配置，保证挂载与环境变量一致。
 // ANYCLAW_VOICE_API_KEY/BASE 供 ASR（语音识别，ChatAnywhere + Groq 均支持）。
 // ANYCLAW_TTS_API_KEY/BASE  供 TTS（语音合成，仅 ChatAnywhere 等支持，Groq 不支持）。
 func buildDockerRunCmd(containerName, wsPath, image, defaultModel, apiURL string, instanceID int64, token string, voiceAPIKey, voiceAPIBase, ttsAPIKey, ttsAPIBase string) string {
 	voiceEnv := ""
 	if voiceAPIKey != "" {
-		voiceEnv = fmt.Sprintf(" -e ANYCLAW_VOICE_API_KEY='%s'", voiceAPIKey)
+		voiceEnv = fmt.Sprintf(" -e ANYCLAW_VOICE_API_KEY='%s'", shellEscapeSingleQuoted(voiceAPIKey))
 		if voiceAPIBase != "" {
-			voiceEnv += fmt.Sprintf(" -e ANYCLAW_VOICE_API_BASE='%s'", voiceAPIBase)
+			voiceEnv += fmt.Sprintf(" -e ANYCLAW_VOICE_API_BASE='%s'", shellEscapeSingleQuoted(voiceAPIBase))
 		}
 	}
 	if ttsAPIKey != "" {
-		voiceEnv += fmt.Sprintf(" -e ANYCLAW_TTS_API_KEY='%s'", ttsAPIKey)
+		voiceEnv += fmt.Sprintf(" -e ANYCLAW_TTS_API_KEY='%s'", shellEscapeSingleQuoted(ttsAPIKey))
 		if ttsAPIBase != "" {
-			voiceEnv += fmt.Sprintf(" -e ANYCLAW_TTS_API_BASE='%s'", ttsAPIBase)
+			voiceEnv += fmt.Sprintf(" -e ANYCLAW_TTS_API_BASE='%s'", shellEscapeSingleQuoted(ttsAPIBase))
 		}
 	}
 	return fmt.Sprintf("export PATH=/usr/local/bin:/usr/bin:$PATH; docker run -d --name %s --pull always -v %s:/workspace -e TZ=Asia/Shanghai -e ANYCLAW_CONFIG=/workspace/config.json -e ANYCLAW_AGENTS_DEFAULTS_WORKSPACE=/workspace -e ANYCLAW_AGENTS_DEFAULTS_MODEL_NAME='%s' -e ANYCLAW_API_URL='%s' -e ANYCLAW_INSTANCE_ID=%d -e ANYCLAW_TOKEN='%s'%s %s gateway 2>&1",
-		containerName, wsPath, defaultModel, apiURL, instanceID, token, voiceEnv, image)
+		containerName, wsPath, shellEscapeSingleQuoted(defaultModel), shellEscapeSingleQuoted(apiURL), instanceID, shellEscapeSingleQuoted(token), voiceEnv, image)
 }
 
 // isGroqEndpoint 判断给定 endpoint 是否为 Groq（Groq 不支持 TTS）。

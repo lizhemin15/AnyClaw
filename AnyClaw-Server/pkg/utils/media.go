@@ -16,7 +16,7 @@ import (
 
 // IsAudioFile checks if a file is an audio file based on its filename extension and content type.
 func IsAudioFile(filename, contentType string) bool {
-	audioExtensions := []string{".mp3", ".wav", ".ogg", ".m4a", ".flac", ".aac", ".wma"}
+	audioExtensions := []string{".mp3", ".wav", ".ogg", ".m4a", ".flac", ".aac", ".wma", ".webm", ".opus"}
 	audioTypes := []string{"audio/", "application/ogg", "application/x-ogg"}
 
 	for _, ext := range audioExtensions {

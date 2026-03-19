@@ -316,6 +316,11 @@ func (c *BridgeChannel) handleMessageSend(bc *bridgeConn, msg pico.PicoMessage) 
 				}
 			}
 			localPath := utils.DownloadFileSimple(mediaURL, filename)
+			if localPath == "" {
+				logger.WarnCF(channelName, "Failed to download inbound audio, transcription will be skipped. Ensure COS bucket/objects are publicly readable.", map[string]any{
+					"media_url": mediaURL,
+				})
+			}
 			if localPath != "" {
 				ct := "audio/webm"
 				ext := strings.ToLower(filepath.Ext(filename))
