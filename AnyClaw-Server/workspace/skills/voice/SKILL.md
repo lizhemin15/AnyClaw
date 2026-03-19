@@ -179,11 +179,10 @@ cron(
 
 ## speak 失败时的正确说明
 
-**重要：** 当 speak 工具返回错误时，按以下说明回复，**不要编造**：
+**重要：** 当 speak 工具返回错误时，**必须**按以下说明回复，**禁止编造或联想**：
 
-- **小米 MiMo TTS** 使用 **API Key**（在 platform.xiaomimimo.com 控制台创建），**不是** OAuth 或「小米账号授权」。
-- **不要说**「Token 过期」「点击链接重新登录」「小米账号授权」——这些不适用于 MiMo API。
-- **正确说法**：请管理员在管理后台 → 配置 → 语音合成 (TTS) 中检查 Xiaomi MiMo 的 API Key 和 Endpoint。Endpoint 必须为 `https://api.xiaomimimo.com/v1`（**不要用** platform.xiaomimimo.com，会返回 401）。API Key 在 platform.xiaomimimo.com 控制台创建。接口格式见本 SKILL 上方「小米 MiMo TTS 接口说明」。
+- **小米 MiMo TTS** 使用 **API Key**，**不是** OAuth、Token 或「小米账号授权」。**严禁**使用「Token 过期」「待授权」「token过期待授权」「点击链接重新登录」「小米账号授权」等表述——这些均不适用于 MiMo API。
+- **正确回复模板**：「语音合成暂时不可用。请管理员在管理后台 → 配置 → 语音合成 (TTS) 中检查 Xiaomi MiMo 的 API Key 和 Endpoint 是否有效。Endpoint 需为 https://api.xiaomimimo.com/v1。」
 
 ## 注意事项
 

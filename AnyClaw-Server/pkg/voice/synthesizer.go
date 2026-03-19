@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -126,12 +127,15 @@ func NewXiaomiMiMoSynthesizer(apiKey, apiBase, model string) *XiaomiMiMoSynthesi
 		"api_base":    apiBase,
 		"model":       model,
 	})
+	// 直连不走代理，避免容器内 HTTP_PROXY 导致 404
+	tr := &http.Transport{Proxy: func(*http.Request) (*url.URL, error) { return nil, nil }}
 	return &XiaomiMiMoSynthesizer{
 		apiKey:  apiKey,
 		apiBase: apiBase,
 		model:   model,
 		httpClient: &http.Client{
-			Timeout: 60 * time.Second,
+			Timeout:   60 * time.Second,
+			Transport: tr,
 		},
 	}
 }
@@ -183,7 +187,14 @@ func (s *XiaomiMiMoSynthesizer) Synthesize(ctx context.Context, text, voiceID st
 
 	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API error (status %d) from %s: %s", resp.StatusCode, reqURL, string(respBody))
+		errMsg := string(respBody)
+		if resp.StatusCode == 401 {
+			// 避免返回 loginUrl 等误导 AI 说「token过期」「待授权」
+			if strings.Contains(errMsg, "loginUrl") {
+				errMsg = "API Key 无效或未配置，请在管理后台检查 TTS 的 API Key"
+			}
+		}
+		return "", fmt.Errorf("API error (status %d) from %s: %s", resp.StatusCode, reqURL, errMsg)
 	}
 
 	var result struct {
