@@ -3,6 +3,7 @@
 package feishu
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	lark "github.com/larksuite/oapi-sdk-go/v3"
 	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
@@ -39,8 +41,9 @@ type FeishuChannel struct {
 
 	botOpenID atomic.Value // stores string; populated lazily for @mention detection
 
-	mu     sync.Mutex
-	cancel context.CancelFunc
+	mu                    sync.Mutex
+	cancel                context.CancelFunc
+	pendingTypingMessageID string // set before HandleMessage for StartTyping to use
 }
 
 func NewFeishuChannel(cfg config.FeishuConfig, bus *bus.MessageBus) (*FeishuChannel, error) {
@@ -319,24 +322,31 @@ func (c *FeishuChannel) sendMediaPart(
 	case "image":
 		err = c.sendImage(ctx, chatID, file)
 	case "audio":
-		// Try to convert to Opus for native voice message; fall back to file on failure.
-		// ffmpeg accesses the file by path, the Go handle can stay open.
-		opusPath, converted, convErr := voice.ConvertToOpus(localPath)
-		if convErr != nil {
-			logger.WarnCF("feishu", "Audio conversion failed, sending as file", map[string]any{"error": convErr.Error()})
+		// < 60s: convert to Opus and send as native voice message; >= 60s or unknown: send as file.
+		durationSec, durationOk := voice.GetAudioDuration(localPath)
+		useVoice := durationOk && durationSec < voice.FeishuVoiceMaxDurationSeconds
+		if !useVoice && durationOk {
+			logger.DebugCF("feishu", "Audio >= 60s, sending as file", map[string]any{"duration_sec": durationSec})
 		}
-		if converted {
-			defer os.Remove(opusPath)
-			opusFile, openErr := os.Open(opusPath)
-			if openErr == nil {
-				defer opusFile.Close()
-				err = c.sendAudio(ctx, chatID, opusFile)
+		if useVoice {
+			opusPath, converted, convErr := voice.ConvertToOpus(localPath)
+			if convErr != nil {
+				logger.WarnCF("feishu", "Audio conversion failed, sending as file", map[string]any{"error": convErr.Error()})
+				useVoice = false
+			} else if converted {
+				defer os.Remove(opusPath)
+				opusFile, openErr := os.Open(opusPath)
+				if openErr == nil {
+					defer opusFile.Close()
+					err = c.sendAudio(ctx, chatID, opusFile)
+				} else {
+					err = openErr
+				}
 			} else {
-				err = openErr
+				useVoice = false // ffmpeg unavailable
 			}
-		} else {
-			// ffmpeg unavailable or conversion failed: send original as generic file.
-			// Reuse the already-open file handle; defer file.Close() covers cleanup.
+		}
+		if !useVoice {
 			filename := part.Filename
 			if filename == "" {
 				filename = "audio.mp3"
@@ -399,6 +409,25 @@ func (c *FeishuChannel) handleMessageReceive(ctx context.Context, event *larkim.
 	// Extract content based on message type
 	content := extractContent(messageType, rawContent)
 
+	// For group chats, do trigger check before downloading media to fail fast.
+	chatType := stringValue(message.ChatType)
+	if chatType != "" && chatType != "p2p" {
+		contentForCheck := content
+		if contentForCheck == "" && (messageType == larkim.MsgTypeAudio || messageType == larkim.MsgTypeImage || messageType == larkim.MsgTypeFile || messageType == larkim.MsgTypeMedia) {
+			contentForCheck = mediaTagForType(messageType)
+		}
+		if len(message.Mentions) > 0 {
+			contentForCheck = stripMentionPlaceholders(contentForCheck, message.Mentions)
+		}
+		respond, cleaned := c.ShouldRespondInGroup(c.isBotMentioned(message), contentForCheck)
+		if !respond {
+			return nil
+		}
+		if content != "" {
+			content = cleaned
+		}
+	}
+
 	// Handle media messages (download and store)
 	var mediaRefs []string
 	if store := c.GetMediaStore(); store != nil && messageID != "" {
@@ -419,7 +448,6 @@ func (c *FeishuChannel) handleMessageReceive(ctx context.Context, event *larkim.
 	if messageType != "" {
 		metadata["message_type"] = messageType
 	}
-	chatType := stringValue(message.ChatType)
 	if chatType != "" {
 		metadata["chat_type"] = chatType
 	}
@@ -428,25 +456,13 @@ func (c *FeishuChannel) handleMessageReceive(ctx context.Context, event *larkim.
 	}
 
 	var peer bus.Peer
-	if chatType == "p2p" {
+	if chatType == "p2p" || chatType == "" {
 		peer = bus.Peer{Kind: "direct", ID: senderID}
 	} else {
 		peer = bus.Peer{Kind: "group", ID: chatID}
-
-		// Check if bot was mentioned
-		isMentioned := c.isBotMentioned(message)
-
-		// Strip mention placeholders from content before group trigger check
 		if len(message.Mentions) > 0 {
 			content = stripMentionPlaceholders(content, message.Mentions)
 		}
-
-		// In group chats, apply unified group trigger filtering
-		respond, cleaned := c.ShouldRespondInGroup(isMentioned, content)
-		if !respond {
-			return nil
-		}
-		content = cleaned
 	}
 
 	logger.InfoCF("feishu", "Feishu message received", map[string]any{
@@ -463,7 +479,13 @@ func (c *FeishuChannel) handleMessageReceive(ctx context.Context, event *larkim.
 		}
 	}
 
+	c.mu.Lock()
+	c.pendingTypingMessageID = messageID
+	c.mu.Unlock()
 	c.HandleMessage(ctx, peer, messageID, senderID, chatID, content, mediaRefs, metadata, senderInfo)
+	c.mu.Lock()
+	c.pendingTypingMessageID = ""
+	c.mu.Unlock()
 	return nil
 }
 
@@ -501,6 +523,51 @@ func (c *FeishuChannel) fetchBotOpenID(ctx context.Context) error {
 		"open_id": result.Bot.OpenID,
 	})
 	return nil
+}
+
+// StartTyping implements channels.TypingCapable.
+// Uses Feishu typing API: POST /im/v1/messages/{message_id}/typing (typing_status: 1=set, 0=clear).
+// Auto-expires after 10s; we refresh every 8s and clear on stop.
+func (c *FeishuChannel) StartTyping(ctx context.Context, chatID string) (func(), error) {
+	c.mu.Lock()
+	messageID := c.pendingTypingMessageID
+	c.mu.Unlock()
+	if messageID == "" {
+		return func() {}, nil
+	}
+
+	doTyping := func(reqCtx context.Context, status int) error {
+		body, _ := json.Marshal(map[string]int{"typing_status": status})
+		_, err := c.client.Do(reqCtx, &larkcore.ApiReq{
+			HttpMethod:                http.MethodPost,
+			ApiPath:                   "/open-apis/im/v1/messages/" + messageID + "/typing",
+			Body:                      bytes.NewReader(body),
+			SupportedAccessTokenTypes: []larkcore.AccessTokenType{larkcore.AccessTokenTypeTenant},
+		})
+		return err
+	}
+
+	if err := doTyping(ctx, 1); err != nil {
+		logger.DebugCF("feishu", "Typing start failed", map[string]any{"error": err.Error()})
+		return func() {}, nil
+	}
+
+	typingCtx, cancel := context.WithCancel(ctx)
+	go func() {
+		ticker := time.NewTicker(8 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-typingCtx.Done():
+				_ = doTyping(context.Background(), 0)
+				return
+			case <-ticker.C:
+				_ = doTyping(typingCtx, 1)
+			}
+		}
+	}()
+
+	return cancel, nil
 }
 
 // isBotMentioned checks if the bot was @mentioned in the message.
@@ -699,6 +766,22 @@ func (c *FeishuChannel) downloadResource(
 	}
 
 	return ref
+}
+
+// mediaTagForType returns the placeholder tag for a media message type (for group trigger check before download).
+func mediaTagForType(messageType string) string {
+	switch messageType {
+	case larkim.MsgTypeImage:
+		return "[image: photo]"
+	case larkim.MsgTypeAudio:
+		return "[audio]"
+	case larkim.MsgTypeMedia:
+		return "[video]"
+	case larkim.MsgTypeFile:
+		return "[file]"
+	default:
+		return "[attachment]"
+	}
 }
 
 // appendMediaTags appends media type tags to content (like Telegram's "[image: photo]").
