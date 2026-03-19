@@ -34,6 +34,10 @@ type MediaStore interface {
 	// ReleaseAll deletes all files registered under the given scope
 	// and removes the mapping entries. File-not-exist errors are ignored.
 	ReleaseAll(scope string) error
+
+	// ReleaseRefs deletes the given refs and their files. Unknown refs are ignored.
+	// Use after outbound media is sent to avoid accumulation (e.g. TTS audio).
+	ReleaseRefs(refs []string)
 }
 
 // mediaEntry holds the path and metadata for a stored media file.
@@ -167,6 +171,39 @@ func (s *FileMediaStore) ReleaseAll(scope string) error {
 	}
 
 	return nil
+}
+
+// ReleaseRefs deletes the given refs and their files. Unknown refs are ignored.
+func (s *FileMediaStore) ReleaseRefs(refs []string) {
+	if len(refs) == 0 {
+		return
+	}
+	var paths []string
+	s.mu.Lock()
+	for _, ref := range refs {
+		if entry, exists := s.refs[ref]; exists {
+			paths = append(paths, entry.path)
+			if scope, ok := s.refToScope[ref]; ok {
+				if scopeRefs, ok := s.scopeToRefs[scope]; ok {
+					delete(scopeRefs, ref)
+					if len(scopeRefs) == 0 {
+						delete(s.scopeToRefs, scope)
+					}
+				}
+			}
+			delete(s.refs, ref)
+			delete(s.refToScope, ref)
+		}
+	}
+	s.mu.Unlock()
+	for _, p := range paths {
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			logger.WarnCF("media", "release: failed to remove file", map[string]any{
+				"path":  p,
+				"error": err.Error(),
+			})
+		}
+	}
 }
 
 // CleanExpired removes all entries older than MaxAge.

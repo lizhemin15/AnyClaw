@@ -657,7 +657,7 @@ func (c *FeishuChannel) downloadResource(
 	}
 
 	// Write to the shared ANYCLAW_media directory using a unique name to avoid collisions.
-	mediaDir := filepath.Join(os.TempDir(), "OPENCLAW_media")
+	mediaDir := filepath.Join(os.TempDir(), "ANYCLAW_media")
 	if mkdirErr := os.MkdirAll(mediaDir, 0o700); mkdirErr != nil {
 		logger.ErrorCF("feishu", "Failed to create media directory", map[string]any{
 			"error": mkdirErr.Error(),

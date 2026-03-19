@@ -733,6 +733,16 @@ func (m *Manager) sendMediaWithRetry(ctx context.Context, name string, w *channe
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		lastErr = ms.SendMedia(ctx, msg)
 		if lastErr == nil {
+			// Release media files immediately after successful send to avoid accumulation.
+			if m.mediaStore != nil && len(msg.Parts) > 0 {
+				refs := make([]string, 0, len(msg.Parts))
+				for _, p := range msg.Parts {
+					if p.Ref != "" {
+						refs = append(refs, p.Ref)
+					}
+				}
+				m.mediaStore.ReleaseRefs(refs)
+			}
 			return
 		}
 
