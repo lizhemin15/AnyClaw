@@ -217,6 +217,11 @@
       "api_base": "",
       "web_search": true
     },
+    "xiaomi_mimo": {
+      "api_key": "",
+      "api_base": "https://platform.xiaomimimo.com/api/v1",
+      "tts_model": "mimo-v2-tts"
+    },
     "openrouter": {
       "api_key": "sk-or-v1-xxx",
       "api_base": ""

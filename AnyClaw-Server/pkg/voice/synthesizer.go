@@ -99,27 +99,136 @@ func (s *OpenAISynthesizer) Synthesize(ctx context.Context, text, voiceID string
 	return tmpFile.Name(), nil
 }
 
+// XiaomiMiMoSynthesizer uses Xiaomi MiMo TTS (platform.xiaomimimo.com) for speech synthesis.
+// API format differs from OpenAI: uses model, text, voice_id, response_format.
+// Docs: https://platform.xiaomimimo.com/#/docs/usage-guide/speech-synthesis
+type XiaomiMiMoSynthesizer struct {
+	apiKey     string
+	apiBase    string
+	model      string
+	httpClient *http.Client
+}
+
+func NewXiaomiMiMoSynthesizer(apiKey, apiBase, model string) *XiaomiMiMoSynthesizer {
+	if apiBase == "" {
+		apiBase = "https://platform.xiaomimimo.com/api/v1"
+	}
+	if model == "" {
+		model = "mimo-v2-tts"
+	}
+	logger.DebugCF("voice", "Creating Xiaomi MiMo synthesizer", map[string]any{
+		"has_api_key": apiKey != "",
+		"api_base":    apiBase,
+		"model":       model,
+	})
+	return &XiaomiMiMoSynthesizer{
+		apiKey:  apiKey,
+		apiBase: apiBase,
+		model:   model,
+		httpClient: &http.Client{
+			Timeout: 60 * time.Second,
+		},
+	}
+}
+
+func (s *XiaomiMiMoSynthesizer) Name() string { return "xiaomi_mimo" }
+
+func (s *XiaomiMiMoSynthesizer) Synthesize(ctx context.Context, text, voiceID string) (string, error) {
+	if voiceID == "" {
+		voiceID = "default"
+	}
+	logger.InfoCF("voice", "Starting Xiaomi MiMo TTS synthesis", map[string]any{
+		"voice":       voiceID,
+		"text_length": len(text),
+	})
+
+	// Xiaomi MiMo TTS API format (per platform.xiaomimimo.com docs)
+	body := map[string]any{
+		"model":  s.model,
+		"text":   text,
+		"voice":  voiceID,
+		"format": "mp3",
+	}
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	reqURL := s.apiBase + "/audio/speech"
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+s.apiKey)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		errBody, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(errBody))
+	}
+
+	tmpFile, err := os.CreateTemp("", "anyclaw_tts_*.mp3")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer tmpFile.Close()
+
+	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
+		os.Remove(tmpFile.Name())
+		return "", fmt.Errorf("failed to write audio data: %w", err)
+	}
+
+	logger.InfoCF("voice", "Xiaomi MiMo TTS synthesis completed", map[string]any{"path": tmpFile.Name()})
+	return tmpFile.Name(), nil
+}
+
 // DetectSynthesizer inspects cfg and returns a Synthesizer if a TTS-capable provider is configured.
-// Priority: ANYCLAW_TTS_API_KEY (new scheduler, ChatAnywhere only) >
-//           ANYCLAW_VOICE_API_KEY (old scheduler, backward-compat) >
-//           OpenAI provider config > model_list openai/.
-// ANYCLAW_TTS_API_KEY is only injected for providers that support TTS (e.g. ChatAnywhere),
-// NOT for ASR-only providers like Groq.
-// ANYCLAW_VOICE_API_KEY is the legacy key used by older scheduler versions.
+// Priority: ANYCLAW_TTS_API_KEY (scheduler) > ANYCLAW_VOICE_API_KEY (backward-compat) >
+//           XIAOMI_MIMO_API_KEY (Xiaomi TTS) > providers.xiaomi_mimo > model_list xiaomi_mimo/ >
+//           providers.openai > model_list openai/.
 func DetectSynthesizer(cfg *config.Config) Synthesizer {
 	// New scheduler: dedicated TTS key (skipped for Groq endpoints).
 	if key := os.Getenv("ANYCLAW_TTS_API_KEY"); key != "" {
 		base := os.Getenv("ANYCLAW_TTS_API_BASE")
+		if strings.Contains(strings.ToLower(base), "xiaomimimo.com") {
+			return NewXiaomiMiMoSynthesizer(key, base, "")
+		}
 		return NewOpenAISynthesizer(key, base)
 	}
-	// Old scheduler: fall back to ANYCLAW_VOICE_API_KEY for backward compatibility.
-	// Skip Groq endpoints — Groq does not support TTS.
+	// Old scheduler: fall back to ANYCLAW_VOICE_API_KEY.
 	if key := os.Getenv("ANYCLAW_VOICE_API_KEY"); key != "" {
 		base := os.Getenv("ANYCLAW_VOICE_API_BASE")
+		if strings.Contains(strings.ToLower(base), "xiaomimimo.com") {
+			return NewXiaomiMiMoSynthesizer(key, base, "")
+		}
 		if !strings.Contains(strings.ToLower(base), "groq.com") {
 			return NewOpenAISynthesizer(key, base)
 		}
 	}
+	// Xiaomi MiMo: env or providers config
+	if key := os.Getenv("XIAOMI_MIMO_API_KEY"); key != "" {
+		base := os.Getenv("XIAOMI_MIMO_API_BASE")
+		return NewXiaomiMiMoSynthesizer(key, base, "")
+	}
+	if key := cfg.Providers.XiaomiMiMo.APIKey; key != "" {
+		return NewXiaomiMiMoSynthesizer(key, cfg.Providers.XiaomiMiMo.APIBase, cfg.Providers.XiaomiMiMo.TTSModel)
+	}
+	for _, mc := range cfg.ModelList {
+		if strings.HasPrefix(mc.Model, "xiaomi_mimo/") && mc.APIKey != "" {
+			model := strings.TrimPrefix(mc.Model, "xiaomi_mimo/")
+			if model == "" {
+				model = "mimo-v2-tts"
+			}
+			return NewXiaomiMiMoSynthesizer(mc.APIKey, mc.APIBase, model)
+		}
+	}
+	// OpenAI
 	if key := cfg.Providers.OpenAI.APIKey; key != "" {
 		return NewOpenAISynthesizer(key, cfg.Providers.OpenAI.APIBase)
 	}

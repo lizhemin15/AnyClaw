@@ -18,7 +18,41 @@ metadata: {"nanobot":{"emoji":"🔊"}}
 
 `speak` 工具将文本合成为语音（MP3）并直接发送给用户，支持飞书和网页端。
 
-**可用音色（voice 参数）：**
+### 配置方式
+
+**调度器（AnyClaw-API）分轨配置 ASR + TTS：**
+- `voice_api`：ASR（语音识别），如 ChatAnywhere、Groq
+- `tts_api`：TTS（语音合成），如 ChatAnywhere、Xiaomi MiMo；空则回退到 voice_api 中非 Groq 的第一个
+
+示例：ASR 用 ChatAnywhere、TTS 用 Xiaomi：
+```json
+"voice_api": [{"id":"asr","name":"ChatAnywhere","endpoint":"https://api.chatanywhere.org/v1","api_key":"sk-xxx","enabled":true}],
+"tts_api": [{"id":"tts","name":"Xiaomi MiMo","endpoint":"https://platform.xiaomimimo.com/api/v1","api_key":"your-key","enabled":true}]
+```
+
+**方式一：环境变量**
+- `XIAOMI_MIMO_API_KEY` 和 `XIAOMI_MIMO_API_BASE`（可选）：使用小米 MiMo TTS
+- `ANYCLAW_VOICE_API_KEY` / `ANYCLAW_TTS_API_KEY`：调度器注入，分别用于 ASR 和 TTS
+
+**方式二：config.json（本地运行）**
+```json
+"providers": {
+  "xiaomi_mimo": {
+    "api_key": "your-key",
+    "api_base": "https://platform.xiaomimimo.com/api/v1",
+    "tts_model": "mimo-v2-tts"
+  }
+}
+```
+
+**方式三：model_list**
+```json
+{"model": "xiaomi_mimo/mimo-v2-tts", "api_key": "your-key", "api_base": "https://platform.xiaomimimo.com/api/v1"}
+```
+
+### 可用音色（voice 参数）
+
+**OpenAI TTS（alloy/echo/fable/onyx/nova/shimmer）：**
 | 音色 | 风格 |
 |------|------|
 | alloy | 中性、平衡（默认） |
@@ -27,6 +61,14 @@ metadata: {"nanobot":{"emoji":"🔊"}}
 | onyx | 男声、深沉 |
 | nova | 女声、活泼 |
 | shimmer | 女声、温柔 |
+
+**小米 MiMo TTS（platform.xiaomimimo.com）：**
+| 音色 | 说明 |
+|------|------|
+| default | 默认音色 |
+| female | 女声 |
+| male | 男声 |
+| 其他 | 以平台文档为准：https://platform.xiaomimimo.com/#/docs/usage-guide/speech-synthesis |
 
 ## 何时调用 speak
 

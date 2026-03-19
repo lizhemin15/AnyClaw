@@ -475,9 +475,10 @@ type DevicesConfig struct {
 }
 
 type ProvidersConfig struct {
-	Anthropic     ProviderConfig       `json:"anthropic"`
-	OpenAI        OpenAIProviderConfig `json:"openai"`
-	LiteLLM       ProviderConfig       `json:"litellm"`
+	Anthropic     ProviderConfig           `json:"anthropic"`
+	OpenAI        OpenAIProviderConfig     `json:"openai"`
+	XiaomiMiMo    XiaomiMiMoProviderConfig `json:"xiaomi_mimo"`
+	LiteLLM       ProviderConfig           `json:"litellm"`
 	OpenRouter    ProviderConfig       `json:"openrouter"`
 	Groq          ProviderConfig       `json:"groq"`
 	Zhipu         ProviderConfig       `json:"zhipu"`
@@ -503,6 +504,7 @@ type ProvidersConfig struct {
 func (p ProvidersConfig) IsEmpty() bool {
 	return p.Anthropic.APIKey == "" && p.Anthropic.APIBase == "" &&
 		p.OpenAI.APIKey == "" && p.OpenAI.APIBase == "" &&
+		p.XiaomiMiMo.APIKey == "" && p.XiaomiMiMo.APIBase == "" &&
 		p.LiteLLM.APIKey == "" && p.LiteLLM.APIBase == "" &&
 		p.OpenRouter.APIKey == "" && p.OpenRouter.APIBase == "" &&
 		p.Groq.APIKey == "" && p.Groq.APIBase == "" &&
@@ -546,6 +548,12 @@ type ProviderConfig struct {
 type OpenAIProviderConfig struct {
 	ProviderConfig
 	WebSearch bool `json:"web_search" env:"ANYCLAW_PROVIDERS_OPENAI_WEB_SEARCH"`
+}
+
+// XiaomiMiMoProviderConfig is for Xiaomi MiMo TTS (platform.xiaomimimo.com).
+type XiaomiMiMoProviderConfig struct {
+	ProviderConfig
+	TTSModel string `json:"tts_model,omitempty"` // e.g. mimo-v2-tts, default if empty
 }
 
 // ModelConfig represents a model-centric provider configuration.

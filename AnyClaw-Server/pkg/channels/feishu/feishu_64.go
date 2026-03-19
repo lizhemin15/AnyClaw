@@ -358,7 +358,8 @@ func (c *FeishuChannel) sendMediaPart(
 					defer opusFile.Close()
 					err = c.sendAudio(ctx, chatID, opusFile)
 				} else {
-					err = openErr
+					logger.WarnCF("feishu", "Failed to open converted Opus file, sending as file", map[string]any{"error": openErr.Error()})
+					useVoice = false
 				}
 			} else {
 				useVoice = false // ffmpeg unavailable

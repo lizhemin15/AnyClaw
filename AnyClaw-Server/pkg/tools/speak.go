@@ -39,8 +39,7 @@ func (t *SpeakTool) Parameters() map[string]any {
 			},
 			"voice": map[string]any{
 				"type":        "string",
-				"description": "Voice ID: alloy, echo, fable, onyx, nova, shimmer. Default: alloy.",
-				"enum":        []string{"alloy", "echo", "fable", "onyx", "nova", "shimmer"},
+				"description": "Voice ID. OpenAI: alloy, echo, fable, onyx, nova, shimmer. Xiaomi MiMo: default, female, male, etc. See voice skill for provider-specific options. Default depends on TTS provider.",
 			},
 		},
 		"required": []string{"text"},
@@ -80,7 +79,7 @@ func (t *SpeakTool) Execute(ctx context.Context, args map[string]any) *ToolResul
 	}
 
 	if t.synthesizer == nil {
-		return ErrorResult("TTS not configured (no OpenAI API key set)")
+		return ErrorResult("TTS not configured (no API key set for OpenAI or Xiaomi MiMo)")
 	}
 	if t.mediaStore == nil {
 		return ErrorResult("media store not configured")

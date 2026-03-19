@@ -234,20 +234,17 @@ func (s *Scheduler) runOnHost(ctx context.Context, host *db.Host, instanceID int
 		if m := cfg.GetEnabledModel(); m != "" {
 			defaultModel = m
 		}
-		// Pass the first enabled voice API endpoint for ASR (both ChatAnywhere and Groq support ASR).
-		// Only pass TTS credentials for endpoints that support TTS (i.e. not Groq).
-		for _, ep := range cfg.VoiceAPI {
-			if !ep.Enabled || ep.APIKey == "" {
-				continue
-			}
-			if voiceAPIKey == "" {
-				voiceAPIKey = ep.APIKey
-				voiceAPIBase = ep.Endpoint
-			}
-			if ttsAPIKey == "" && !isGroqEndpoint(ep.Endpoint) {
-				ttsAPIKey = ep.APIKey
-				ttsAPIBase = ep.Endpoint
-			}
+		// ASR: first enabled voice_api endpoint (ChatAnywhere, Groq support Whisper).
+		voiceEndpoints := cfg.FindVoiceAPIEndpoints()
+		if len(voiceEndpoints) > 0 {
+			voiceAPIKey = voiceEndpoints[0].APIKey
+			voiceAPIBase = voiceEndpoints[0].APIBase
+		}
+		// TTS: first enabled tts_api endpoint; if tts_api empty, fall back to first non-Groq voice_api.
+		ttsEndpoints := cfg.FindTTSAPIEndpoints()
+		if len(ttsEndpoints) > 0 {
+			ttsAPIKey = ttsEndpoints[0].APIKey
+			ttsAPIBase = ttsEndpoints[0].APIBase
 		}
 	}
 	wsPath := fmt.Sprintf("/var/lib/anyclaw/ws-%d", instanceID)

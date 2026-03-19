@@ -118,9 +118,13 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	if voiceAPI == nil {
 		voiceAPI = []config.VoiceAPIEndpoint{}
 	}
-	maskedAPI := make([]map[string]any, len(voiceAPI))
+	ttsAPI := cfg.TTSAPI
+	if ttsAPI == nil {
+		ttsAPI = []config.VoiceAPIEndpoint{}
+	}
+	maskedVoice := make([]map[string]any, len(voiceAPI))
 	for i, ep := range voiceAPI {
-		maskedAPI[i] = map[string]any{
+		maskedVoice[i] = map[string]any{
 			"id":                 ep.ID,
 			"name":               ep.Name,
 			"endpoint":           ep.Endpoint,
@@ -130,7 +134,20 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 			"qps_limit":          ep.QPSLimit,
 		}
 	}
-	resp["voice_api"] = maskedAPI
+	maskedTTS := make([]map[string]any, len(ttsAPI))
+	for i, ep := range ttsAPI {
+		maskedTTS[i] = map[string]any{
+			"id":                 ep.ID,
+			"name":               ep.Name,
+			"endpoint":           ep.Endpoint,
+			"api_key":            config.MaskAPIKey(ep.APIKey),
+			"enabled":            ep.Enabled,
+			"daily_tokens_limit": ep.DailyTokensLimit,
+			"qps_limit":          ep.QPSLimit,
+		}
+	}
+	resp["voice_api"] = maskedVoice
+	resp["tts_api"] = maskedTTS
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -142,14 +159,15 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Channels   []config.Channel              `json:"channels"`
-		VoiceAPI   []config.VoiceAPIEndpoint     `json:"voice_api"`
-		SMTP       *config.SMTPConfig            `json:"smtp"`
-		Payment    *config.PaymentConfig         `json:"payment"`
-		Energy     *config.EnergyConfig          `json:"energy"`
-		Container  *config.ContainerConfig       `json:"container"`
-		COS        *config.COSConfig             `json:"cos"`
-		APIURL     string                        `json:"api_url"`
+		Channels   []config.Channel          `json:"channels"`
+		VoiceAPI   []config.VoiceAPIEndpoint `json:"voice_api"`
+		TTSAPI     []config.VoiceAPIEndpoint `json:"tts_api"`
+		SMTP       *config.SMTPConfig       `json:"smtp"`
+		Payment    *config.PaymentConfig    `json:"payment"`
+		Energy     *config.EnergyConfig     `json:"energy"`
+		Container  *config.ContainerConfig  `json:"container"`
+		COS        *config.COSConfig        `json:"cos"`
+		APIURL     string                   `json:"api_url"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
@@ -174,8 +192,11 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 			channels[i].APIKey = k
 		}
 	}
-	// Merge VoiceAPI: preserve existing api_key if client sent masked value
+	// Merge VoiceAPI: preserve existing when not sent; preserve api_key if client sent masked value
 	voiceAPI := req.VoiceAPI
+	if voiceAPI == nil {
+		voiceAPI = cfg.VoiceAPI
+	}
 	if voiceAPI == nil {
 		voiceAPI = []config.VoiceAPIEndpoint{}
 	}
@@ -186,6 +207,23 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 	for i := range voiceAPI {
 		if k, ok := existingAPI[voiceAPI[i].ID]; ok && (voiceAPI[i].APIKey == "" || strings.HasPrefix(voiceAPI[i].APIKey, "****")) {
 			voiceAPI[i].APIKey = k
+		}
+	}
+	// Merge TTSAPI: preserve existing when not sent; preserve api_key if client sent masked value
+	ttsAPI := req.TTSAPI
+	if ttsAPI == nil {
+		ttsAPI = cfg.TTSAPI
+	}
+	if ttsAPI == nil {
+		ttsAPI = []config.VoiceAPIEndpoint{}
+	}
+	existingTTS := make(map[string]string)
+	for _, ep := range cfg.TTSAPI {
+		existingTTS[ep.ID] = ep.APIKey
+	}
+	for i := range ttsAPI {
+		if k, ok := existingTTS[ttsAPI[i].ID]; ok && (ttsAPI[i].APIKey == "" || strings.HasPrefix(ttsAPI[i].APIKey, "****")) {
+			ttsAPI[i].APIKey = k
 		}
 	}
 	// Merge SMTP: preserve existing if not sent; clear if host empty; preserve pass if masked
@@ -240,7 +278,7 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	apiURL := strings.TrimSpace(req.APIURL)
 	// 全部写入数据库，DB 为唯一数据源
-	dbPayload := map[string]any{"channels": channels, "voice_api": voiceAPI, "smtp": smtp, "payment": payment, "energy": energy, "container": container, "cos": cos, "api_url": apiURL}
+	dbPayload := map[string]any{"channels": channels, "voice_api": voiceAPI, "tts_api": ttsAPI, "smtp": smtp, "payment": payment, "energy": energy, "container": container, "cos": cos, "api_url": apiURL}
 	dbBytes, _ := json.Marshal(dbPayload)
 	if h.database == nil {
 		http.Error(w, `{"error":"database not configured"}`, http.StatusInternalServerError)

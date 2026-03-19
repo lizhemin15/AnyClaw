@@ -14,8 +14,9 @@ type Config struct {
 	APIURL       string         `json:"api_url"`
 	DockerImage  string         `json:"docker_image"`
 	DefaultModel string         `json:"default_model"` // deprecated
-	Channels     []Channel      `json:"channels"`     // 用户添加的渠道，每个渠道可配置、启用、添加多个模型
-	VoiceAPI     []VoiceAPIEndpoint `json:"voice_api,omitempty"` // 语音 API（ASR/TTS）端点配置
+	Channels     []Channel           `json:"channels"`     // 用户添加的渠道，每个渠道可配置、启用、添加多个模型
+	VoiceAPI     []VoiceAPIEndpoint  `json:"voice_api,omitempty"`  // ASR（语音识别）端点，如 ChatAnywhere、Groq
+	TTSAPI       []VoiceAPIEndpoint  `json:"tts_api,omitempty"`    // TTS（语音合成）端点，如 ChatAnywhere、Xiaomi MiMo；空则回退到 voice_api 中非 Groq 的第一个
 	KeyPool      KeyPool        `json:"key_pool"`     // deprecated, migrate to channels
 	InstanceMap  InstanceMap    `json:"instance_map"`
 	SMTP         *SMTPConfig    `json:"smtp,omitempty"` // 注册验证码邮件
@@ -224,10 +225,39 @@ func (c *Config) HasVoiceAPI() bool {
 	return false
 }
 
-// FindVoiceAPIEndpoints 返回已启用的语音 API 端点列表，转为 ChannelEndpoint 供调度器使用
+// FindVoiceAPIEndpoints 返回已启用的 ASR 语音 API 端点列表
 func (c *Config) FindVoiceAPIEndpoints() []ChannelEndpoint {
+	return findEndpoints(c.VoiceAPI)
+}
+
+// FindTTSAPIEndpoints 返回已启用的 TTS 语音 API 端点列表；空则回退到 voice_api 中非 Groq 的端点
+func (c *Config) FindTTSAPIEndpoints() []ChannelEndpoint {
+	if len(c.TTSAPI) > 0 {
+		return findEndpoints(c.TTSAPI)
+	}
 	var out []ChannelEndpoint
 	for _, ep := range c.VoiceAPI {
+		if !ep.Enabled || ep.Endpoint == "" || ep.APIKey == "" {
+			continue
+		}
+		if strings.Contains(strings.ToLower(ep.Endpoint), "groq.com") {
+			continue
+		}
+		out = append(out, ChannelEndpoint{
+			ChannelID:        ep.ID,
+			ChannelName:      ep.Name,
+			APIBase:          strings.TrimSuffix(ep.Endpoint, "/"),
+			APIKey:           ep.APIKey,
+			DailyTokensLimit: ep.DailyTokensLimit,
+			QPSLimit:         ep.QPSLimit,
+		})
+	}
+	return out
+}
+
+func findEndpoints(api []VoiceAPIEndpoint) []ChannelEndpoint {
+	var out []ChannelEndpoint
+	for _, ep := range api {
 		if !ep.Enabled || ep.Endpoint == "" || ep.APIKey == "" {
 			continue
 		}
@@ -385,15 +415,16 @@ func Load(path string) (*Config, error) {
 	if LoadFromDB != nil {
 		if b, err := LoadFromDB(); err == nil && len(b) > 0 {
 			var dbCfg struct {
-				Channels   []Channel              `json:"channels"`
-				VoiceAPI   []VoiceAPIEndpoint      `json:"voice_api"`
-				AnyclawAPI []VoiceAPIEndpoint      `json:"anyclaw_api"`
-				SMTP       *SMTPConfig             `json:"smtp"`
-				Payment    *PaymentConfig          `json:"payment"`
-				Energy     *EnergyConfig           `json:"energy"`
-				Container  *ContainerConfig        `json:"container"`
-				COS        *COSConfig              `json:"cos"`
-				APIURL     string                  `json:"api_url"`
+				Channels   []Channel         `json:"channels"`
+				VoiceAPI   []VoiceAPIEndpoint `json:"voice_api"`
+				TTSAPI     []VoiceAPIEndpoint `json:"tts_api"`
+				AnyclawAPI []VoiceAPIEndpoint `json:"anyclaw_api"`
+				SMTP       *SMTPConfig       `json:"smtp"`
+				Payment    *PaymentConfig    `json:"payment"`
+				Energy     *EnergyConfig     `json:"energy"`
+				Container  *ContainerConfig  `json:"container"`
+				COS        *COSConfig        `json:"cos"`
+				APIURL     string            `json:"api_url"`
 			}
 			if json.Unmarshal(b, &dbCfg) == nil {
 				if len(dbCfg.Channels) > 0 {
@@ -405,6 +436,9 @@ func Load(path string) (*Config, error) {
 				}
 				if len(voiceEndpoints) > 0 {
 					cfg.VoiceAPI = voiceEndpoints
+				}
+				if len(dbCfg.TTSAPI) > 0 {
+					cfg.TTSAPI = dbCfg.TTSAPI
 				}
 				if dbCfg.SMTP != nil {
 					cfg.SMTP = dbCfg.SMTP
