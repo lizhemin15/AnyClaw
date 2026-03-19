@@ -416,6 +416,7 @@ type TestVoiceAPIRequest struct {
 	EndpointID string `json:"endpoint_id"` // 从已保存配置查找
 	Endpoint   string `json:"endpoint"`    // 或直接传
 	APIKey     string `json:"api_key"`
+	APIType    string `json:"api_type"`    // "voice" 查 voice_api，"tts" 查 tts_api，空则先 voice 后 tts
 }
 
 func (h *Handler) TestVoiceAPI(w http.ResponseWriter, r *http.Request) {
@@ -440,13 +441,25 @@ func (h *Handler) TestVoiceAPI(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"failed to load config"}`, http.StatusInternalServerError)
 			return
 		}
-		for _, ep := range cfg.VoiceAPI {
-			if ep.ID != req.EndpointID {
-				continue
+		lookInVoice := req.APIType != "tts"
+		lookInTTS := req.APIType != "voice"
+		if lookInVoice {
+			for _, ep := range cfg.VoiceAPI {
+				if ep.ID == req.EndpointID && ep.APIKey != "" {
+					apiKey = ep.APIKey
+					endpoint = strings.TrimSuffix(strings.TrimSpace(ep.Endpoint), "/")
+					break
+				}
 			}
-			apiKey = ep.APIKey
-			endpoint = strings.TrimSuffix(strings.TrimSpace(ep.Endpoint), "/")
-			break
+		}
+		if apiKey == "" && lookInTTS {
+			for _, ep := range cfg.TTSAPI {
+				if ep.ID == req.EndpointID && ep.APIKey != "" {
+					apiKey = ep.APIKey
+					endpoint = strings.TrimSuffix(strings.TrimSpace(ep.Endpoint), "/")
+					break
+				}
+			}
 		}
 		if apiKey == "" {
 			http.Error(w, `{"error":"voice api endpoint not found or no api key"}`, http.StatusBadRequest)

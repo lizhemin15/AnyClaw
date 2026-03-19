@@ -10,9 +10,15 @@ function genModelId() {
   return 'm-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
 }
 
-const VOICE_PROVIDERS: { id: string; name: string; endpoint: string }[] = [
+// ASR（语音识别）支持 Whisper，Groq 与 ChatAnywhere 均可用
+const ASR_PROVIDERS: { id: string; name: string; endpoint: string }[] = [
   { id: 'chatanywhere', name: 'ChatAnywhere', endpoint: 'https://api.chatanywhere.org/v1' },
   { id: 'groq',         name: 'Groq',         endpoint: 'https://api.groq.com/openai/v1'  },
+]
+// TTS（语音合成）Groq 不支持，Xiaomi MiMo 为小米 TTS
+const TTS_PROVIDERS: { id: string; name: string; endpoint: string }[] = [
+  { id: 'chatanywhere', name: 'ChatAnywhere', endpoint: 'https://api.chatanywhere.org/v1' },
+  { id: 'xiaomi_mimo',  name: 'Xiaomi MiMo',  endpoint: 'https://platform.xiaomimimo.com/api/v1' },
 ]
 
 function getChannelProvider(ch: Channel): string {
@@ -153,8 +159,9 @@ export default function AdminConfig() {
         const cos: COSConfig | undefined = (c as { cos?: COSConfig }).cos
         const api_url = (c as { api_url?: string }).api_url ?? ''
         const voice_api: VoiceAPIEndpoint[] = Array.isArray((c as { voice_api?: VoiceAPIEndpoint[] }).voice_api) ? (c as { voice_api?: VoiceAPIEndpoint[] }).voice_api! : []
-        setConfig({ channels, smtp, payment, energy, container, cos, api_url, voice_api })
-        setForm({ channels: JSON.parse(JSON.stringify(channels)), smtp, payment: JSON.parse(JSON.stringify(payment)), energy: { ...energy }, container: { ...container }, cos: cos ? { ...cos } : undefined, api_url, voice_api: JSON.parse(JSON.stringify(voice_api)) })
+        const tts_api: VoiceAPIEndpoint[] = Array.isArray((c as { tts_api?: VoiceAPIEndpoint[] }).tts_api) ? (c as { tts_api?: VoiceAPIEndpoint[] }).tts_api! : []
+        setConfig({ channels, smtp, payment, energy, container, cos, api_url, voice_api, tts_api })
+        setForm({ channels: JSON.parse(JSON.stringify(channels)), smtp, payment: JSON.parse(JSON.stringify(payment)), energy: { ...energy }, container: { ...container }, cos: cos ? { ...cos } : undefined, api_url, voice_api: JSON.parse(JSON.stringify(voice_api)), tts_api: JSON.parse(JSON.stringify(tts_api)) })
       })
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
       .finally(() => setLoading(false))
@@ -177,12 +184,12 @@ export default function AdminConfig() {
   }, [])
 
   useEffect(() => {
-    const count = (form?.channels?.length ?? 0) + (form?.voice_api?.length ?? 0)
+    const count = (form?.channels?.length ?? 0) + (form?.voice_api?.length ?? 0) + (form?.tts_api?.length ?? 0)
     if (count === 0) return
     refreshChannelStatus()
     const t = setInterval(refreshChannelStatus, 30000)
     return () => clearInterval(t)
-  }, [form?.channels?.length, form?.voice_api?.length, refreshChannelStatus])
+  }, [form?.channels?.length, form?.voice_api?.length, form?.tts_api?.length, refreshChannelStatus])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -738,108 +745,95 @@ export default function AdminConfig() {
           </div>
         </div>
 
-        {/* 语音 API 配置 */}
+        {/* 语音识别 (ASR) */}
         <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-200">
-            <h2 className="font-semibold text-slate-800">语音 API 配置</h2>
-            <p className="text-xs text-slate-500 mt-0.5">填写 API Key 后启用对应服务，用于语音识别（ASR）和语音合成（TTS）。</p>
+            <h2 className="font-semibold text-slate-800">语音识别 (ASR)</h2>
+            <p className="text-xs text-slate-500 mt-0.5">填写 API Key 后启用，用于将语音转为文字。调度时优先使用第一个启用的端点。</p>
           </div>
           <div className="divide-y divide-slate-100">
-            {VOICE_PROVIDERS.map((provider) => {
+            {ASR_PROVIDERS.map((provider) => {
               const ep = (form?.voice_api ?? []).find((e) => e.id === provider.id)
               const apiKey = ep?.api_key ?? ''
               const enabled = ep?.enabled ?? false
               const hasKey = !!apiKey.trim()
-
               const upsertProvider = (updates: Partial<VoiceAPIEndpoint>) => {
                 if (!form) return
                 const cur = form.voice_api ?? []
                 const exists = cur.some((e) => e.id === provider.id)
-                const next = exists
-                  ? cur.map((e) => e.id === provider.id ? { ...e, ...updates } : e)
-                  : [...cur, { id: provider.id, name: provider.name, endpoint: provider.endpoint, enabled: false, api_key: '', ...updates }]
+                const next = exists ? cur.map((e) => e.id === provider.id ? { ...e, ...updates } : e) : [...cur, { id: provider.id, name: provider.name, endpoint: provider.endpoint, enabled: false, api_key: '', ...updates }]
                 setForm({ ...form, voice_api: next })
               }
-
               return (
-                <div key={provider.id} className="px-5 py-4">
+                <div key={'asr-' + provider.id} className="px-5 py-4">
                   <div className="flex items-center gap-4 flex-wrap">
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={enabled}
-                      disabled={!hasKey}
-                      onClick={() => upsertProvider({ enabled: !enabled })}
-                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors disabled:opacity-40 ${
-                        enabled && hasKey ? 'bg-indigo-600' : 'bg-slate-200'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
-                          enabled && hasKey ? 'translate-x-4' : 'translate-x-0.5'
-                        }`}
-                      />
+                    <button type="button" role="switch" aria-checked={enabled} disabled={!hasKey} onClick={() => upsertProvider({ enabled: !enabled })}
+                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors disabled:opacity-40 ${enabled && hasKey ? 'bg-indigo-600' : 'bg-slate-200'}`}>
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${enabled && hasKey ? 'translate-x-4' : 'translate-x-0.5'}`} />
                     </button>
-                    <div className="min-w-[120px]">
-                      <span className="font-medium text-slate-800">{provider.name}</span>
-                      <p className="text-xs text-slate-400 font-mono">{provider.endpoint}</p>
-                    </div>
+                    <div className="min-w-[120px]"><span className="font-medium text-slate-800">{provider.name}</span><p className="text-xs text-slate-400 font-mono">{provider.endpoint}</p></div>
                     {voiceApiStatus[provider.id] && hasKey && (
-                      <span className="text-xs">
-                        {!enabled ? (
-                          <span className="text-slate-500">手动关闭</span>
-                        ) : voiceApiStatus[provider.id].available ? (
-                          <span className="text-emerald-600">可用</span>
-                        ) : (
-                          <span className="text-amber-600">系统自动关闭</span>
-                        )}
-                        {(voiceApiStatus[provider.id].in_flight ?? 0) > 0 && (
-                          <span className="ml-2 text-indigo-500">进行中 {voiceApiStatus[provider.id].in_flight}</span>
-                        )}
-                      </span>
+                      <span className="text-xs">{!enabled ? <span className="text-slate-500">手动关闭</span> : voiceApiStatus[provider.id].available ? <span className="text-emerald-600">可用</span> : <span className="text-amber-600">系统自动关闭</span>}{(voiceApiStatus[provider.id].in_flight ?? 0) > 0 && <span className="ml-2 text-indigo-500">进行中 {voiceApiStatus[provider.id].in_flight}</span>}</span>
                     )}
-                    <input
-                      type="password"
-                      value={apiKey}
-                      onChange={(e) => upsertProvider({ api_key: e.target.value, enabled: !!e.target.value.trim() && enabled })}
-                      placeholder="API Key"
-                      className="px-3 py-1.5 border border-slate-300 rounded text-sm font-mono w-52"
-                    />
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!hasKey) {
-                          setVoiceTestResult({ id: provider.id, ok: false, message: '请先填写 API Key' })
-                          return
-                        }
-                        const masked = apiKey.startsWith('****')
-                        setTestingVoiceEndpoint(provider.id)
-                        setVoiceTestResult(null)
-                        try {
-                          const res = await testVoiceAPIConfig(
-                            masked
-                              ? { endpoint_id: provider.id }
-                              : { endpoint_id: provider.id, endpoint: provider.endpoint, api_key: apiKey.trim() }
-                          )
-                          setVoiceTestResult({ id: provider.id, ok: res.ok, message: res.message + (res.latency != null ? ` (${res.latency}ms)` : ''), latency: res.latency })
-                        } catch (err) {
-                          setVoiceTestResult({ id: provider.id, ok: false, message: err instanceof Error ? err.message : '测试失败' })
-                        } finally {
-                          setTestingVoiceEndpoint(null)
-                        }
-                      }}
-                      disabled={testingVoiceEndpoint === provider.id}
-                      className="text-sm text-slate-600 hover:text-slate-800 disabled:opacity-50"
-                    >
-                      {testingVoiceEndpoint === provider.id ? '测试中...' : '测试'}
-                    </button>
+                    <input type="password" value={apiKey} onChange={(e) => upsertProvider({ api_key: e.target.value, enabled: !!e.target.value.trim() && enabled })} placeholder="API Key" className="px-3 py-1.5 border border-slate-300 rounded text-sm font-mono w-52" />
+                    <button type="button" onClick={async () => {
+                      if (!hasKey) { setVoiceTestResult({ id: provider.id, ok: false, message: '请先填写 API Key' }); return }
+                      const masked = apiKey.startsWith('****')
+                      setTestingVoiceEndpoint(provider.id); setVoiceTestResult(null)
+                      try {
+                        const res = await testVoiceAPIConfig(masked ? { endpoint_id: provider.id, api_type: 'voice' } : { endpoint_id: provider.id, api_type: 'voice', endpoint: provider.endpoint, api_key: apiKey.trim() })
+                        setVoiceTestResult({ id: provider.id, ok: res.ok, message: res.message + (res.latency != null ? ` (${res.latency}ms)` : ''), latency: res.latency })
+                      } catch (err) { setVoiceTestResult({ id: provider.id, ok: false, message: err instanceof Error ? err.message : '测试失败' }) }
+                      finally { setTestingVoiceEndpoint(null) }
+                    }} disabled={testingVoiceEndpoint === provider.id} className="text-sm text-slate-600 hover:text-slate-800 disabled:opacity-50">{testingVoiceEndpoint === provider.id ? '测试中...' : '测试'}</button>
                   </div>
-                  {voiceTestResult?.id === provider.id && (
-                    <div className={`mt-2 text-xs px-3 py-1.5 rounded ${voiceTestResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-                      {voiceTestResult.ok ? '✓ ' : '✗ '}
-                      {voiceTestResult.message}
-                    </div>
-                  )}
+                  {voiceTestResult?.id === provider.id && <div className={`mt-2 text-xs px-3 py-1.5 rounded ${voiceTestResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{voiceTestResult.ok ? '✓ ' : '✗ '}{voiceTestResult.message}</div>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* 语音合成 (TTS) */}
+        <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200">
+            <h2 className="font-semibold text-slate-800">语音合成 (TTS)</h2>
+            <p className="text-xs text-slate-500 mt-0.5">填写 API Key 后启用，用于将文字转为语音。Groq 不支持 TTS，可配置 Xiaomi MiMo 或 ChatAnywhere。空则回退到 ASR 中非 Groq 的第一个。</p>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {TTS_PROVIDERS.map((provider) => {
+              const ep = (form?.tts_api ?? []).find((e) => e.id === provider.id)
+              const apiKey = ep?.api_key ?? ''
+              const enabled = ep?.enabled ?? false
+              const hasKey = !!apiKey.trim()
+              const upsertProvider = (updates: Partial<VoiceAPIEndpoint>) => {
+                if (!form) return
+                const cur = form.tts_api ?? []
+                const exists = cur.some((e) => e.id === provider.id)
+                const next = exists ? cur.map((e) => e.id === provider.id ? { ...e, ...updates } : e) : [...cur, { id: provider.id, name: provider.name, endpoint: provider.endpoint, enabled: false, api_key: '', ...updates }]
+                setForm({ ...form, tts_api: next })
+              }
+              return (
+                <div key={'tts-' + provider.id} className="px-5 py-4">
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <button type="button" role="switch" aria-checked={enabled} disabled={!hasKey} onClick={() => upsertProvider({ enabled: !enabled })}
+                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors disabled:opacity-40 ${enabled && hasKey ? 'bg-indigo-600' : 'bg-slate-200'}`}>
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${enabled && hasKey ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                    </button>
+                    <div className="min-w-[120px]"><span className="font-medium text-slate-800">{provider.name}</span><p className="text-xs text-slate-400 font-mono">{provider.endpoint}</p></div>
+                    <input type="password" value={apiKey} onChange={(e) => upsertProvider({ api_key: e.target.value, enabled: !!e.target.value.trim() && enabled })} placeholder="API Key" className="px-3 py-1.5 border border-slate-300 rounded text-sm font-mono w-52" />
+                    <button type="button" onClick={async () => {
+                      if (!hasKey) { setVoiceTestResult({ id: 'tts-' + provider.id, ok: false, message: '请先填写 API Key' }); return }
+                      const masked = apiKey.startsWith('****')
+                      setTestingVoiceEndpoint('tts-' + provider.id); setVoiceTestResult(null)
+                      try {
+                        const res = await testVoiceAPIConfig(masked ? { endpoint_id: provider.id, api_type: 'tts' } : { endpoint_id: provider.id, api_type: 'tts', endpoint: provider.endpoint, api_key: apiKey.trim() })
+                        setVoiceTestResult({ id: 'tts-' + provider.id, ok: res.ok, message: res.message + (res.latency != null ? ` (${res.latency}ms)` : ''), latency: res.latency })
+                      } catch (err) { setVoiceTestResult({ id: 'tts-' + provider.id, ok: false, message: err instanceof Error ? err.message : '测试失败' }) }
+                      finally { setTestingVoiceEndpoint(null) }
+                    }} disabled={testingVoiceEndpoint === 'tts-' + provider.id} className="text-sm text-slate-600 hover:text-slate-800 disabled:opacity-50">{testingVoiceEndpoint === 'tts-' + provider.id ? '测试中...' : '测试'}</button>
+                  </div>
+                  {voiceTestResult?.id === 'tts-' + provider.id && <div className={`mt-2 text-xs px-3 py-1.5 rounded ${voiceTestResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{voiceTestResult.ok ? '✓ ' : '✗ '}{voiceTestResult.message}</div>}
                 </div>
               )
             })}

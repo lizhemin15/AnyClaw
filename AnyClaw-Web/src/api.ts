@@ -492,6 +492,7 @@ export interface VoiceAPIEndpoint {
 export interface AdminConfig {
   channels: Channel[];
   voice_api?: VoiceAPIEndpoint[];
+  tts_api?: VoiceAPIEndpoint[];
   smtp?: SMTPConfig;
   payment?: PaymentConfig;
   energy?: EnergyConfig;
@@ -560,6 +561,7 @@ export async function testVoiceAPIConfig(params: {
   endpoint_id?: string;
   endpoint?: string;
   api_key?: string;
+  api_type?: 'voice' | 'tts';
 }): Promise<{ ok: boolean; message: string; latency?: number }> {
   return fetchApi<{ ok: boolean; message: string; latency?: number }>('/admin/config/test-voice-api', {
     method: 'POST',
