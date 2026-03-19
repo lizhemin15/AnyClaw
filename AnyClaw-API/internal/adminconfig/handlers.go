@@ -539,6 +539,11 @@ func (h *Handler) TestVoiceAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := &http.Client{Timeout: 15 * time.Second}
+	// 小米 API 直连，不走 HTTP_PROXY，避免代理返回 404
+	if strings.Contains(strings.ToLower(reqURL), "xiaomimimo.com") {
+		tr := &http.Transport{Proxy: func(*http.Request) (*url.URL, error) { return nil, nil }}
+		client = &http.Client{Timeout: 15 * time.Second, Transport: tr}
+	}
 	start := time.Now()
 	resp, err := client.Do(proxyReq)
 	latency := time.Since(start).Milliseconds()
@@ -562,7 +567,7 @@ func (h *Handler) TestVoiceAPI(w http.ResponseWriter, r *http.Request) {
 			msg += "（TTS 测试，请检查 API Key 是否有效）"
 		}
 		if resp.StatusCode == 404 && strings.Contains(strings.ToLower(reqURL), "xiaomimimo.com") {
-			msg += "。小米 TTS 请确认 Endpoint 为 https://api.xiaomimimo.com/v1，参考 https://platform.xiaomimimo.com/#/docs/usage-guide/speech-synthesis"
+			msg += "。请求 URL: " + reqURL + "。若本地 curl 正常，可能是服务器网络/代理导致，可尝试在 API 服务器上执行相同 curl 验证"
 		}
 		msg += ": " + string(respBody)
 		w.Header().Set("Content-Type", "application/json")
