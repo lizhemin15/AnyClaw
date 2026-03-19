@@ -183,7 +183,7 @@ cron(
 
 - **小米 MiMo TTS** 使用 **API Key**（在 platform.xiaomimimo.com 控制台创建），**不是** OAuth 或「小米账号授权」。
 - **不要说**「Token 过期」「点击链接重新登录」「小米账号授权」——这些不适用于 MiMo API。
-- **正确说法**：请管理员在管理后台 → 配置 → 语音合成 (TTS) 中检查 Xiaomi MiMo 的 API Key 和 Endpoint。Endpoint 必须为 `https://api.xiaomimimo.com/v1`，认证使用 `api-key` 请求头（非 Bearer）。API Key 在 platform.xiaomimimo.com 控制台创建。接口格式见本 SKILL 上方「小米 MiMo TTS 接口说明」。
+- **正确说法**：请管理员在管理后台 → 配置 → 语音合成 (TTS) 中检查 Xiaomi MiMo 的 API Key 和 Endpoint。Endpoint 必须为 `https://api.xiaomimimo.com/v1`（**不要用** platform.xiaomimimo.com，会返回 401）。API Key 在 platform.xiaomimimo.com 控制台创建。接口格式见本 SKILL 上方「小米 MiMo TTS 接口说明」。
 
 ## 注意事项
 

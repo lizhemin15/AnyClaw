@@ -114,6 +114,8 @@ func NewXiaomiMiMoSynthesizer(apiKey, apiBase, model string) *XiaomiMiMoSynthesi
 	if apiBase == "" {
 		apiBase = "https://api.xiaomimimo.com/v1"
 	}
+	// platform.xiaomimimo.com 会返回 401+loginUrl，必须用 api 域名
+	apiBase = strings.ReplaceAll(strings.ToLower(apiBase), "platform.xiaomimimo.com", "api.xiaomimimo.com")
 	if model == "" {
 		model = "mimo-v2-tts"
 	}
@@ -169,6 +171,7 @@ func (s *XiaomiMiMoSynthesizer) Synthesize(ctx context.Context, text, voiceID st
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("api-key", s.apiKey)
+	req.Header.Set("Authorization", "Bearer "+s.apiKey)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {

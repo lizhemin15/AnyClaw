@@ -479,7 +479,12 @@ func (h *Handler) TestVoiceAPI(w http.ResponseWriter, r *http.Request) {
 	if useTTS {
 		var body []byte
 		if strings.Contains(strings.ToLower(endpoint), "xiaomimimo.com") {
-			reqURL = strings.TrimSuffix(endpoint, "/") + "/chat/completions"
+			// 必须使用 api.xiaomimimo.com，platform 域名会返回 401+loginUrl
+			actualEndpoint := endpoint
+			if strings.Contains(strings.ToLower(endpoint), "platform.xiaomimimo.com") {
+				actualEndpoint = strings.ReplaceAll(strings.ToLower(endpoint), "platform.xiaomimimo.com", "api.xiaomimimo.com")
+			}
+			reqURL = strings.TrimSuffix(actualEndpoint, "/") + "/chat/completions"
 			body, _ = json.Marshal(map[string]any{
 				"model": "mimo-v2-tts",
 				"messages": []map[string]string{
@@ -495,6 +500,7 @@ func (h *Handler) TestVoiceAPI(w http.ResponseWriter, r *http.Request) {
 			}
 			proxyReq.Header.Set("Content-Type", "application/json")
 			proxyReq.Header.Set("api-key", apiKey)
+			proxyReq.Header.Set("Authorization", "Bearer "+apiKey)
 		} else {
 			reqURL = endpoint + "/audio/speech"
 			body, _ = json.Marshal(map[string]string{"model": "tts-1", "input": "test", "voice": "alloy"})
