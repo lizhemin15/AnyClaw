@@ -479,12 +479,18 @@ func (h *Handler) TestVoiceAPI(w http.ResponseWriter, r *http.Request) {
 	if useTTS {
 		var body []byte
 		if strings.Contains(strings.ToLower(endpoint), "xiaomimimo.com") {
-			// 必须使用 api.xiaomimimo.com，platform 域名会返回 401+loginUrl
+			// 平台文档 https://platform.xiaomimimo.com/#/docs/usage-guide/speech-synthesis
+			// curl POST 'https://api.xiaomimimo.com/v1/chat/completions' -H 'api-key: $MIMO_API_KEY'
 			actualEndpoint := endpoint
 			if strings.Contains(strings.ToLower(endpoint), "platform.xiaomimimo.com") {
 				actualEndpoint = strings.ReplaceAll(strings.ToLower(endpoint), "platform.xiaomimimo.com", "api.xiaomimimo.com")
 			}
-			reqURL = strings.TrimSuffix(actualEndpoint, "/") + "/chat/completions"
+			base := strings.TrimSuffix(actualEndpoint, "/")
+			if strings.HasSuffix(strings.ToLower(base), "/v1") {
+				reqURL = base + "/chat/completions"
+			} else {
+				reqURL = base + "/v1/chat/completions"
+			}
 			body, _ = json.Marshal(map[string]any{
 				"model": "mimo-v2-tts",
 				"messages": []map[string]string{
@@ -523,7 +529,8 @@ func (h *Handler) TestVoiceAPI(w http.ResponseWriter, r *http.Request) {
 	if !strings.Contains(strings.ToLower(endpoint), "xiaomimimo.com") {
 		proxyReq.Header.Set("Authorization", "Bearer "+apiKey)
 	}
-	if u, err := url.Parse(reqURL); err == nil && u.Host != "" {
+	// 不覆盖 Host，避免 xiaomimimo 等外部 API 返回 404
+	if u, err := url.Parse(reqURL); err == nil && u.Host != "" && !strings.Contains(strings.ToLower(reqURL), "xiaomimimo.com") {
 		host := u.Hostname()
 		if p := u.Port(); p != "" && p != "443" && p != "80" {
 			host = u.Host
@@ -553,6 +560,9 @@ func (h *Handler) TestVoiceAPI(w http.ResponseWriter, r *http.Request) {
 		msg := "上游返回 " + http.StatusText(resp.StatusCode)
 		if useTTS {
 			msg += "（TTS 测试，请检查 API Key 是否有效）"
+		}
+		if resp.StatusCode == 404 && strings.Contains(strings.ToLower(reqURL), "xiaomimimo.com") {
+			msg += "。小米 TTS 请确认 Endpoint 为 https://api.xiaomimimo.com/v1，参考 https://platform.xiaomimimo.com/#/docs/usage-guide/speech-synthesis"
 		}
 		msg += ": " + string(respBody)
 		w.Header().Set("Content-Type", "application/json")
