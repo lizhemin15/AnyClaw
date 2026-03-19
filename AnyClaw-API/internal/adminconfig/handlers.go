@@ -477,19 +477,35 @@ func (h *Handler) TestVoiceAPI(w http.ResponseWriter, r *http.Request) {
 	var proxyReq *http.Request
 	var reqErr error
 	if useTTS {
-		reqURL = endpoint + "/audio/speech"
 		var body []byte
 		if strings.Contains(strings.ToLower(endpoint), "xiaomimimo.com") {
-			body, _ = json.Marshal(map[string]any{"model": "mimo-v2-tts", "input": "测", "voice": "default", "format": "mp3"})
+			reqURL = strings.TrimSuffix(endpoint, "/") + "/chat/completions"
+			body, _ = json.Marshal(map[string]any{
+				"model": "mimo-v2-tts",
+				"messages": []map[string]string{
+					{"role": "user", "content": "Please read the following text."},
+					{"role": "assistant", "content": "测"},
+				},
+				"audio": map[string]string{"format": "wav", "voice": "mimo_default"},
+			})
+			proxyReq, reqErr = http.NewRequestWithContext(r.Context(), "POST", reqURL, bytes.NewReader(body))
+			if reqErr != nil {
+				http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+				return
+			}
+			proxyReq.Header.Set("Content-Type", "application/json")
+			proxyReq.Header.Set("api-key", apiKey)
 		} else {
+			reqURL = endpoint + "/audio/speech"
 			body, _ = json.Marshal(map[string]string{"model": "tts-1", "input": "test", "voice": "alloy"})
+			proxyReq, reqErr = http.NewRequestWithContext(r.Context(), "POST", reqURL, bytes.NewReader(body))
+			if reqErr != nil {
+				http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+				return
+			}
+			proxyReq.Header.Set("Content-Type", "application/json")
+			proxyReq.Header.Set("Authorization", "Bearer "+apiKey)
 		}
-		proxyReq, reqErr = http.NewRequestWithContext(r.Context(), "POST", reqURL, bytes.NewReader(body))
-		if reqErr != nil {
-			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-			return
-		}
-		proxyReq.Header.Set("Content-Type", "application/json")
 	} else {
 		reqURL = endpoint + "/models"
 		proxyReq, reqErr = http.NewRequestWithContext(r.Context(), "GET", reqURL, nil)
@@ -498,7 +514,9 @@ func (h *Handler) TestVoiceAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	proxyReq.Header.Set("Authorization", "Bearer "+apiKey)
+	if !strings.Contains(strings.ToLower(endpoint), "xiaomimimo.com") {
+		proxyReq.Header.Set("Authorization", "Bearer "+apiKey)
+	}
 	if u, err := url.Parse(reqURL); err == nil && u.Host != "" {
 		host := u.Hostname()
 		if p := u.Port(); p != "" && p != "443" && p != "80" {

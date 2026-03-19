@@ -65,32 +65,29 @@ metadata: {"nanobot":{"emoji":"🔊"}}
 **小米 MiMo TTS（api.xiaomimimo.com）：**
 | 音色 | 说明 |
 |------|------|
-| default / mimo_default | 默认音色 |
+| mimo_default | 默认音色 |
 | default_zh | 中文女声 |
 | default_en | 英文女声 |
-| female / male | 女声/男声（以实际 API 为准） |
 
-### 小米 MiMo TTS 接口说明（内联，与 synthesizer.go 一致）
+### 小米 MiMo TTS 接口说明（内联自平台文档）
 
-- **Endpoint**：`POST {api_base}/audio/speech`（如 `https://api.xiaomimimo.com/v1/audio/speech`）
-- **Headers**：`Content-Type: application/json`，`Authorization: Bearer {api_key}`
+- **Endpoint**：`POST {api_base}/chat/completions`（如 `https://api.xiaomimimo.com/v1/chat/completions`）
+- **Headers**：`Content-Type: application/json`，`api-key: {api_key}`（**不是** Authorization: Bearer）
 - **Request body**：
   | 参数 | 类型 | 说明 |
   |------|------|------|
-  | model | string | 模型，默认 `mimo-v2-tts` |
-  | input | string | 待合成文本 |
-  | voice | string | 音色：default / mimo_default / default_zh / default_en |
-  | format | string | 输出格式，如 `mp3` |
-- **Response**：二进制 MP3 音频流
-- **API Key**：在 platform.xiaomimimo.com 控制台创建，使用 API Key 认证，**不是** OAuth 或小米账号授权
+  | model | string | 模型，`mimo-v2-tts` |
+  | messages | array | 含 user 与 assistant，assistant.content 为待合成文本 |
+  | audio | object | `{ "format": "wav", "voice": "mimo_default" }` |
+- **Response**：JSON，音频在 `choices[0].message.audio.data`（base64）
+- **API Key**：在 platform.xiaomimimo.com 控制台创建，使用 `api-key` 请求头，**不是** OAuth 或小米账号授权
 
-**curl 示例**（与代码实现一致）：
+**curl 示例**（与平台文档一致）：
 ```bash
-curl -X POST "https://api.xiaomimimo.com/v1/audio/speech" \
+curl -X POST "https://api.xiaomimimo.com/v1/chat/completions" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -d '{"model":"mimo-v2-tts","input":"你好","voice":"default","format":"mp3"}' \
-  --output speech.mp3
+  -H "api-key: $MIMO_API_KEY" \
+  -d '{"model":"mimo-v2-tts","messages":[{"role":"user","content":"Hello"},{"role":"assistant","content":"你好"}],"audio":{"format":"wav","voice":"mimo_default"}}'
 ```
 
 ### 小米 MiMo 风格与语气控制（内联自平台文档）
@@ -145,20 +142,20 @@ speak(text="你好，我是你的 AI 助手。", voice="shimmer")
 
 **小米 MiMo TTS 调用示例**（接口格式见上方「小米 MiMo TTS 接口说明」）：
 ```
-speak(text="你好，欢迎使用小米语音。", voice="default")
-speak(text="这是一段女声朗读。", voice="female")
-speak(text="这是一段男声朗读。", voice="male")
+speak(text="你好，欢迎使用小米语音。", voice="mimo_default")
+speak(text="这是一段中文女声朗读。", voice="default_zh")
+speak(text="This is English female voice.", voice="default_en")
 ```
 
 **小米 MiMo 风格示例**（唱歌、语气、情感）：
 ```
-speak(text="<style>Happy</style>明天周五啦，好开心！", voice="default")
-speak(text="<style>Whisper</style>天哪，今天好冷啊！那风呼呼的，像刀子割脸一样！", voice="default")
-speak(text="<style>唱歌</style>一闪一闪亮晶晶，满天都是小星星。", voice="default")
-speak(text="阿嚏！咳。我真是 [cough] 觉得要感冒了 [cough] 重感冒。", voice="default")
-speak(text="[heavy breathing] 等……等一下。我从车站一路跑过来的。", voice="default")
-speak(text="我就是觉得…… long sigh ……像一直在踩水，你知道吗？", voice="default")
-speak(text="太蠢了！(sobbing) 我们花那么多钱买蛋糕，狗却……(sudden laugh) 一口全吃光了！", voice="default")
+speak(text="<style>Happy</style>明天周五啦，好开心！", voice="mimo_default")
+speak(text="<style>Whisper</style>天哪，今天好冷啊！那风呼呼的，像刀子割脸一样！", voice="mimo_default")
+speak(text="<style>唱歌</style>一闪一闪亮晶晶，满天都是小星星。", voice="mimo_default")
+speak(text="阿嚏！咳。我真是 [cough] 觉得要感冒了 [cough] 重感冒。", voice="mimo_default")
+speak(text="[heavy breathing] 等……等一下。我从车站一路跑过来的。", voice="mimo_default")
+speak(text="我就是觉得…… long sigh ……像一直在踩水，你知道吗？", voice="mimo_default")
+speak(text="太蠢了！(sobbing) 我们花那么多钱买蛋糕，狗却……(sudden laugh) 一口全吃光了！", voice="mimo_default")
 ```
 
 ## 与定时任务（cron）结合
@@ -186,7 +183,7 @@ cron(
 
 - **小米 MiMo TTS** 使用 **API Key**（在 platform.xiaomimimo.com 控制台创建），**不是** OAuth 或「小米账号授权」。
 - **不要说**「Token 过期」「点击链接重新登录」「小米账号授权」——这些不适用于 MiMo API。
-- **正确说法**：请管理员在管理后台 → 配置 → 语音合成 (TTS) 中检查 Xiaomi MiMo 的 API Key 和 Endpoint。Endpoint 建议用 `https://api.xiaomimimo.com/v1`（若 platform.xiaomimimo.com 返回 401 带 loginUrl，请改用 api 域名）。API Key 在平台控制台创建。接口格式见本 SKILL 上方「小米 MiMo TTS 接口说明」。
+- **正确说法**：请管理员在管理后台 → 配置 → 语音合成 (TTS) 中检查 Xiaomi MiMo 的 API Key 和 Endpoint。Endpoint 必须为 `https://api.xiaomimimo.com/v1`，认证使用 `api-key` 请求头（非 Bearer）。API Key 在 platform.xiaomimimo.com 控制台创建。接口格式见本 SKILL 上方「小米 MiMo TTS 接口说明」。
 
 ## 注意事项
 

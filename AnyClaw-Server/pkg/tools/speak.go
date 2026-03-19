@@ -39,7 +39,7 @@ func (t *SpeakTool) Parameters() map[string]any {
 			},
 			"voice": map[string]any{
 				"type":        "string",
-				"description": "Voice ID. OpenAI: alloy, echo, fable, onyx, nova, shimmer. Xiaomi MiMo: default, female, male, etc. See voice skill for provider-specific options. Default depends on TTS provider.",
+				"description": "Voice ID. OpenAI: alloy, echo, fable, onyx, nova, shimmer. Xiaomi MiMo: mimo_default, default_zh, default_en. See voice skill for provider-specific options. Default depends on TTS provider.",
 			},
 		},
 		"required": []string{"text"},

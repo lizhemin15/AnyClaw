@@ -3,6 +3,7 @@ package voice
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -100,7 +101,7 @@ func (s *OpenAISynthesizer) Synthesize(ctx context.Context, text, voiceID string
 }
 
 // XiaomiMiMoSynthesizer uses Xiaomi MiMo TTS (platform.xiaomimimo.com) for speech synthesis.
-// API format: model, input, voice, format (OpenAI /audio/speech compatible).
+// API: POST /v1/chat/completions with messages + audio, auth via api-key header.
 // Docs: https://platform.xiaomimimo.com/#/docs/usage-guide/speech-synthesis
 type XiaomiMiMoSynthesizer struct {
 	apiKey     string
@@ -135,32 +136,39 @@ func (s *XiaomiMiMoSynthesizer) Name() string { return "xiaomi_mimo" }
 
 func (s *XiaomiMiMoSynthesizer) Synthesize(ctx context.Context, text, voiceID string) (string, error) {
 	if voiceID == "" {
-		voiceID = "default"
+		voiceID = "mimo_default"
+	} else if voiceID == "default" {
+		voiceID = "mimo_default"
 	}
 	logger.InfoCF("voice", "Starting Xiaomi MiMo TTS synthesis", map[string]any{
 		"voice":       voiceID,
 		"text_length": len(text),
 	})
 
-	// Xiaomi MiMo TTS API (platform.xiaomimimo.com). Use "input" per OpenAI-compatible /audio/speech.
+	// Xiaomi MiMo TTS: POST /v1/chat/completions with messages + audio, api-key header.
 	body := map[string]any{
-		"model":  s.model,
-		"input":  text,
-		"voice":  voiceID,
-		"format": "mp3",
+		"model": s.model,
+		"messages": []map[string]string{
+			{"role": "user", "content": "Please read the following text."},
+			{"role": "assistant", "content": text},
+		},
+		"audio": map[string]string{
+			"format": "wav",
+			"voice":  voiceID,
+		},
 	}
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	reqURL := s.apiBase + "/audio/speech"
+	reqURL := strings.TrimSuffix(s.apiBase, "/") + "/chat/completions"
 	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+s.apiKey)
+	req.Header.Set("api-key", s.apiKey)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
@@ -168,21 +176,40 @@ func (s *XiaomiMiMoSynthesizer) Synthesize(ctx context.Context, text, voiceID st
 	}
 	defer resp.Body.Close()
 
+	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		errBody, _ := io.ReadAll(resp.Body)
-		// Include base URL (no key) to help diagnose 401: wrong endpoint or key mix-up
-		return "", fmt.Errorf("API error (status %d) from %s/audio/speech: %s", resp.StatusCode, s.apiBase, string(errBody))
+		return "", fmt.Errorf("API error (status %d) from %s: %s", resp.StatusCode, reqURL, string(respBody))
 	}
 
-	tmpFile, err := os.CreateTemp("", "anyclaw_tts_*.mp3")
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Audio *struct {
+					Data string `json:"data"`
+				} `json:"audio"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return "", fmt.Errorf("failed to parse response: %w", err)
+	}
+	if len(result.Choices) == 0 || result.Choices[0].Message.Audio == nil || result.Choices[0].Message.Audio.Data == "" {
+		return "", fmt.Errorf("no audio in response")
+	}
+
+	audioData, err := base64.StdEncoding.DecodeString(result.Choices[0].Message.Audio.Data)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode audio: %w", err)
+	}
+
+	tmpFile, err := os.CreateTemp("", "anyclaw_tts_*.wav")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}
 	defer tmpFile.Close()
-
-	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
+	if _, err := tmpFile.Write(audioData); err != nil {
 		os.Remove(tmpFile.Name())
-		return "", fmt.Errorf("failed to write audio data: %w", err)
+		return "", fmt.Errorf("failed to write audio: %w", err)
 	}
 
 	logger.InfoCF("voice", "Xiaomi MiMo TTS synthesis completed", map[string]any{"path": tmpFile.Name()})
