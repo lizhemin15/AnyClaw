@@ -142,10 +142,10 @@ func (s *XiaomiMiMoSynthesizer) Synthesize(ctx context.Context, text, voiceID st
 		"text_length": len(text),
 	})
 
-	// Xiaomi MiMo TTS API format (per platform.xiaomimimo.com docs)
+	// Xiaomi MiMo TTS API (platform.xiaomimimo.com). Use "input" per OpenAI-compatible /audio/speech.
 	body := map[string]any{
 		"model":  s.model,
-		"text":   text,
+		"input":  text,
 		"voice":  voiceID,
 		"format": "mp3",
 	}
@@ -170,7 +170,8 @@ func (s *XiaomiMiMoSynthesizer) Synthesize(ctx context.Context, text, voiceID st
 
 	if resp.StatusCode != http.StatusOK {
 		errBody, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(errBody))
+		// Include base URL (no key) to help diagnose 401: wrong endpoint or key mix-up
+		return "", fmt.Errorf("API error (status %d) from %s/audio/speech: %s", resp.StatusCode, s.apiBase, string(errBody))
 	}
 
 	tmpFile, err := os.CreateTemp("", "anyclaw_tts_*.mp3")
