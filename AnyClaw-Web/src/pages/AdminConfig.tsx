@@ -10,10 +10,6 @@ function genModelId() {
   return 'm-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
 }
 
-function genApiId() {
-  return 'a-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
-}
-
 const VOICE_PROVIDERS: { id: string; name: string; endpoint: string }[] = [
   { id: 'chatanywhere', name: 'ChatAnywhere', endpoint: 'https://api.chatanywhere.org/v1' },
   { id: 'groq',         name: 'Groq',         endpoint: 'https://api.groq.com/openai/v1'  },
