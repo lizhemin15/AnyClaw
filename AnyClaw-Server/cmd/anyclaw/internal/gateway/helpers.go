@@ -144,6 +144,12 @@ func gatewayCmd(debug bool) error {
 		logger.InfoCF("voice", "Transcription enabled (agent-level)", map[string]any{"provider": transcriber.Name()})
 	}
 
+	// Wire up TTS synthesis if OpenAI is configured.
+	if synthesizer := voice.DetectSynthesizer(cfg); synthesizer != nil {
+		agentLoop.SetSynthesizer(synthesizer)
+		logger.InfoCF("voice", "TTS synthesis enabled (agent-level)", map[string]any{"provider": synthesizer.Name()})
+	}
+
 	enabledChannels := channelManager.GetEnabledChannels()
 	if len(enabledChannels) > 0 {
 		fmt.Printf("✔Channels enabled: %s\n", enabledChannels)

@@ -47,6 +47,7 @@ type AgentLoop struct {
 	channelManager *channels.Manager
 	mediaStore     media.MediaStore
 	transcriber    voice.Transcriber
+	synthesizer    voice.Synthesizer
 	cmdRegistry    *commands.Registry
 }
 
@@ -405,11 +406,31 @@ func (al *AgentLoop) SetMediaStore(s media.MediaStore) {
 			sf.SetMediaStore(s)
 		}
 	})
+
+	// Propagate store to speak tools in all agents.
+	al.registry.ForEachTool("speak", func(t tools.Tool) {
+		if st, ok := t.(*tools.SpeakTool); ok {
+			st.SetMediaStore(s)
+		}
+	})
 }
 
 // SetTranscriber injects a voice transcriber for agent-level audio transcription.
 func (al *AgentLoop) SetTranscriber(t voice.Transcriber) {
 	al.transcriber = t
+}
+
+// SetSynthesizer injects a TTS synthesizer and registers the speak tool in all agents.
+func (al *AgentLoop) SetSynthesizer(s voice.Synthesizer) {
+	al.synthesizer = s
+	for _, agentID := range al.registry.ListAgentIDs() {
+		agent, ok := al.registry.GetAgent(agentID)
+		if !ok {
+			continue
+		}
+		speakTool := tools.NewSpeakTool(s, al.mediaStore)
+		agent.Tools.Register(speakTool)
+	}
 }
 
 var audioAnnotationRe = regexp.MustCompile(`\[(voice|audio)(?::[^\]]*)?\]`)

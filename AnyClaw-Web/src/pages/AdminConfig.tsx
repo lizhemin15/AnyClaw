@@ -14,6 +14,11 @@ function genApiId() {
   return 'a-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
 }
 
+const VOICE_PROVIDERS: { id: string; name: string; endpoint: string }[] = [
+  { id: 'chatanywhere', name: 'ChatAnywhere', endpoint: 'https://api.chatanywhere.org/v1' },
+  { id: 'groq',         name: 'Groq',         endpoint: 'https://api.groq.com/openai/v1'  },
+]
+
 function getChannelProvider(ch: Channel): string {
   if (ch.name?.trim()) return ch.name.trim()
   const base = (ch.api_base || 'https://api.openai.com/v1').trim().replace(/\/$/, '')
@@ -78,9 +83,6 @@ export default function AdminConfig() {
   const [correctingChannel, setCorrectingChannel] = useState<Channel | null>(null)
   const [correctedTotal, setCorrectedTotal] = useState('')
   const [correcting, setCorrecting] = useState(false)
-  const [addingVoiceEndpoint, setAddingVoiceEndpoint] = useState(false)
-  const [newVoiceEndpoint, setNewVoiceEndpoint] = useState({ name: '', endpoint: '', api_key: '' })
-  const [editingVoiceEndpoint, setEditingVoiceEndpoint] = useState<string | null>(null)
   const [testingVoiceEndpoint, setTestingVoiceEndpoint] = useState<string | null>(null)
   const [voiceTestResult, setVoiceTestResult] = useState<{ id: string; ok: boolean; message: string; latency?: number } | null>(null)
   const [voiceApiStatus, setVoiceApiStatus] = useState<Record<string, ChannelStatus>>({})
@@ -742,225 +744,109 @@ export default function AdminConfig() {
 
         {/* 语音 API 配置 */}
         <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold text-slate-800">语音 API 配置</h2>
-              <p className="text-xs text-slate-500 mt-0.5">配置语音识别（ASR）和语音合成（TTS）的 API 端点，支持多端点负载均衡。</p>
-            </div>
-            {!addingVoiceEndpoint ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setAddingVoiceEndpoint(true)
-                  setNewVoiceEndpoint({ name: '', endpoint: '', api_key: '' })
-                }}
-                className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-              >
-                + 添加端点
-              </button>
-            ) : (
-              <div className="flex gap-2 items-center flex-wrap">
-                <input
-                  type="text"
-                  value={newVoiceEndpoint.name}
-                  onChange={(e) => setNewVoiceEndpoint((p) => ({ ...p, name: e.target.value }))}
-                  placeholder="名称，如 API-1"
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-28"
-                />
-                <input
-                  type="url"
-                  value={newVoiceEndpoint.endpoint}
-                  onChange={(e) => setNewVoiceEndpoint((p) => ({ ...p, endpoint: e.target.value }))}
-                  placeholder="API 地址，如 https://api.example.com/v1"
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-72"
-                />
-                <input
-                  type="password"
-                  value={newVoiceEndpoint.api_key}
-                  onChange={(e) => setNewVoiceEndpoint((p) => ({ ...p, api_key: e.target.value }))}
-                  placeholder="API Key"
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm w-40 font-mono"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!form || !newVoiceEndpoint.endpoint.trim() || !newVoiceEndpoint.api_key.trim()) return
-                    const ep: VoiceAPIEndpoint = {
-                      id: genApiId(),
-                      name: newVoiceEndpoint.name.trim() || '端点',
-                      endpoint: newVoiceEndpoint.endpoint.trim(),
-                      api_key: newVoiceEndpoint.api_key.trim(),
-                      enabled: true,
-                    }
-                    setForm({ ...form, voice_api: [...(form.voice_api || []), ep] })
-                    setNewVoiceEndpoint({ name: '', endpoint: '', api_key: '' })
-                    setAddingVoiceEndpoint(false)
-                  }}
-                  className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                >
-                  添加
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAddingVoiceEndpoint(false)}
-                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
-                >
-                  取消
-                </button>
-              </div>
-            )}
+          <div className="px-5 py-4 border-b border-slate-200">
+            <h2 className="font-semibold text-slate-800">语音 API 配置</h2>
+            <p className="text-xs text-slate-500 mt-0.5">填写 API Key 后启用对应服务，用于语音识别（ASR）和语音合成（TTS）。</p>
           </div>
-
           <div className="divide-y divide-slate-100">
-            {(form?.voice_api ?? []).length === 0 ? (
-              <div className="px-5 py-8 text-center text-slate-500 text-sm">未配置语音 API 端点，请点击上方添加</div>
-            ) : (
-              (form?.voice_api ?? []).map((ep) => (
-                <div key={ep.id} className="px-5 py-4">
+            {VOICE_PROVIDERS.map((provider) => {
+              const ep = (form?.voice_api ?? []).find((e) => e.id === provider.id)
+              const apiKey = ep?.api_key ?? ''
+              const enabled = ep?.enabled ?? false
+              const hasKey = !!apiKey.trim()
+
+              const upsertProvider = (updates: Partial<VoiceAPIEndpoint>) => {
+                if (!form) return
+                const cur = form.voice_api ?? []
+                const exists = cur.some((e) => e.id === provider.id)
+                const next = exists
+                  ? cur.map((e) => e.id === provider.id ? { ...e, ...updates } : e)
+                  : [...cur, { id: provider.id, name: provider.name, endpoint: provider.endpoint, enabled: false, api_key: '', ...updates }]
+                setForm({ ...form, voice_api: next })
+              }
+
+              return (
+                <div key={provider.id} className="px-5 py-4">
                   <div className="flex items-center gap-4 flex-wrap">
                     <button
                       type="button"
                       role="switch"
-                      aria-checked={ep.enabled}
-                      onClick={() => {
-                        if (!form) return
-                        setForm({
-                          ...form,
-                          voice_api: (form.voice_api || []).map((e) =>
-                            e.id === ep.id ? { ...e, enabled: !e.enabled } : e
-                          ),
-                        })
-                      }}
-                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${
-                        ep.enabled ? 'bg-indigo-600' : 'bg-slate-200'
+                      aria-checked={enabled}
+                      disabled={!hasKey}
+                      onClick={() => upsertProvider({ enabled: !enabled })}
+                      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors disabled:opacity-40 ${
+                        enabled && hasKey ? 'bg-indigo-600' : 'bg-slate-200'
                       }`}
                     >
                       <span
                         className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
-                          ep.enabled ? 'translate-x-4' : 'translate-x-0.5'
+                          enabled && hasKey ? 'translate-x-4' : 'translate-x-0.5'
                         }`}
                       />
                     </button>
-                    <span className="font-medium text-slate-800 min-w-[80px]">{ep.name}</span>
-                    {voiceApiStatus[ep.id] ? (
-                      <span className="flex items-center gap-3 text-xs flex-wrap">
-                        {!ep.enabled ? (
+                    <div className="min-w-[120px]">
+                      <span className="font-medium text-slate-800">{provider.name}</span>
+                      <p className="text-xs text-slate-400 font-mono">{provider.endpoint}</p>
+                    </div>
+                    {voiceApiStatus[provider.id] && hasKey && (
+                      <span className="text-xs">
+                        {!enabled ? (
                           <span className="text-slate-500">手动关闭</span>
-                        ) : voiceApiStatus[ep.id].available ? (
+                        ) : voiceApiStatus[provider.id].available ? (
                           <span className="text-emerald-600">可用</span>
                         ) : (
                           <span className="text-amber-600">系统自动关闭</span>
                         )}
-                        {(voiceApiStatus[ep.id].in_flight ?? 0) > 0 && (
-                          <span className="text-indigo-500">进行中 {voiceApiStatus[ep.id].in_flight}</span>
+                        {(voiceApiStatus[provider.id].in_flight ?? 0) > 0 && (
+                          <span className="ml-2 text-indigo-500">进行中 {voiceApiStatus[provider.id].in_flight}</span>
                         )}
                       </span>
-                    ) : (
-                      <span className="text-xs text-slate-400">{ep.enabled ? '已启用' : '手动关闭'}</span>
                     )}
-                    {editingVoiceEndpoint === ep.id ? (
-                      <div className="flex gap-2 flex-1 flex-wrap items-center">
-                        <input
-                          type="url"
-                          value={ep.endpoint}
-                          onChange={(e) => {
-                            if (!form) return
-                            setForm({
-                              ...form,
-                              voice_api: (form.voice_api || []).map((a) =>
-                                a.id === ep.id ? { ...a, endpoint: e.target.value } : a
-                              ),
-                            })
-                          }}
-                          placeholder="API 地址"
-                          className="px-3 py-1.5 border border-slate-300 rounded text-sm w-56"
-                        />
-                        <input
-                          type="password"
-                          value={ep.api_key}
-                          onChange={(e) => {
-                            if (!form) return
-                            setForm({
-                              ...form,
-                              voice_api: (form.voice_api || []).map((a) =>
-                                a.id === ep.id ? { ...a, api_key: e.target.value } : a
-                              ),
-                            })
-                          }}
-                          placeholder="API Key"
-                          className="px-3 py-1.5 border border-slate-300 rounded text-sm font-mono w-40"
-                        />
-                        <button type="button" onClick={() => setEditingVoiceEndpoint(null)} className="text-sm text-slate-600">
-                          完成
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-slate-500 truncate max-w-[300px]">
-                        {ep.api_key ? '****' + ep.api_key.slice(-4) : '—'} · {ep.endpoint || '—'}
-                      </span>
-                    )}
-                    {editingVoiceEndpoint !== ep.id && (
-                      <button
-                        type="button"
-                        onClick={() => setEditingVoiceEndpoint(ep.id)}
-                        className="text-sm text-indigo-600 hover:text-indigo-700"
-                      >
-                        编辑
-                      </button>
-                    )}
+                    <input
+                      type="password"
+                      value={apiKey}
+                      onChange={(e) => upsertProvider({ api_key: e.target.value, enabled: !!e.target.value.trim() && enabled })}
+                      placeholder="API Key"
+                      className="px-3 py-1.5 border border-slate-300 rounded text-sm font-mono w-52"
+                    />
                     <button
                       type="button"
                       onClick={async () => {
-                        const apiKeyMasked = (ep.api_key?.trim() || '').startsWith('****')
-                        if (!ep.api_key?.trim()) {
-                          setVoiceTestResult({ id: ep.id, ok: false, message: '请先填写 API Key' })
+                        if (!hasKey) {
+                          setVoiceTestResult({ id: provider.id, ok: false, message: '请先填写 API Key' })
                           return
                         }
-                        setTestingVoiceEndpoint(ep.id)
+                        const masked = apiKey.startsWith('****')
+                        setTestingVoiceEndpoint(provider.id)
                         setVoiceTestResult(null)
                         try {
                           const res = await testVoiceAPIConfig(
-                            apiKeyMasked
-                              ? { endpoint_id: ep.id }
-                              : { endpoint_id: ep.id, endpoint: ep.endpoint?.trim(), api_key: ep.api_key.trim() }
+                            masked
+                              ? { endpoint_id: provider.id }
+                              : { endpoint_id: provider.id, endpoint: provider.endpoint, api_key: apiKey.trim() }
                           )
-                          setVoiceTestResult({ id: ep.id, ok: res.ok, message: res.message + (res.latency != null ? ` (${res.latency}ms)` : ''), latency: res.latency })
+                          setVoiceTestResult({ id: provider.id, ok: res.ok, message: res.message + (res.latency != null ? ` (${res.latency}ms)` : ''), latency: res.latency })
                         } catch (err) {
-                          setVoiceTestResult({ id: ep.id, ok: false, message: err instanceof Error ? err.message : '测试失败' })
+                          setVoiceTestResult({ id: provider.id, ok: false, message: err instanceof Error ? err.message : '测试失败' })
                         } finally {
                           setTestingVoiceEndpoint(null)
                         }
                       }}
-                      disabled={testingVoiceEndpoint === ep.id || !ep.api_key?.trim()}
+                      disabled={testingVoiceEndpoint === provider.id}
                       className="text-sm text-slate-600 hover:text-slate-800 disabled:opacity-50"
                     >
-                      {testingVoiceEndpoint === ep.id ? '测试中...' : '测试连通性'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!form) return
-                        setForm({ ...form, voice_api: (form.voice_api || []).filter((a) => a.id !== ep.id) })
-                        setEditingVoiceEndpoint(null)
-                      }}
-                      className="text-sm text-red-600 hover:text-red-700"
-                    >
-                      删除
+                      {testingVoiceEndpoint === provider.id ? '测试中...' : '测试'}
                     </button>
                   </div>
-                  {voiceTestResult?.id === ep.id && (
-                    <div
-                      className={`mt-2 text-xs px-3 py-1.5 rounded ${
-                        voiceTestResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
-                      }`}
-                    >
+                  {voiceTestResult?.id === provider.id && (
+                    <div className={`mt-2 text-xs px-3 py-1.5 rounded ${voiceTestResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
                       {voiceTestResult.ok ? '✓ ' : '✗ '}
                       {voiceTestResult.message}
                     </div>
                   )}
                 </div>
-              ))
-            )}
+              )
+            })}
           </div>
         </div>
 

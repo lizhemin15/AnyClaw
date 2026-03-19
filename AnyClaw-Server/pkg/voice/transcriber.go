@@ -23,33 +23,15 @@ type Transcriber interface {
 	Transcribe(ctx context.Context, audioFilePath string) (*TranscriptionResponse, error)
 }
 
-type GroqTranscriber struct {
-	apiKey     string
-	apiBase    string
-	httpClient *http.Client
-}
-
 type TranscriptionResponse struct {
 	Text     string  `json:"text"`
 	Language string  `json:"language,omitempty"`
 	Duration float64 `json:"duration,omitempty"`
 }
 
-func NewGroqTranscriber(apiKey string) *GroqTranscriber {
-	logger.DebugCF("voice", "Creating Groq transcriber", map[string]any{"has_api_key": apiKey != ""})
-
-	apiBase := "https://api.groq.com/openai/v1"
-	return &GroqTranscriber{
-		apiKey:  apiKey,
-		apiBase: apiBase,
-		httpClient: &http.Client{
-			Timeout: 60 * time.Second,
-		},
-	}
-}
-
-func (t *GroqTranscriber) Transcribe(ctx context.Context, audioFilePath string) (*TranscriptionResponse, error) {
-	logger.InfoCF("voice", "Starting transcription", map[string]any{"audio_file": audioFilePath})
+// whisperTranscribe is the shared HTTP implementation for OpenAI-compatible Whisper APIs.
+func whisperTranscribe(ctx context.Context, apiKey, apiBase, model string, client *http.Client, audioFilePath string) (*TranscriptionResponse, error) {
+	logger.InfoCF("voice", "Starting transcription", map[string]any{"audio_file": audioFilePath, "model": model})
 
 	audioFile, err := os.Open(audioFilePath)
 	if err != nil {
@@ -86,7 +68,7 @@ func (t *GroqTranscriber) Transcribe(ctx context.Context, audioFilePath string) 
 
 	logger.DebugCF("voice", "File copied to request", map[string]any{"bytes_copied": copied})
 
-	if err = writer.WriteField("model", "whisper-large-v3"); err != nil {
+	if err = writer.WriteField("model", model); err != nil {
 		logger.ErrorCF("voice", "Failed to write model field", map[string]any{"error": err})
 		return nil, fmt.Errorf("failed to write model field: %w", err)
 	}
@@ -101,23 +83,23 @@ func (t *GroqTranscriber) Transcribe(ctx context.Context, audioFilePath string) 
 		return nil, fmt.Errorf("failed to close multipart writer: %w", err)
 	}
 
-	url := t.apiBase + "/audio/transcriptions"
-	req, err := http.NewRequestWithContext(ctx, "POST", url, &requestBody)
+	reqURL := apiBase + "/audio/transcriptions"
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, &requestBody)
 	if err != nil {
 		logger.ErrorCF("voice", "Failed to create request", map[string]any{"error": err})
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	req.Header.Set("Authorization", "Bearer "+t.apiKey)
+	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	logger.DebugCF("voice", "Sending transcription request to Groq API", map[string]any{
-		"url":                url,
+	logger.DebugCF("voice", "Sending transcription request", map[string]any{
+		"url":                reqURL,
 		"request_size_bytes": requestBody.Len(),
 		"file_size_bytes":    fileInfo.Size(),
 	})
 
-	resp, err := t.httpClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		logger.ErrorCF("voice", "Failed to send request", map[string]any{"error": err})
 		return nil, fmt.Errorf("failed to send request: %w", err)
@@ -138,7 +120,7 @@ func (t *GroqTranscriber) Transcribe(ctx context.Context, audioFilePath string) 
 		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
-	logger.DebugCF("voice", "Received response from Groq API", map[string]any{
+	logger.DebugCF("voice", "Received transcription response", map[string]any{
 		"status_code":         resp.StatusCode,
 		"response_size_bytes": len(body),
 	})
@@ -159,14 +141,76 @@ func (t *GroqTranscriber) Transcribe(ctx context.Context, audioFilePath string) 
 	return &result, nil
 }
 
+// OpenAITranscriber uses OpenAI Whisper (whisper-1) for transcription.
+type OpenAITranscriber struct {
+	apiKey     string
+	apiBase    string
+	httpClient *http.Client
+}
+
+func NewOpenAITranscriber(apiKey, apiBase string) *OpenAITranscriber {
+	if apiBase == "" {
+		apiBase = "https://api.chatanywhere.org/v1"
+	}
+	logger.DebugCF("voice", "Creating OpenAI transcriber", map[string]any{"has_api_key": apiKey != "", "api_base": apiBase})
+	return &OpenAITranscriber{
+		apiKey:  apiKey,
+		apiBase: apiBase,
+		httpClient: &http.Client{
+			Timeout: 60 * time.Second,
+		},
+	}
+}
+
+func (t *OpenAITranscriber) Transcribe(ctx context.Context, audioFilePath string) (*TranscriptionResponse, error) {
+	return whisperTranscribe(ctx, t.apiKey, t.apiBase, "whisper-1", t.httpClient, audioFilePath)
+}
+
+func (t *OpenAITranscriber) Name() string {
+	return "openai"
+}
+
+// GroqTranscriber uses Groq Whisper (whisper-large-v3) for transcription.
+type GroqTranscriber struct {
+	apiKey     string
+	apiBase    string
+	httpClient *http.Client
+}
+
+func NewGroqTranscriber(apiKey string) *GroqTranscriber {
+	logger.DebugCF("voice", "Creating Groq transcriber", map[string]any{"has_api_key": apiKey != ""})
+	return &GroqTranscriber{
+		apiKey:  apiKey,
+		apiBase: "https://api.groq.com/openai/v1",
+		httpClient: &http.Client{
+			Timeout: 60 * time.Second,
+		},
+	}
+}
+
+func (t *GroqTranscriber) Transcribe(ctx context.Context, audioFilePath string) (*TranscriptionResponse, error) {
+	return whisperTranscribe(ctx, t.apiKey, t.apiBase, "whisper-large-v3", t.httpClient, audioFilePath)
+}
+
 func (t *GroqTranscriber) Name() string {
 	return "groq"
 }
 
 // DetectTranscriber inspects cfg and returns the appropriate Transcriber, or
 // nil if no supported transcription provider is configured.
+// Priority: OpenAI > Groq.
 func DetectTranscriber(cfg *config.Config) Transcriber {
-	// Direct Groq provider config takes priority.
+	// OpenAI provider takes highest priority.
+	if key := cfg.Providers.OpenAI.APIKey; key != "" {
+		return NewOpenAITranscriber(key, cfg.Providers.OpenAI.APIBase)
+	}
+	// Check model list for openai/ protocol entries.
+	for _, mc := range cfg.ModelList {
+		if strings.HasPrefix(mc.Model, "openai/") && mc.APIKey != "" {
+			return NewOpenAITranscriber(mc.APIKey, mc.APIBase)
+		}
+	}
+	// Fall back to Groq provider config.
 	if key := cfg.Providers.Groq.APIKey; key != "" {
 		return NewGroqTranscriber(key)
 	}
