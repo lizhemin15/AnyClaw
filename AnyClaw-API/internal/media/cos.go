@@ -46,8 +46,8 @@ func UploadToCOS(ctx context.Context, cfg *config.COSConfig, reader io.Reader, f
 
 	opt := &cos.ObjectPutOptions{
 		ObjectPutHeaderOptions: &cos.ObjectPutHeaderOptions{
-			ContentType: contentType,
-			XCosACL:     "public-read",
+			ContentType:   contentType,
+			XOptionHeader: &http.Header{"x-cos-acl": []string{"public-read"}},
 		},
 	}
 	_, err := client.Object.Put(ctx, key, reader, opt)
