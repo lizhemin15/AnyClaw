@@ -18,7 +18,7 @@ const ASR_PROVIDERS: { id: string; name: string; endpoint: string }[] = [
 // TTS（语音合成）Groq 不支持，Xiaomi MiMo 为小米 TTS
 const TTS_PROVIDERS: { id: string; name: string; endpoint: string }[] = [
   { id: 'chatanywhere', name: 'ChatAnywhere', endpoint: 'https://api.chatanywhere.org/v1' },
-  { id: 'xiaomi_mimo',  name: 'Xiaomi MiMo',  endpoint: 'https://platform.xiaomimimo.com/api/v1' },
+  { id: 'xiaomi_mimo',  name: 'Xiaomi MiMo',  endpoint: 'https://api.xiaomimimo.com/v1' },
 ]
 
 function getChannelProvider(ch: Channel): string {

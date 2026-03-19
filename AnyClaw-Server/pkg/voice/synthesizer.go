@@ -100,7 +100,7 @@ func (s *OpenAISynthesizer) Synthesize(ctx context.Context, text, voiceID string
 }
 
 // XiaomiMiMoSynthesizer uses Xiaomi MiMo TTS (platform.xiaomimimo.com) for speech synthesis.
-// API format differs from OpenAI: uses model, text, voice_id, response_format.
+// API format: model, input, voice, format (OpenAI /audio/speech compatible).
 // Docs: https://platform.xiaomimimo.com/#/docs/usage-guide/speech-synthesis
 type XiaomiMiMoSynthesizer struct {
 	apiKey     string
@@ -111,7 +111,7 @@ type XiaomiMiMoSynthesizer struct {
 
 func NewXiaomiMiMoSynthesizer(apiKey, apiBase, model string) *XiaomiMiMoSynthesizer {
 	if apiBase == "" {
-		apiBase = "https://platform.xiaomimimo.com/api/v1"
+		apiBase = "https://api.xiaomimimo.com/v1"
 	}
 	if model == "" {
 		model = "mimo-v2-tts"
@@ -194,6 +194,9 @@ func (s *XiaomiMiMoSynthesizer) Synthesize(ctx context.Context, text, voiceID st
 //           XIAOMI_MIMO_API_KEY (Xiaomi TTS) > providers.xiaomi_mimo > model_list xiaomi_mimo/ >
 //           providers.openai > model_list openai/.
 func DetectSynthesizer(cfg *config.Config) Synthesizer {
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
 	// New scheduler: dedicated TTS key (skipped for Groq endpoints).
 	if key := os.Getenv("ANYCLAW_TTS_API_KEY"); key != "" {
 		base := os.Getenv("ANYCLAW_TTS_API_BASE")

@@ -27,7 +27,7 @@ metadata: {"nanobot":{"emoji":"🔊"}}
 示例：ASR 用 ChatAnywhere、TTS 用 Xiaomi：
 ```json
 "voice_api": [{"id":"asr","name":"ChatAnywhere","endpoint":"https://api.chatanywhere.org/v1","api_key":"sk-xxx","enabled":true}],
-"tts_api": [{"id":"tts","name":"Xiaomi MiMo","endpoint":"https://platform.xiaomimimo.com/api/v1","api_key":"your-key","enabled":true}]
+"tts_api": [{"id":"tts","name":"Xiaomi MiMo","endpoint":"https://api.xiaomimimo.com/v1","api_key":"your-key","enabled":true}]
 ```
 
 **方式一：环境变量**
@@ -39,7 +39,7 @@ metadata: {"nanobot":{"emoji":"🔊"}}
 "providers": {
   "xiaomi_mimo": {
     "api_key": "your-key",
-    "api_base": "https://platform.xiaomimimo.com/api/v1",
+    "api_base": "https://api.xiaomimimo.com/v1",
     "tts_model": "mimo-v2-tts"
   }
 }
@@ -47,7 +47,7 @@ metadata: {"nanobot":{"emoji":"🔊"}}
 
 **方式三：model_list**
 ```json
-{"model": "xiaomi_mimo/mimo-v2-tts", "api_key": "your-key", "api_base": "https://platform.xiaomimimo.com/api/v1"}
+{"model": "xiaomi_mimo/mimo-v2-tts", "api_key": "your-key", "api_base": "https://api.xiaomimimo.com/v1"}
 ```
 
 ### 可用音色（voice 参数）
@@ -62,13 +62,56 @@ metadata: {"nanobot":{"emoji":"🔊"}}
 | nova | 女声、活泼 |
 | shimmer | 女声、温柔 |
 
-**小米 MiMo TTS（platform.xiaomimimo.com）：**
+**小米 MiMo TTS（api.xiaomimimo.com）：**
 | 音色 | 说明 |
 |------|------|
-| default | 默认音色 |
-| female | 女声 |
-| male | 男声 |
-| 其他 | 以平台文档为准：https://platform.xiaomimimo.com/#/docs/usage-guide/speech-synthesis |
+| default / mimo_default | 默认音色 |
+| default_zh | 中文女声 |
+| default_en | 英文女声 |
+| female / male | 女声/男声（以实际 API 为准） |
+
+### 小米 MiMo TTS 接口说明（内联，与 synthesizer.go 一致）
+
+- **Endpoint**：`POST {api_base}/audio/speech`（如 `https://api.xiaomimimo.com/v1/audio/speech`）
+- **Headers**：`Content-Type: application/json`，`Authorization: Bearer {api_key}`
+- **Request body**：
+  | 参数 | 类型 | 说明 |
+  |------|------|------|
+  | model | string | 模型，默认 `mimo-v2-tts` |
+  | input | string | 待合成文本 |
+  | voice | string | 音色：default / mimo_default / default_zh / default_en |
+  | format | string | 输出格式，如 `mp3` |
+- **Response**：二进制 MP3 音频流
+- **API Key**：在 platform.xiaomimimo.com 控制台创建，使用 API Key 认证，**不是** OAuth 或小米账号授权
+
+**curl 示例**（与代码实现一致）：
+```bash
+curl -X POST "https://api.xiaomimimo.com/v1/audio/speech" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{"model":"mimo-v2-tts","input":"你好","voice":"default","format":"mp3"}' \
+  --output speech.mp3
+```
+
+### 小米 MiMo 风格与语气控制（内联自平台文档）
+
+**整体风格**：在文本开头加 `<style>风格名</style>`，可组合多个风格：`<style>风格1 风格2</style>内容`。下表为推荐风格，未列出的风格也可尝试。
+
+| 风格 | 说明 | 示例 |
+|------|------|------|
+| Happy | 开心、愉悦 | `<style>Happy</style>明天周五啦，好开心！` |
+| Whisper | 低语、悄悄话 | `<style>Whisper</style>天哪，今天好冷啊！那风呼呼的，像刀子割脸一样！` |
+| 唱歌 | 歌声合成 | `<style>唱歌</style>歌词内容`（**唱歌必须**在文本最开头加此标签） |
+
+**细粒度音效标签**：用 `[标签]` 或 `(标签)` 控制咳嗽、喘息、叹气、抽泣、笑声等。
+
+| 标签 | 效果 | 示例 |
+|------|------|------|
+| [cough] | 咳嗽 | `阿嚏！咳。我—我真是 [cough] 觉得要感冒了 [cough] 重感冒。` |
+| [heavy breathing] | 喘息 | `[heavy breathing] 等……等一下。我……从车站……一路跑过来的。` |
+| long sigh | 长叹 | `我就是觉得…… long sigh ……像一直在踩水，你知道吗？` |
+| (sobbing) | 抽泣 | `太蠢了！(sobbing) 我们花那么多钱买蛋糕，狗却……(sudden laugh) 一口全吃光了！` |
+| (sudden laugh) | 突然笑 | 见上例 |
 
 ## 何时调用 speak
 
@@ -100,6 +143,24 @@ speak(text="今天北京天气晴，气温 18 到 26 度，适合出行。", voi
 speak(text="你好，我是你的 AI 助手。", voice="shimmer")
 ```
 
+**小米 MiMo TTS 调用示例**（接口格式见上方「小米 MiMo TTS 接口说明」）：
+```
+speak(text="你好，欢迎使用小米语音。", voice="default")
+speak(text="这是一段女声朗读。", voice="female")
+speak(text="这是一段男声朗读。", voice="male")
+```
+
+**小米 MiMo 风格示例**（唱歌、语气、情感）：
+```
+speak(text="<style>Happy</style>明天周五啦，好开心！", voice="default")
+speak(text="<style>Whisper</style>天哪，今天好冷啊！那风呼呼的，像刀子割脸一样！", voice="default")
+speak(text="<style>唱歌</style>一闪一闪亮晶晶，满天都是小星星。", voice="default")
+speak(text="阿嚏！咳。我真是 [cough] 觉得要感冒了 [cough] 重感冒。", voice="default")
+speak(text="[heavy breathing] 等……等一下。我从车站一路跑过来的。", voice="default")
+speak(text="我就是觉得…… long sigh ……像一直在踩水，你知道吗？", voice="default")
+speak(text="太蠢了！(sobbing) 我们花那么多钱买蛋糕，狗却……(sudden laugh) 一口全吃光了！", voice="default")
+```
+
 ## 与定时任务（cron）结合
 
 当用户要求定时发语音提醒时，**必须将 `deliver` 设为 `false`**，让 agent 在触发时处理消息并调用 speak，而不是直接推送文字。
@@ -125,11 +186,11 @@ cron(
 
 - **小米 MiMo TTS** 使用 **API Key**（在 platform.xiaomimimo.com 控制台创建），**不是** OAuth 或「小米账号授权」。
 - **不要说**「Token 过期」「点击链接重新登录」「小米账号授权」——这些不适用于 MiMo API。
-- **正确说法**：请管理员在管理后台 → 配置 → 语音合成 (TTS) 中检查 Xiaomi MiMo 的 API Key 是否正确，保存后需**重启实例**使新配置生效。API Key 在 https://platform.xiaomimimo.com/#/console/api-keys 创建。
+- **正确说法**：请管理员在管理后台 → 配置 → 语音合成 (TTS) 中检查 Xiaomi MiMo 的 API Key 和 Endpoint。Endpoint 建议用 `https://api.xiaomimimo.com/v1`（若 platform.xiaomimimo.com 返回 401 带 loginUrl，请改用 api 域名）。API Key 在平台控制台创建。接口格式见本 SKILL 上方「小米 MiMo TTS 接口说明」。
 
 ## 注意事项
 
-- `text` 参数只传要说的内容，不要包含 markdown、表情符号等非朗读文本
+- `text` 参数只传要说的内容，不要包含 markdown、表情符号等非朗读文本（**小米 MiMo 除外**：可含 `<style>风格</style>` 和 `[cough]`、`(sobbing)` 等音效标签）
 - 长文本建议拆分为自然段落，分多次调用
 - **调用 speak 后不要再额外输出文字**——语音本身就是回复，无需重复说一遍或解释"已为你合成语音"之类的话
 - 用户要求语音回复时，直接调用 speak，不要先说"好的，我来……"等铺垫语

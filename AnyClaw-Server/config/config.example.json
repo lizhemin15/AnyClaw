@@ -219,7 +219,7 @@
     },
     "xiaomi_mimo": {
       "api_key": "",
-      "api_base": "https://platform.xiaomimimo.com/api/v1",
+      "api_base": "https://api.xiaomimimo.com/v1",
       "tts_model": "mimo-v2-tts"
     },
     "openrouter": {
