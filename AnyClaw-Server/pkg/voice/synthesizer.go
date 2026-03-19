@@ -153,11 +153,17 @@ func (s *XiaomiMiMoSynthesizer) Synthesize(ctx context.Context, text, voiceID st
 		"text_length": len(text),
 	})
 
+	// user 侧明确说明标签语义，避免模型把 <style>/[]/() 当普通文字略读
+	userHint := os.Getenv("XIAOMI_MIMO_TTS_USER_HINT")
+	if userHint == "" {
+		userHint = "请对下一条 assistant 消息做语音合成：完整保留并按平台规则渲染其中的 MiMo 控制标记，包括开头的 <style>…</style>（整体风格/唱歌等）、英文方括号 [] 与圆括号 () 内的音效与语气词、以及文本中的 long sigh 等停顿提示；不要改写、不要去掉这些标记，也不要扩展剧本外的台词。"
+	}
+
 	// Xiaomi MiMo TTS: POST /v1/chat/completions with messages + audio, api-key header.
 	body := map[string]any{
 		"model": s.model,
 		"messages": []map[string]string{
-			{"role": "user", "content": "Please read the following text."},
+			{"role": "user", "content": userHint},
 			{"role": "assistant", "content": text},
 		},
 		"audio": map[string]string{

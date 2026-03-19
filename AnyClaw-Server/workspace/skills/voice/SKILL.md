@@ -16,7 +16,9 @@ metadata: {"nanobot":{"emoji":"🔊"}}
 
 ## speak 工具说明
 
-`speak` 工具将文本合成为语音（MP3）并直接发送给用户，支持飞书和网页端。
+`speak` 工具将文本合成为语音（MP3/WAV，依 TTS 提供商）并直接发送给用户，支持飞书和网页端。
+
+**小米 MiMo 专用参数 `style`（可选）**：与 `text` 并列传入时，服务端会前置 `<style>…</style>`（若 `text` 本身已以 `<style>` 开头则不再重复包裹）。便于模型只填情感/场景词，例如 `style="Whisper"`、`style="唱歌"`。
 
 ### 配置方式
 
@@ -149,6 +151,7 @@ speak(text="This is English female voice.", voice="default_en")
 
 **小米 MiMo 风格示例**（唱歌、语气、情感）：
 ```
+speak(text="明天周五啦，好开心！", style="Happy", voice="mimo_default")
 speak(text="<style>Happy</style>明天周五啦，好开心！", voice="mimo_default")
 speak(text="<style>Whisper</style>天哪，今天好冷啊！那风呼呼的，像刀子割脸一样！", voice="mimo_default")
 speak(text="<style>唱歌</style>一闪一闪亮晶晶，满天都是小星星。", voice="mimo_default")

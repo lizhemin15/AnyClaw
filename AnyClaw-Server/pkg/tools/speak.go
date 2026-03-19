@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/anyclaw/anyclaw-server/pkg/media"
 	"github.com/anyclaw/anyclaw-server/pkg/voice"
@@ -26,7 +27,7 @@ func NewSpeakTool(synthesizer voice.Synthesizer, store media.MediaStore) *SpeakT
 func (t *SpeakTool) Name() string { return "speak" }
 
 func (t *SpeakTool) Description() string {
-	return "Synthesize text to speech and send it as an audio message to the user. Use when the user requests a voice reply or when audio output is appropriate."
+	return "Synthesize text to speech and send it as an audio message to the user. Use when the user requests a voice reply or when audio output is appropriate. When TTS is Xiaomi MiMo, prefer richer delivery: use optional style (e.g. Happy, Whisper, 唱歌) and/or embed MiMo tags in text (<style>…</style>, [cough], (sobbing), long sigh, etc.) per the voice skill."
 }
 
 func (t *SpeakTool) Parameters() map[string]any {
@@ -35,7 +36,11 @@ func (t *SpeakTool) Parameters() map[string]any {
 		"properties": map[string]any{
 			"text": map[string]any{
 				"type":        "string",
-				"description": "Text to synthesize into speech.",
+				"description": "Text to synthesize into speech. For Xiaomi MiMo, may include <style>…</style>, [cough], (laugh), long sigh, etc.",
+			},
+			"style": map[string]any{
+				"type":        "string",
+				"description": "Xiaomi MiMo only: overall style prepended as <style>…</style> (e.g. Happy, Whisper, 唱歌; multiple words allowed). Ignored for OpenAI. Omit if text already starts with <style>.",
 			},
 			"voice": map[string]any{
 				"type":        "string",
@@ -65,6 +70,13 @@ func (t *SpeakTool) Execute(ctx context.Context, args map[string]any) *ToolResul
 		return ErrorResult("text is required")
 	}
 	voiceID, _ := args["voice"].(string)
+	style, _ := args["style"].(string)
+	if style != "" && t.synthesizer != nil && t.synthesizer.Name() == "xiaomi_mimo" {
+		trimmed := strings.TrimSpace(text)
+		if !strings.HasPrefix(strings.ToLower(trimmed), "<style>") {
+			text = fmt.Sprintf("<style>%s</style>%s", strings.TrimSpace(style), text)
+		}
+	}
 
 	channel := ToolChannel(ctx)
 	if channel == "" {
@@ -90,10 +102,16 @@ func (t *SpeakTool) Execute(ctx context.Context, args map[string]any) *ToolResul
 		return ErrorResult(fmt.Sprintf("TTS synthesis failed: %v", err)).WithError(err)
 	}
 
+	filename := "speech.mp3"
+	contentType := "audio/mpeg"
+	if strings.HasSuffix(strings.ToLower(path), ".wav") {
+		filename = "speech.wav"
+		contentType = "audio/wav"
+	}
 	scope := fmt.Sprintf("tool:speak:%s:%s", channel, chatID)
 	ref, err := t.mediaStore.Store(path, media.MediaMeta{
-		Filename:    "speech.mp3",
-		ContentType: "audio/mpeg",
+		Filename:    filename,
+		ContentType: contentType,
 		Source:      "tool:speak",
 	}, scope)
 	if err != nil {
