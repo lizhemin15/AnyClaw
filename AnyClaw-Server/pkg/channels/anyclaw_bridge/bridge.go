@@ -345,9 +345,9 @@ func (c *BridgeChannel) handleMessageSend(bc *bridgeConn, msg pico.PicoMessage) 
 				}
 			}
 		}
-		if strings.TrimSpace(content) == "" {
-			content = "[audio]"
-		}
+		// Always use [audio] so transcribeAudioInMessage can locate and replace it,
+		// and to prevent the LLM from treating any markdown URL as a fetchable link.
+		content = "[audio]"
 	}
 
 	logger.DebugCF(channelName, "Received message", map[string]any{

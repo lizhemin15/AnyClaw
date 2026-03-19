@@ -198,9 +198,14 @@ func (t *GroqTranscriber) Name() string {
 
 // DetectTranscriber inspects cfg and returns the appropriate Transcriber, or
 // nil if no supported transcription provider is configured.
-// Priority: OpenAI > Groq.
+// Priority: env ANYCLAW_VOICE_API_KEY > OpenAI provider > model_list openai/ > Groq.
 func DetectTranscriber(cfg *config.Config) Transcriber {
-	// OpenAI provider takes highest priority.
+	// Highest priority: dedicated voice API env vars (injected by scheduler at container start).
+	if key := os.Getenv("ANYCLAW_VOICE_API_KEY"); key != "" {
+		base := os.Getenv("ANYCLAW_VOICE_API_BASE")
+		return NewOpenAITranscriber(key, base)
+	}
+	// OpenAI provider config.
 	if key := cfg.Providers.OpenAI.APIKey; key != "" {
 		return NewOpenAITranscriber(key, cfg.Providers.OpenAI.APIBase)
 	}

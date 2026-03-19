@@ -20,7 +20,7 @@ RUN make build
 # ============================================================
 FROM alpine:3.23
 
-RUN apk add --no-cache ca-certificates tzdata curl bash
+RUN apk add --no-cache ca-certificates tzdata curl bash ffmpeg
 ENV TZ=Asia/Shanghai
 
 # 预装 Skillhub CLI（腾讯云镜像，国内加速、合规）

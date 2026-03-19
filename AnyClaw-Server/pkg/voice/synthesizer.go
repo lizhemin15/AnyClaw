@@ -99,8 +99,27 @@ func (s *OpenAISynthesizer) Synthesize(ctx context.Context, text, voiceID string
 	return tmpFile.Name(), nil
 }
 
-// DetectSynthesizer inspects cfg and returns a Synthesizer if OpenAI is configured.
+// DetectSynthesizer inspects cfg and returns a Synthesizer if a TTS-capable provider is configured.
+// Priority: ANYCLAW_TTS_API_KEY (new scheduler, ChatAnywhere only) >
+//           ANYCLAW_VOICE_API_KEY (old scheduler, backward-compat) >
+//           OpenAI provider config > model_list openai/.
+// ANYCLAW_TTS_API_KEY is only injected for providers that support TTS (e.g. ChatAnywhere),
+// NOT for ASR-only providers like Groq.
+// ANYCLAW_VOICE_API_KEY is the legacy key used by older scheduler versions.
 func DetectSynthesizer(cfg *config.Config) Synthesizer {
+	// New scheduler: dedicated TTS key (skipped for Groq endpoints).
+	if key := os.Getenv("ANYCLAW_TTS_API_KEY"); key != "" {
+		base := os.Getenv("ANYCLAW_TTS_API_BASE")
+		return NewOpenAISynthesizer(key, base)
+	}
+	// Old scheduler: fall back to ANYCLAW_VOICE_API_KEY for backward compatibility.
+	// Skip Groq endpoints — Groq does not support TTS.
+	if key := os.Getenv("ANYCLAW_VOICE_API_KEY"); key != "" {
+		base := os.Getenv("ANYCLAW_VOICE_API_BASE")
+		if !strings.Contains(strings.ToLower(base), "groq.com") {
+			return NewOpenAISynthesizer(key, base)
+		}
+	}
 	if key := cfg.Providers.OpenAI.APIKey; key != "" {
 		return NewOpenAISynthesizer(key, cfg.Providers.OpenAI.APIBase)
 	}

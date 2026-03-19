@@ -31,6 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   git \
   python3 \
   python3-pip \
+  ffmpeg \
   && rm -rf /var/lib/apt/lists/*
 
 # Headless browser support for agent-browser / Playwright / Puppeteer.

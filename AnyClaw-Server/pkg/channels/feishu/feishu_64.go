@@ -28,6 +28,7 @@ import (
 	"github.com/anyclaw/anyclaw-server/pkg/logger"
 	"github.com/anyclaw/anyclaw-server/pkg/media"
 	"github.com/anyclaw/anyclaw-server/pkg/utils"
+	"github.com/anyclaw/anyclaw-server/pkg/voice"
 )
 
 type FeishuChannel struct {
@@ -317,6 +318,31 @@ func (c *FeishuChannel) sendMediaPart(
 	switch part.Type {
 	case "image":
 		err = c.sendImage(ctx, chatID, file)
+	case "audio":
+		// Try to convert to Opus for native voice message; fall back to file on failure.
+		// ffmpeg accesses the file by path, the Go handle can stay open.
+		opusPath, converted, convErr := voice.ConvertToOpus(localPath)
+		if convErr != nil {
+			logger.WarnCF("feishu", "Audio conversion failed, sending as file", map[string]any{"error": convErr.Error()})
+		}
+		if converted {
+			defer os.Remove(opusPath)
+			opusFile, openErr := os.Open(opusPath)
+			if openErr == nil {
+				defer opusFile.Close()
+				err = c.sendAudio(ctx, chatID, opusFile)
+			} else {
+				err = openErr
+			}
+		} else {
+			// ffmpeg unavailable or conversion failed: send original as generic file.
+			// Reuse the already-open file handle; defer file.Close() covers cleanup.
+			filename := part.Filename
+			if filename == "" {
+				filename = "audio.mp3"
+			}
+			err = c.sendFile(ctx, chatID, file, filename, "audio")
+		}
 	default:
 		filename := part.Filename
 		if filename == "" {
@@ -774,11 +800,10 @@ func (c *FeishuChannel) sendImage(ctx context.Context, chatID string, file *os.F
 
 // sendFile uploads a file and sends it as a message.
 func (c *FeishuChannel) sendFile(ctx context.Context, chatID string, file *os.File, filename, fileType string) error {
-	// Map part type to Feishu file type
+	// Map part type to Feishu file type.
+	// Note: "opus" requires actual Opus-encoded audio; for MP3/AAC/etc. use "stream".
 	feishuFileType := "stream"
 	switch fileType {
-	case "audio":
-		feishuFileType = "opus"
 	case "video":
 		feishuFileType = "mp4"
 	}
@@ -822,6 +847,49 @@ func (c *FeishuChannel) sendFile(ctx context.Context, chatID string, file *os.Fi
 	}
 	if !resp.Success() {
 		return fmt.Errorf("feishu file send api error (code=%d msg=%s)", resp.Code, resp.Msg)
+	}
+	return nil
+}
+
+// sendAudio uploads an Opus audio file and sends it as a Feishu audio (voice) message.
+func (c *FeishuChannel) sendAudio(ctx context.Context, chatID string, file *os.File) error {
+	uploadReq := larkim.NewCreateFileReqBuilder().
+		Body(larkim.NewCreateFileReqBodyBuilder().
+			FileType("opus").
+			FileName(filepath.Base(file.Name())).
+			File(file).
+			Build()).
+		Build()
+
+	uploadResp, err := c.client.Im.V1.File.Create(ctx, uploadReq)
+	if err != nil {
+		return fmt.Errorf("feishu audio upload: %w", err)
+	}
+	if !uploadResp.Success() {
+		return fmt.Errorf("feishu audio upload api error (code=%d msg=%s)", uploadResp.Code, uploadResp.Msg)
+	}
+	if uploadResp.Data == nil || uploadResp.Data.FileKey == nil {
+		return fmt.Errorf("feishu audio upload: no file_key returned")
+	}
+
+	fileKey := *uploadResp.Data.FileKey
+
+	content, _ := json.Marshal(map[string]string{"file_key": fileKey})
+	req := larkim.NewCreateMessageReqBuilder().
+		ReceiveIdType(larkim.ReceiveIdTypeChatId).
+		Body(larkim.NewCreateMessageReqBodyBuilder().
+			ReceiveId(chatID).
+			MsgType(larkim.MsgTypeAudio).
+			Content(string(content)).
+			Build()).
+		Build()
+
+	resp, err := c.client.Im.V1.Message.Create(ctx, req)
+	if err != nil {
+		return fmt.Errorf("feishu audio send: %w", err)
+	}
+	if !resp.Success() {
+		return fmt.Errorf("feishu audio send api error (code=%d msg=%s)", resp.Code, resp.Msg)
 	}
 	return nil
 }
