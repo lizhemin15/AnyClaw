@@ -480,12 +480,17 @@ func (h *Handler) TestVoiceAPI(w http.ResponseWriter, r *http.Request) {
 		var body []byte
 		if strings.Contains(strings.ToLower(endpoint), "xiaomimimo.com") {
 			// 平台文档 https://platform.xiaomimimo.com/#/docs/usage-guide/speech-synthesis
-			// curl POST 'https://api.xiaomimimo.com/v1/chat/completions' -H 'api-key: $MIMO_API_KEY'
+			// 正确 URL: https://api.xiaomimimo.com/v1/chat/completions（无 /api 前缀）
 			actualEndpoint := endpoint
 			if strings.Contains(strings.ToLower(endpoint), "platform.xiaomimimo.com") {
 				actualEndpoint = strings.ReplaceAll(strings.ToLower(endpoint), "platform.xiaomimimo.com", "api.xiaomimimo.com")
 			}
 			base := strings.TrimSuffix(actualEndpoint, "/")
+			// 平台路径为 /v1/chat/completions，无 /api。若配置了 /api/v1 则修正
+			base = strings.ReplaceAll(strings.ReplaceAll(base, "/api/v1", "/v1"), "/API/v1", "/v1")
+			if !strings.HasSuffix(strings.ToLower(base), "/v1") && (base == "" || strings.HasSuffix(base, "xiaomimimo.com")) {
+				base = strings.TrimSuffix(base, "/") + "/v1"
+			}
 			if strings.HasSuffix(strings.ToLower(base), "/v1") {
 				reqURL = base + "/chat/completions"
 			} else {

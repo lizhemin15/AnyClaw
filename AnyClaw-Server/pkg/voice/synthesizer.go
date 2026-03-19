@@ -116,6 +116,8 @@ func NewXiaomiMiMoSynthesizer(apiKey, apiBase, model string) *XiaomiMiMoSynthesi
 	}
 	// platform.xiaomimimo.com 会返回 401+loginUrl，必须用 api 域名
 	apiBase = strings.ReplaceAll(strings.ToLower(apiBase), "platform.xiaomimimo.com", "api.xiaomimimo.com")
+	// 平台路径为 /v1/chat/completions，无 /api。若配置了 /api/v1 则修正
+	apiBase = strings.ReplaceAll(strings.ReplaceAll(apiBase, "/api/v1", "/v1"), "/API/v1", "/v1")
 	if model == "" {
 		model = "mimo-v2-tts"
 	}
