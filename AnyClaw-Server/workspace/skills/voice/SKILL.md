@@ -27,6 +27,7 @@ metadata: {"nanobot":{"emoji":"🔊"}}
 **调度器（AnyClaw-API）分轨配置 ASR + TTS：**
 - `voice_api`：ASR（语音识别），如 ChatAnywhere、Groq
 - `tts_api`：TTS（语音合成），如 ChatAnywhere、Xiaomi MiMo；空则回退到 voice_api 中非 Groq 的第一个。容器内 `speak` 优先使用注入的 `ANYCLAW_TTS_API_*`，与 `ANYCLAW_VOICE_API_*`（多为 ASR）不是同一路由。
+- **路由**：`speak` 选 TTS 时 **能小米则小米**：`ANYCLAW_VOICE_*` 为小米域名时会优先于「TTS 槽位指向 ChatAnyWhere 等 OpenAI 兼容」的合成路径。若 `ANYCLAW_TTS_API_BASE` 未注入，会用 `ANYCLAW_VOICE_API_BASE` 判断是否 MiMo。仍建议在 TTS 端点填写完整 `https://api.xiaomimimo.com/v1`。
 
 示例：ASR 用 ChatAnywhere、TTS 用 Xiaomi：
 ```json
@@ -95,6 +96,8 @@ curl -X POST "https://api.xiaomimimo.com/v1/chat/completions" \
 ```
 
 ### 小米 MiMo 风格与语气控制（内联自平台文档）
+
+**严禁误用**：`<Happy>`、`<Whisper>` 这类**单独尖括号**会被 TTS **整段读成文字**（例如读出「Happy」），**不是**情感控制。正确写法必须是 **`<style>Happy</style>`** 正文，或 **`speak(..., style="Happy", text="正文")`**（服务端会转成 `<style>`）。
 
 **整体风格**：在文本开头加 `<style>风格名</style>`，可组合多个风格：`<style>风格1 风格2</style>内容`。下表为推荐风格，未列出的风格也可尝试。
 
@@ -188,6 +191,8 @@ cron(
 
 - **小米 MiMo TTS** 使用 **API Key**，**不是** OAuth、Token 或「小米账号授权」。**严禁**使用「Token 过期」「待授权」「token过期待授权」「点击链接重新登录」「小米账号授权」等表述——这些均不适用于 MiMo API。
 - **正确回复模板**：「语音合成暂时不可用。请管理员在管理后台 → 配置 → 语音合成 (TTS) 中检查 Xiaomi MiMo 的 API Key 和 Endpoint 是否有效。Endpoint 需为 https://api.xiaomimimo.com/v1。」
+
+**若 speak 已成功并发出音频**：**禁止**再声称「401」「Key 失效」「只能用 ChatAnyWhere」等——以工具返回值为准，勿臆测环境变量状态。
 
 ## 注意事项
 

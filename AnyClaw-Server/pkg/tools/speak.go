@@ -42,7 +42,7 @@ func (t *SpeakTool) Parameters() map[string]any {
 		"properties": map[string]any{
 			"text": map[string]any{
 				"type":        "string",
-				"description": "Text to synthesize into speech. For Xiaomi MiMo, may include <style>…</style>, [cough], (laugh), long sigh, etc.",
+				"description": "Text to synthesize. Xiaomi MiMo: use <style>Happy</style>prefix or style= param; NEVER use <Happy> alone (it will be read as words). Also [cough], (laugh), long sigh per voice skill.",
 			},
 			"style": map[string]any{
 				"type":        "string",
@@ -142,7 +142,8 @@ func (t *SpeakTool) Execute(ctx context.Context, args map[string]any) *ToolResul
 
 	path, err := t.synthesizer.Synthesize(ctx, text, voiceID)
 	if err != nil {
-		return ErrorResult(fmt.Sprintf("TTS synthesis failed: %v", err)).WithError(err)
+		prov := t.synthesizer.Name()
+		return ErrorResult(fmt.Sprintf("TTS synthesis failed (provider=%s): %v", prov, err)).WithError(err)
 	}
 
 	if !sendToUser {

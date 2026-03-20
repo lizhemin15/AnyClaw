@@ -153,6 +153,8 @@ func (s *XiaomiMiMoSynthesizer) Synthesize(ctx context.Context, text, voiceID st
 		"text_length": len(text),
 	})
 
+	text = NormalizeXiaomiMisformedStyleTag(text)
+
 	// user 侧明确说明标签语义，避免模型把 <style>/[]/() 当普通文字略读
 	userHint := os.Getenv("XIAOMI_MIMO_TTS_USER_HINT")
 	if userHint == "" {
@@ -238,35 +240,47 @@ func (s *XiaomiMiMoSynthesizer) Synthesize(ctx context.Context, text, voiceID st
 	return tmpFile.Name(), nil
 }
 
+func isXiaomiMimoAPIBase(base string) bool {
+	return strings.Contains(strings.ToLower(strings.TrimSpace(base)), "xiaomimimo.com")
+}
+
 // DetectSynthesizer inspects cfg and returns a Synthesizer if a TTS-capable provider is configured.
-// Priority: ANYCLAW_TTS_API_KEY (scheduler) > ANYCLAW_VOICE_API_KEY (backward-compat) >
-//           XIAOMI_MIMO_API_KEY (Xiaomi TTS) > providers.xiaomi_mimo > model_list xiaomi_mimo/ >
-//           providers.openai > model_list openai/.
+// 策略：只要存在可用的 MiMo 端点与 Key，就优先小米 TTS；避免 TTS 槽位误配成 OpenAI 兼容时抢走合成路由。
+// 顺序：调度器 TTS+MiMo → TTS Key + 空 Base 用 Voice MiMo → Voice+MiMo（覆盖「TTS=ChatAnyWhere + Voice=小米」）
+//       → 再走 OpenAI 兼容（TTS Key / Voice Key）→ XIAOMI_* / config 小米 → config OpenAI。
 func DetectSynthesizer(cfg *config.Config) Synthesizer {
 	if cfg == nil {
 		cfg = &config.Config{}
 	}
-	// New scheduler: dedicated TTS key (skipped for Groq endpoints).
-	if key := os.Getenv("ANYCLAW_TTS_API_KEY"); key != "" {
-		base := os.Getenv("ANYCLAW_TTS_API_BASE")
-		if strings.Contains(strings.ToLower(base), "xiaomimimo.com") {
-			return NewXiaomiMiMoSynthesizer(key, base, "")
+	ttsKey := strings.TrimSpace(os.Getenv("ANYCLAW_TTS_API_KEY"))
+	ttsBase := strings.TrimSpace(os.Getenv("ANYCLAW_TTS_API_BASE"))
+	voiceKey := strings.TrimSpace(os.Getenv("ANYCLAW_VOICE_API_KEY"))
+	voiceBase := strings.TrimSpace(os.Getenv("ANYCLAW_VOICE_API_BASE"))
+
+	// ----- 小米（环境变量，优先于一切 OpenAI TTS）-----
+	if ttsKey != "" {
+		if isXiaomiMimoAPIBase(ttsBase) {
+			return NewXiaomiMiMoSynthesizer(ttsKey, ttsBase, "")
 		}
-		return NewOpenAISynthesizer(key, base)
-	}
-	// Old scheduler: fall back to ANYCLAW_VOICE_API_KEY.
-	if key := os.Getenv("ANYCLAW_VOICE_API_KEY"); key != "" {
-		base := os.Getenv("ANYCLAW_VOICE_API_BASE")
-		if strings.Contains(strings.ToLower(base), "xiaomimimo.com") {
-			return NewXiaomiMiMoSynthesizer(key, base, "")
-		}
-		if !strings.Contains(strings.ToLower(base), "groq.com") {
-			return NewOpenAISynthesizer(key, base)
+		if ttsBase == "" && isXiaomiMimoAPIBase(voiceBase) {
+			return NewXiaomiMiMoSynthesizer(ttsKey, voiceBase, "")
 		}
 	}
-	// Xiaomi MiMo: env or providers config
-	if key := os.Getenv("XIAOMI_MIMO_API_KEY"); key != "" {
-		base := os.Getenv("XIAOMI_MIMO_API_BASE")
+	if voiceKey != "" && isXiaomiMimoAPIBase(voiceBase) {
+		return NewXiaomiMiMoSynthesizer(voiceKey, voiceBase, "")
+	}
+
+	// ----- OpenAI 兼容 TTS（仅在没有可用 MiMo 环境组合时）-----
+	if ttsKey != "" {
+		return NewOpenAISynthesizer(ttsKey, ttsBase)
+	}
+	if voiceKey != "" && !strings.Contains(strings.ToLower(voiceBase), "groq.com") {
+		return NewOpenAISynthesizer(voiceKey, voiceBase)
+	}
+
+	// ----- 配置文件：先小米后 OpenAI -----
+	if key := strings.TrimSpace(os.Getenv("XIAOMI_MIMO_API_KEY")); key != "" {
+		base := strings.TrimSpace(os.Getenv("XIAOMI_MIMO_API_BASE"))
 		return NewXiaomiMiMoSynthesizer(key, base, "")
 	}
 	if key := cfg.Providers.XiaomiMiMo.APIKey; key != "" {
@@ -281,7 +295,6 @@ func DetectSynthesizer(cfg *config.Config) Synthesizer {
 			return NewXiaomiMiMoSynthesizer(mc.APIKey, mc.APIBase, model)
 		}
 	}
-	// OpenAI
 	if key := cfg.Providers.OpenAI.APIKey; key != "" {
 		return NewOpenAISynthesizer(key, cfg.Providers.OpenAI.APIBase)
 	}

@@ -246,6 +246,10 @@ func (s *Scheduler) runOnHost(ctx context.Context, host *db.Host, instanceID int
 			ttsAPIKey = strings.TrimSpace(ttsEndpoints[0].APIKey)
 			ttsAPIBase = strings.TrimSpace(ttsEndpoints[0].APIBase)
 		}
+		// TTS 端点若漏填 Base，但 ASR 使用小米域名，则复用 voice base，避免容器内 ANYCLAW_TTS 只有 Key 无 Base 时误走 OpenAI 默认地址。
+		if ttsAPIKey != "" && ttsAPIBase == "" && strings.Contains(strings.ToLower(voiceAPIBase), "xiaomimimo.com") {
+			ttsAPIBase = strings.TrimSpace(voiceAPIBase)
+		}
 	}
 	wsPath := fmt.Sprintf("/var/lib/anyclaw/ws-%d", instanceID)
 	containerName := fmt.Sprintf("anyclaw-inst-%d", instanceID)
