@@ -20,11 +20,13 @@ metadata: {"nanobot":{"emoji":"🔊"}}
 
 **小米 MiMo 专用参数 `style`（可选）**：与 `text` 并列传入时，服务端会前置 `<style>…</style>`（若 `text` 本身已以 `<style>` 开头则不再重复包裹）。便于模型只填情感/场景词，例如 `style="Whisper"`、`style="唱歌"`。
 
+**参数 `send`（混剪 / 电台 / 配 BGM）**：默认 `true`（合成并发给用户）。若要先做人声再 ffmpeg 混背景音乐：**必须** `speak(..., send=false)`，人声会写入当前 agent 工作区的 `.tts_staging/stem_*.wav`（或 mp3），与 `send=true` **同一套** TTS（含小米 MiMo 与情感标签）。**禁止**用 `curl` + `ANYCLAW_VOICE_API_KEY` 调 OpenAI 兼容的 `/audio/speech` 做人声——`voice_api` 常为 ASR/ChatAnywhere，与飞书语音不同源，且不支持 MiMo 标签。（注意：`cron` 工具里的 `deliver` 含义不同，勿混淆。）
+
 ### 配置方式
 
 **调度器（AnyClaw-API）分轨配置 ASR + TTS：**
 - `voice_api`：ASR（语音识别），如 ChatAnywhere、Groq
-- `tts_api`：TTS（语音合成），如 ChatAnywhere、Xiaomi MiMo；空则回退到 voice_api 中非 Groq 的第一个
+- `tts_api`：TTS（语音合成），如 ChatAnywhere、Xiaomi MiMo；空则回退到 voice_api 中非 Groq 的第一个。容器内 `speak` 优先使用注入的 `ANYCLAW_TTS_API_*`，与 `ANYCLAW_VOICE_API_*`（多为 ASR）不是同一路由。
 
 示例：ASR 用 ChatAnywhere、TTS 用 Xiaomi：
 ```json

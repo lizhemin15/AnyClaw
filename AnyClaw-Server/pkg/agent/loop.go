@@ -428,7 +428,7 @@ func (al *AgentLoop) SetSynthesizer(s voice.Synthesizer) {
 		if !ok {
 			continue
 		}
-		speakTool := tools.NewSpeakTool(s, al.mediaStore)
+		speakTool := tools.NewSpeakTool(s, al.mediaStore, agent.Workspace)
 		agent.Tools.Register(speakTool)
 	}
 }
