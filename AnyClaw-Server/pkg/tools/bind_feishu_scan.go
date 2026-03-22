@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image"
+	"image/color"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -190,12 +192,35 @@ func writeFeishuQRPNG(path, uri string) error {
 		return err
 	}
 	code.Scale = 12
+	img := feishuQRToRGBA(code)
 	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	return png.Encode(f, code)
+	return png.Encode(f, img)
+}
+
+// rsc.io/qr.Code does not implement image.Image; expand modules to RGBA for PNG.
+func feishuQRToRGBA(c *qr.Code) *image.RGBA {
+	if c.Scale < 1 {
+		c.Scale = 8
+	}
+	w := c.Size * c.Scale
+	h := c.Size * c.Scale
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		my := y / c.Scale
+		for x := 0; x < w; x++ {
+			mx := x / c.Scale
+			if c.Black(mx, my) {
+				img.Set(x, y, color.Black)
+			} else {
+				img.Set(x, y, color.White)
+			}
+		}
+	}
+	return img
 }
 
 func renderFeishuQR(uri string) string {
