@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -49,20 +50,30 @@ func NewProvider(apiURL, instanceID, token string) *Provider {
 	}
 }
 
+// UsesManagerProxy reports that LLM calls go through AnyClaw-Manager. The agent
+// skips local light/heavy routing so logs and fallback attempts are not tied to
+// pet-side model names that are ignored by default (see Chat).
+func (p *Provider) UsesManagerProxy() bool { return true }
+
 // Chat forwards the request to the API.
-// Model selection is delegated to the manager; server does not specify model.
+// By default the JSON body does not include "model": AnyClaw-Manager then uses
+// GetEnabledModel() and FindChannelsForModel, so the pet needs no matching
+// agents.defaults.model_name / model_list for LLM routing. Set ANYCLAW_API_PROXY_FORWARD_MODEL=1
+// to forward the pet-resolved model name (stripped protocol prefix) for overrides.
 func (p *Provider) Chat(
 	ctx context.Context,
 	messages []Message,
 	tools []ToolDefinition,
-	_ string, // model is ignored - manager decides which model to use
+	model string,
 	options map[string]any,
 ) (*LLMResponse, error) {
-	// Model selection is handled by the manager (anyclaw-api).
-	// The manager uses its configured channels to select the appropriate model.
-	// This allows centralized model management across all instances.
 	requestBody := map[string]any{
 		"messages": serializeMessages(messages),
+	}
+	if forwardPetModel() {
+		if m := modelIDForManager(model); m != "" {
+			requestBody["model"] = m
+		}
 	}
 
 	if len(tools) > 0 {
@@ -116,6 +127,24 @@ func (p *Provider) Chat(
 // GetDefaultModel returns empty; model comes from config.
 func (p *Provider) GetDefaultModel() string {
 	return ""
+}
+
+func forwardPetModel() bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("ANYCLAW_API_PROXY_FORWARD_MODEL")))
+	return v == "1" || v == "true" || v == "yes"
+}
+
+// modelIDForManager strips a protocol prefix (e.g. openai/gpt-4o -> gpt-4o) so the
+// manager matches channel model names as configured in the admin UI.
+func modelIDForManager(model string) string {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return ""
+	}
+	if _, rest, ok := strings.Cut(model, "/"); ok {
+		return strings.TrimSpace(rest)
+	}
+	return model
 }
 
 func serializeMessages(messages []Message) []map[string]any {

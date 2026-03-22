@@ -413,6 +413,12 @@ func (al *AgentLoop) SetMediaStore(s media.MediaStore) {
 			st.SetMediaStore(s)
 		}
 	})
+
+	al.registry.ForEachTool("bind_feishu_scan", func(t tools.Tool) {
+		if b, ok := t.(*tools.BindFeishuScanTool); ok {
+			b.SetMediaStore(s)
+		}
+	})
 }
 
 // SetTranscriber injects a voice transcriber for agent-level audio transcription.
@@ -1233,20 +1239,7 @@ func (al *AgentLoop) runLLMIteration(
 			// uses SendResponse=false because the outer Run() loop publishes the assistant
 			// reply separately. Tool side-effects (QR, file paths, etc.) must still reach
 			// the user on that path.
-			if !r.result.Silent && r.result.ForUser != "" {
-				al.bus.PublishOutbound(ctx, bus.OutboundMessage{
-					Channel: opts.Channel,
-					ChatID:  opts.ChatID,
-					Content: r.result.ForUser,
-				})
-				logger.DebugCF("agent", "Sent tool result to user",
-					map[string]any{
-						"tool":        r.tc.Name,
-						"content_len": len(r.result.ForUser),
-					})
-			}
-
-			// If tool returned media refs, publish them as outbound media
+			// Send media before text when both exist (e.g. Feishu bind PNG QR + instructions).
 			if len(r.result.Media) > 0 {
 				parts := make([]bus.MediaPart, 0, len(r.result.Media))
 				for _, ref := range r.result.Media {
@@ -1265,6 +1258,19 @@ func (al *AgentLoop) runLLMIteration(
 					ChatID:  opts.ChatID,
 					Parts:   parts,
 				})
+			}
+
+			if !r.result.Silent && r.result.ForUser != "" {
+				al.bus.PublishOutbound(ctx, bus.OutboundMessage{
+					Channel: opts.Channel,
+					ChatID:  opts.ChatID,
+					Content: r.result.ForUser,
+				})
+				logger.DebugCF("agent", "Sent tool result to user",
+					map[string]any{
+						"tool":        r.tc.Name,
+						"content_len": len(r.result.ForUser),
+					})
 			}
 
 			// Determine content for LLM based on tool result
@@ -1301,6 +1307,12 @@ func (al *AgentLoop) selectCandidates(
 	userMsg string,
 	history []providers.Message,
 ) (candidates []providers.FallbackCandidate, model string) {
+	// Manager proxy: always use primary candidates/model so the forwarded
+	// model matches channels configured on AnyClaw-Manager (see api_proxy.UsesManagerProxy).
+	if mp, ok := agent.Provider.(interface{ UsesManagerProxy() bool }); ok && mp.UsesManagerProxy() {
+		return agent.Candidates, agent.Model
+	}
+
 	if agent.Router == nil || len(agent.LightCandidates) == 0 {
 		return agent.Candidates, agent.Model
 	}

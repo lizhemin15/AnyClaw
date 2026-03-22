@@ -4,23 +4,36 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image/png"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	qrterminal "github.com/mdp/qrterminal/v3"
+	"rsc.io/qr"
 
 	feishuchan "github.com/anyclaw/anyclaw-server/pkg/channels/feishu"
 	"github.com/anyclaw/anyclaw-server/pkg/feishu/onboard"
 	"github.com/anyclaw/anyclaw-server/pkg/logger"
+	"github.com/anyclaw/anyclaw-server/pkg/media"
 )
 
 // BindFeishuScanTool starts the same device-registration flow as the official
 // `npx @larksuite/openclaw-lark install` "new bot" path: user scans a QR (URL)
 // in Feishu, then AnyClaw polls for app credentials and writes config.
 type BindFeishuScanTool struct {
-	mu      sync.Mutex
-	running bool
+	mu         sync.Mutex
+	running    bool
+	mediaStore media.MediaStore
+}
+
+// SetMediaStore registers the media store used to attach a PNG QR for web/UI clients.
+func (t *BindFeishuScanTool) SetMediaStore(store media.MediaStore) {
+	t.mu.Lock()
+	t.mediaStore = store
+	t.mu.Unlock()
 }
 
 var _ AsyncExecutor = (*BindFeishuScanTool)(nil)
@@ -106,22 +119,60 @@ func (t *BindFeishuScanTool) ExecuteAsync(ctx context.Context, args map[string]a
 		return ErrorResult("无法开始扫码绑定: " + err.Error())
 	}
 
-	qrText := renderFeishuQR(beginRes.VerificationURIComplete)
+	uri := strings.TrimSpace(beginRes.VerificationURIComplete)
+	ch, cid := ToolChannel(ctx), ToolChatID(ctx)
+	scope := fmt.Sprintf("tool:bind_feishu_scan:%s:%s", ch, cid)
+
+	var mediaRefs []string
+	if t.mediaStore != nil && ch != "" && cid != "" && uri != "" {
+		pngPath := filepath.Join(os.TempDir(), fmt.Sprintf("anyclaw-feishu-qr-%d.png", time.Now().UnixNano()))
+		if err := writeFeishuQRPNG(pngPath, uri); err != nil {
+			logger.WarnCF("feishu_scan", "PNG QR failed, falling back to text/terminal QR", map[string]any{"error": err.Error()})
+		} else {
+			ref, err := t.mediaStore.Store(pngPath, media.MediaMeta{
+				Filename:    "feishu-bind-qr.png",
+				ContentType: "image/png",
+				Source:      "tool:bind_feishu_scan",
+			}, scope)
+			if err != nil {
+				logger.WarnCF("feishu_scan", "store PNG QR failed", map[string]any{"error": err.Error()})
+				_ = os.Remove(pngPath)
+			} else {
+				mediaRefs = append(mediaRefs, ref)
+			}
+		}
+	}
+
+	var scanHint string
+	if len(mediaRefs) > 0 {
+		scanHint = "请用飞书扫描**同时发送的二维码图片**，或直接打开下方链接完成创建机器人："
+	} else {
+		scanHint = "请用飞书扫描下方终端风格二维码（网页端若排版错乱请改用链接），或打开链接完成创建机器人："
+	}
+	qrBlock := ""
+	if len(mediaRefs) == 0 {
+		qrBlock = renderFeishuQR(uri) + "\n\n"
+	}
+
 	forUser := strings.TrimSpace(fmt.Sprintf(`已按「新建机器人」流程发起飞书官方扫码绑定（与 npx @larksuite/openclaw-lark install 使用同一注册接口）。
 
-请用飞书客户端扫描下方二维码，或打开链接完成创建机器人：
+%s
+%s
 %s
 
 完成后 AnyClaw 会在后台自动写入 app_id / app_secret 并重启网关（Linux/macOS）。Windows 上请在本机手动重启 openclaw gateway。
 
 验证：在飞书对话中发送 /feishu start 查看版本；需要更多能力可发 /feishu auth 做批量授权。`,
-		qrText+"\n\n"+beginRes.VerificationURIComplete))
+		scanHint,
+		qrBlock,
+		uri))
 
 	go t.pollUntilDone(ctx, client, env, beginRes, cb)
 
 	return &ToolResult{
 		ForLLM:  "已向用户发送飞书扫码绑定说明与二维码（新建机器人流程）。正在后台轮询注册结果；成功后会写入 config 并触发重启，你会收到系统消息。若超时或失败，可建议用户重试或使用 update_feishu_config 手动填凭证。",
 		ForUser: forUser,
+		Media:   mediaRefs,
 		Silent:  false,
 		Async:   true,
 	}
@@ -131,6 +182,20 @@ func (t *BindFeishuScanTool) clearRunning() {
 	t.mu.Lock()
 	t.running = false
 	t.mu.Unlock()
+}
+
+func writeFeishuQRPNG(path, uri string) error {
+	code, err := qr.Encode(uri, qr.M)
+	if err != nil {
+		return err
+	}
+	code.Scale = 12
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return png.Encode(f, code)
 }
 
 func renderFeishuQR(uri string) string {
