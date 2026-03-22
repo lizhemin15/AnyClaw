@@ -1228,8 +1228,12 @@ func (al *AgentLoop) runLLMIteration(
 
 		// Process results in original order (send to user, save to session)
 		for _, r := range agentResults {
-			// Send ForUser content to user immediately if not Silent
-			if !r.result.Silent && r.result.ForUser != "" && opts.SendResponse {
+			// Send ForUser content to user immediately if not Silent.
+			// Do not require opts.SendResponse: normal inbound flow (bus → processMessage)
+			// uses SendResponse=false because the outer Run() loop publishes the assistant
+			// reply separately. Tool side-effects (QR, file paths, etc.) must still reach
+			// the user on that path.
+			if !r.result.Silent && r.result.ForUser != "" {
 				al.bus.PublishOutbound(ctx, bus.OutboundMessage{
 					Channel: opts.Channel,
 					ChatID:  opts.ChatID,
