@@ -1,7 +1,6 @@
 package api_proxy
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -18,6 +17,7 @@ import (
 const (
 	llmPath            = "/llm/v1/chat/completions"
 	defaultReqTimeout  = 300 * time.Second // 5 分钟，应对慢速 LLM 或网络延迟
+	managerLLMRetries = 6 // 含首次；绑定/重启后 Manager 短时冷却或 429 时退避重试
 )
 
 type (
@@ -96,9 +96,60 @@ func (p *Provider) Chat(
 		return nil, fmt.Errorf("api_proxy: marshal request: %w", err)
 	}
 
+	var lastErr error
+	for attempt := 0; attempt < managerLLMRetries; attempt++ {
+		if attempt > 0 {
+			d := time.Duration(attempt) * 3 * time.Second
+			if d > 15*time.Second {
+				d = 15 * time.Second
+			}
+			if err := sleepCtx(ctx, d); err != nil {
+				return nil, err
+			}
+		}
+		out, status, errBody, err := p.chatOnce(ctx, jsonData)
+		if err == nil {
+			return out, nil
+		}
+		lastErr = err
+		if !shouldRetryManagerLLM(status, errBody) {
+			return nil, err
+		}
+	}
+	return nil, lastErr
+}
+
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
+// shouldRetryManagerLLM matches AnyClaw-Manager proxy transient states (channel cooldown,
+// upstream 5xx/429) that often appear right after gateway restart or Feishu re-bind.
+func shouldRetryManagerLLM(status int, body string) bool {
+	b := strings.ToLower(body)
+	switch status {
+	case http.StatusTooManyRequests:
+		return true
+	case http.StatusBadGateway:
+		return strings.Contains(b, "all upstream channels failed")
+	case http.StatusServiceUnavailable:
+		return strings.Contains(b, "all upstream channels failed")
+	default:
+		return false
+	}
+}
+
+func (p *Provider) chatOnce(ctx context.Context, jsonData []byte) (*LLMResponse, int, string, error) {
 	req, err := http.NewRequestWithContext(ctx, "POST", p.apiURL+llmPath, bytes.NewReader(jsonData))
 	if err != nil {
-		return nil, fmt.Errorf("api_proxy: create request: %w", err)
+		return nil, 0, "", fmt.Errorf("api_proxy: create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -107,21 +158,27 @@ func (p *Provider) Chat(
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("api_proxy: send request: %w", err)
+		return nil, 0, "", fmt.Errorf("api_proxy: send request: %w", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("api_proxy: status %d: %s", resp.StatusCode, string(body))
-	}
-
-	reader := bufio.NewReader(resp.Body)
-	out, err := parseResponse(reader)
+	body, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
 	if err != nil {
-		return nil, fmt.Errorf("api_proxy: parse response: %w", err)
+		return nil, resp.StatusCode, "", fmt.Errorf("api_proxy: read body: %w", err)
 	}
-	return out, nil
+
+	errBody := string(body)
+	if len(errBody) > 512 {
+		errBody = errBody[:512]
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, resp.StatusCode, errBody, fmt.Errorf("api_proxy: status %d: %s", resp.StatusCode, errBody)
+	}
+
+	out, err := parseResponse(bytes.NewReader(body))
+	if err != nil {
+		return nil, resp.StatusCode, "", fmt.Errorf("api_proxy: parse response: %w", err)
+	}
+	return out, resp.StatusCode, "", nil
 }
 
 // GetDefaultModel returns empty; model comes from config.

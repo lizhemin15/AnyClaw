@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -225,7 +226,6 @@ func (s *ModelScheduler) Pick(model string, candidates []config.ChannelEndpoint)
 	now := time.Now()
 
 	// 过滤冷却期内的渠道：配额用尽等自动禁用至次日 0 点，0 点后自动恢复
-	// 全部在冷却时不再降级，直接返回无可用渠道
 	healthy := make([]config.ChannelEndpoint, 0, len(available))
 	for _, ep := range available {
 		if until, failed := s.failures[s.endpointKey(ep)]; !failed || now.After(until) {
@@ -233,7 +233,10 @@ func (s *ModelScheduler) Pick(model string, candidates []config.ChannelEndpoint)
 		}
 	}
 	if len(healthy) == 0 {
-		return config.ChannelEndpoint{}, false
+		// 全部在冷却常见于网关/飞书绑定后重启：并发 429/5xx 给每个渠道打了短时冷却，
+		// 若此处直接失败会立刻 502。仍从「未超日配额」的候选里按原负载逻辑选一条尝试，
+		// 由上游决定是否继续限流；真正配额用尽时上游仍会失败并再次写入长冷却。
+		healthy = slices.Clone(available)
 	}
 
 	// 负载 = token 用量/上限比例 + 进行中请求数；各渠道上限不同，用比例才能比较
