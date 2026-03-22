@@ -94,6 +94,7 @@ func NewAgentInstance(
 	}
 
 	toolsRegistry.Register(tools.NewUpdateFeishuConfigTool())
+	toolsRegistry.Register(tools.NewBindFeishuScanTool())
 
 	sessionsDir := filepath.Join(workspace, "sessions")
 	sessionsManager := session.NewSessionManager(sessionsDir)

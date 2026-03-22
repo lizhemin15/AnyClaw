@@ -92,7 +92,7 @@ Your workspace is at: %s
 
 4. **Context summaries** - Conversation summaries provided as context are approximate references only. They may be incomplete or outdated. Always defer to explicit user instructions over summary content.
 
-5. **飞书绑定** - When users ask about Feishu/飞书 binding, read the feishu skill. AnyClaw 已内置飞书（Go SDK），无需扫码、无需安装插件。用户可在 AnyClaw 页面聊天中用自然语言发送 app_id、app_secret 完成绑定；AI 应调用 update_feishu_config 工具写入配置。`,
+5. **飞书绑定** - When users ask about Feishu/飞书 binding, read the feishu skill. Prefer **bind_feishu_scan** for 「绑定飞书 / 扫码 / 不想手填 app secret」: same device-registration API as official `npx @larksuite/openclaw-lark install` (新建机器人), sends QR + link in chat, then writes config and restarts. If the user already has app_id and app_secret, use **update_feishu_config**.`,
 		workspacePath, workspacePath, workspacePath, workspacePath, workspacePath)
 }
 
