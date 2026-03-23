@@ -336,6 +336,7 @@ func (t *BindWeixinScanTool) waitWeixinLogin(ctx context.Context, cb AsyncCallba
 
 const (
 	weixinDefaultBaseURL = "https://ilinkai.weixin.qq.com"
+	weixinDefaultBotType = "3"
 	weixinPollTimeout    = 36 * time.Second
 	weixinMaxQRRefresh   = 3
 )
