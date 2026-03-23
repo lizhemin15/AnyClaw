@@ -218,6 +218,15 @@ func (d *DB) ListInstancesByUserID(userID int64) ([]*Instance, error) {
 	return list, nil
 }
 
+func (d *DB) UpdateInstanceName(userID, instanceID int64, name string) (updated bool, err error) {
+	res, err := d.Exec("UPDATE instances SET name = ? WHERE id = ? AND user_id = ?", name, instanceID, userID)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
 func (d *DB) UpdateInstanceLastRead(instanceID, userID int64) error {
 	_, err := d.Exec("UPDATE instances SET last_read_at = NOW() WHERE id = ? AND user_id = ?", instanceID, userID)
 	return err

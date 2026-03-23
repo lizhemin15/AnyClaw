@@ -157,6 +157,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Post("/{id}/upload", mediaHandler.UploadMediaAsUser)
 		r.Put("/{id}/read", instHandler.MarkRead)
 		r.Post("/{id}/subscribe", instHandler.Subscribe)
+		r.Patch("/{id}", instHandler.Patch)
 		r.Get("/{id}", instHandler.Get)
 		r.Delete("/{id}", instHandler.Delete)
 	})

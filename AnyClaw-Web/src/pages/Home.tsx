@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getInstances, createInstance, deleteInstance, subscribeInstance, getAuthConfig, getEnergyConfig, type Instance, type User } from '../api'
+import { getInstances, createInstance, deleteInstance, subscribeInstance, updateInstanceName, getAuthConfig, getEnergyConfig, type Instance, type User } from '../api'
 import SearchInput from '../components/SearchInput'
 import Pagination from '../components/Pagination'
 
@@ -19,6 +19,13 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
   const [monthlyCost, setMonthlyCost] = useState(0)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editDraft, setEditDraft] = useState('')
+  const [renamingId, setRenamingId] = useState<number | null>(null)
+  const nameInputRef = useRef<HTMLInputElement>(null)
+  const skipNameBlurCommit = useRef(false)
+  const editingIdRef = useRef<number | null>(null)
+  editingIdRef.current = editingId
 
   const navigate = useNavigate()
 
@@ -36,6 +43,13 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
   useEffect(() => {
     setPage(1)
   }, [search])
+
+  useEffect(() => {
+    if (editingId != null) {
+      nameInputRef.current?.focus()
+      nameInputRef.current?.select()
+    }
+  }, [editingId])
 
   const formatExpires = (s: string) => {
     if (!s || s.length < 10) return ''
@@ -112,6 +126,46 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
     } finally {
       setDeleting(null)
     }
+  }
+
+  const cancelNameEdit = () => {
+    skipNameBlurCommit.current = true
+    setEditingId(null)
+    setEditDraft('')
+    queueMicrotask(() => {
+      skipNameBlurCommit.current = false
+    })
+  }
+
+  const commitNameEdit = async (inst: Instance, nameOverride?: string) => {
+    const next = (nameOverride ?? editDraft).trim()
+    if (!next) {
+      setError('名称不能为空')
+      nameInputRef.current?.focus()
+      return
+    }
+    if (next === inst.name) {
+      if (editingIdRef.current === inst.id) cancelNameEdit()
+      return
+    }
+    setRenamingId(inst.id)
+    setError('')
+    try {
+      const updated = await updateInstanceName(inst.id, next)
+      setInstances((prev) => prev.map((i) => (i.id === inst.id ? updated : i)))
+      if (editingIdRef.current === inst.id) cancelNameEdit()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '修改失败')
+    } finally {
+      setRenamingId(null)
+    }
+  }
+
+  const handleNameBlur = (inst: Instance, valueFromInput: string) => {
+    window.setTimeout(() => {
+      if (skipNameBlurCommit.current) return
+      void commitNameEdit(inst, valueFromInput)
+    }, 0)
   }
 
   const handleSubscribe = async (e: React.MouseEvent, inst: Instance) => {
@@ -259,7 +313,44 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
                       <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-white" title="新消息" aria-label="新消息" />
                     )}
                   </div>
-                  <p className="font-medium text-slate-800 truncate">{inst.name}</p>
+                  {editingId === inst.id ? (
+                    <input
+                      ref={nameInputRef}
+                      type="text"
+                      value={editDraft}
+                      onChange={(e) => setEditDraft(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onBlur={(e) => handleNameBlur(inst, (e.target as HTMLInputElement).value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          void commitNameEdit(inst)
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault()
+                          cancelNameEdit()
+                        }
+                      }}
+                      disabled={renamingId === inst.id}
+                      className="font-medium text-slate-800 min-w-0 flex-1 max-w-full px-2 py-0.5 border border-slate-300 rounded-lg text-sm"
+                      maxLength={255}
+                      aria-label="员工名称"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setEditingId(inst.id)
+                        setEditDraft(inst.name)
+                        setError('')
+                      }}
+                      className="font-medium text-slate-800 truncate text-left min-w-0 hover:text-slate-600 underline-offset-2 hover:underline"
+                      title="点击修改名称"
+                    >
+                      {inst.name}
+                    </button>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {inst.subscribed_until && (

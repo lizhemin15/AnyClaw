@@ -160,6 +160,13 @@ export async function getInstance(id: number): Promise<Instance> {
   return fetchApi<Instance>(`/instances/${id}`);
 }
 
+export async function updateInstanceName(id: number, name: string): Promise<Instance> {
+  return fetchApi<Instance>(`/instances/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name }),
+  });
+}
+
 export async function markInstanceRead(id: number): Promise<void> {
   await fetchApi(`/instances/${id}/read`, { method: 'PUT' });
 }

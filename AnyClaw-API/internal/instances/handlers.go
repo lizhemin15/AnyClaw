@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/anyclaw/anyclaw-api/internal/config"
 	"github.com/anyclaw/anyclaw-api/internal/db"
@@ -29,6 +30,10 @@ func New(db *db.DB, sched *scheduler.Scheduler, apiURL, configPath string) *Hand
 }
 
 type CreateRequest struct {
+	Name string `json:"name"`
+}
+
+type PatchRequest struct {
 	Name string `json:"name"`
 }
 
@@ -162,6 +167,57 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[instances] instance %d container started: %s on host %s", inst.ID, containerID, hostID)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(inst)
+}
+
+func (h *Handler) Patch(w http.ResponseWriter, r *http.Request) {
+	claims := request.FromContext(r.Context())
+	if claims == nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, `{"error":"invalid instance id"}`, http.StatusBadRequest)
+		return
+	}
+	var req PatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		http.Error(w, `{"error":"名称不能为空"}`, http.StatusBadRequest)
+		return
+	}
+	if utf8.RuneCountInString(name) > 255 {
+		http.Error(w, `{"error":"名称过长"}`, http.StatusBadRequest)
+		return
+	}
+	ok, err := h.db.UpdateInstanceName(claims.UserID, id, name)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.Error(w, `{"error":"instance not found"}`, http.StatusNotFound)
+		return
+	}
+	inst, err := h.db.GetInstanceByID(id)
+	if err != nil || inst == nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	expMap, _ := h.db.GetSubscribedExpiresByInstanceIDs([]int64{id})
+	if exp, ok := expMap[id]; ok {
+		if t, err := time.Parse("2006-01-02 15:04:05", exp); err == nil {
+			inst.SubscribedUntil = t.Format("2006-01-02")
+		} else if len(exp) >= 10 {
+			inst.SubscribedUntil = exp[:10]
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(inst)
 }
 
