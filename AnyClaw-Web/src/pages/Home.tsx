@@ -250,6 +250,9 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
             <p className="text-sm text-slate-500">OpenClaw 是效率工具、一人公司的底座。每位员工擅长复杂任务、拥有超长记忆，回答会稍慢一些～</p>
           </div>
         </div>
+        <p className="mt-2 mb-3 text-sm text-slate-600 leading-relaxed rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+          OpenClaw 是硅基生物，拥有心跳、思考、主动发消息等特性，这一切都需要消耗 token，所以建议包月。
+        </p>
         <form onSubmit={handleAdopt} className="flex flex-col sm:flex-row gap-3">
           <input
             type="text"
