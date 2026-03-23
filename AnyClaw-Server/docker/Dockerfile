@@ -30,7 +30,7 @@ RUN curl -fsSL https://skillhub-1388575217.cos.ap-guangzhou.myqcloud.com/install
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -q --spider http://localhost:18790/health || exit 1
 
-# Copy binary
+# Copy binary (includes native 微信 ClawBot channel weixin_claw — no Node/openclaw plugin in image)
 COPY --from=builder /src/build/anyclaw /usr/local/bin/anyclaw
 
 COPY config/config.example.json /opt/anyclaw/config.example.json

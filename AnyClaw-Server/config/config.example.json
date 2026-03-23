@@ -101,6 +101,14 @@
       "reasoning_channel_id": "",
       "random_reaction_emoji": []
     },
+    "weixin_claw": {
+      "enabled": false,
+      "allow_from": [],
+      "route_tag": "",
+      "state_dir": "",
+      "cdn_base_url": "",
+      "reasoning_channel_id": ""
+    },
     "dingtalk": {
       "enabled": false,
       "client_id": "YOUR_CLIENT_ID",

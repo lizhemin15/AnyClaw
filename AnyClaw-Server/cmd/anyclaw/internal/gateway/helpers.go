@@ -29,6 +29,7 @@ import (
 	_ "github.com/anyclaw/anyclaw-server/pkg/channels/wecom"
 	_ "github.com/anyclaw/anyclaw-server/pkg/channels/whatsapp"
 	_ "github.com/anyclaw/anyclaw-server/pkg/channels/whatsapp_native"
+	_ "github.com/anyclaw/anyclaw-server/pkg/channels/weixinclaw"
 	"github.com/anyclaw/anyclaw-server/pkg/config"
 	"github.com/anyclaw/anyclaw-server/pkg/cron"
 	"github.com/anyclaw/anyclaw-server/pkg/devices"

@@ -67,6 +67,10 @@ func DefaultConfig() *Config {
 				VerificationToken: "",
 				AllowFrom:         FlexibleStringSlice{},
 			},
+			WeixinClaw: WeixinClawConfig{
+				Enabled:   false,
+				AllowFrom: FlexibleStringSlice{},
+			},
 			Discord: DiscordConfig{
 				Enabled:     false,
 				Token:       "",

@@ -225,6 +225,10 @@ func (m *Manager) initChannels() error {
 		m.initChannel("feishu", "Feishu")
 	}
 
+	if m.config.Channels.WeixinClaw.Enabled {
+		m.initChannel("weixinclaw", "Weixin ClawBot")
+	}
+
 	if m.config.Channels.Discord.Enabled && m.config.Channels.Discord.Token != "" {
 		m.initChannel("discord", "Discord")
 	}

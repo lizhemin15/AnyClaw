@@ -419,6 +419,11 @@ func (al *AgentLoop) SetMediaStore(s media.MediaStore) {
 			b.SetMediaStore(s)
 		}
 	})
+	al.registry.ForEachTool("bind_weixin_scan", func(t tools.Tool) {
+		if b, ok := t.(*tools.BindWeixinScanTool); ok {
+			b.SetMediaStore(s)
+		}
+	})
 }
 
 // SetTranscriber injects a voice transcriber for agent-level audio transcription.
@@ -1181,11 +1186,30 @@ func (al *AgentLoop) runLLMIteration(
 				// as an inbound system message so processSystemMessage routes it
 				// back to the user via the normal agent loop.
 				asyncCallback := func(_ context.Context, result *tools.ToolResult) {
+					outCtx, outCancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer outCancel()
+					if len(result.Media) > 0 {
+						parts := make([]bus.MediaPart, 0, len(result.Media))
+						for _, ref := range result.Media {
+							part := bus.MediaPart{Ref: ref}
+							if al.mediaStore != nil {
+								if _, meta, err := al.mediaStore.ResolveWithMeta(ref); err == nil {
+									part.Filename = meta.Filename
+									part.ContentType = meta.ContentType
+									part.Type = inferMediaType(meta.Filename, meta.ContentType)
+								}
+							}
+							parts = append(parts, part)
+						}
+						_ = al.bus.PublishOutboundMedia(outCtx, bus.OutboundMediaMessage{
+							Channel: opts.Channel,
+							ChatID:  opts.ChatID,
+							Parts:   parts,
+						})
+					}
 					// Send ForUser content directly to the user (immediate feedback),
 					// mirroring the synchronous tool execution path.
 					if !result.Silent && result.ForUser != "" {
-						outCtx, outCancel := context.WithTimeout(context.Background(), 5*time.Second)
-						defer outCancel()
 						_ = al.bus.PublishOutbound(outCtx, bus.OutboundMessage{
 							Channel: opts.Channel,
 							ChatID:  opts.ChatID,

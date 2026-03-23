@@ -233,6 +233,7 @@ type ChannelsConfig struct {
 	WeComApp   WeComAppConfig   `json:"wecom_app"`
 	WeComAIBot WeComAIBotConfig `json:"wecom_aibot"`
 	Pico           PicoConfig           `json:"pico"`
+	WeixinClaw     WeixinClawConfig     `json:"weixin_claw"`
 	AnyClawBridge  AnyClawBridgeConfig  `json:"anyclaw_bridge,omitempty"`
 	IRC            IRCConfig            `json:"irc"`
 }
@@ -273,6 +274,17 @@ type TelegramConfig struct {
 	Typing             TypingConfig        `json:"typing,omitempty"`
 	Placeholder        PlaceholderConfig   `json:"placeholder,omitempty"`
 	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"ANYCLAW_CHANNELS_TELEGRAM_REASONING_CHANNEL_ID"`
+}
+
+// WeixinClawConfig enables the native WeChat ClawBot (ilink) channel; credentials live under
+// {state_dir or home}/openclaw-weixin/ (same layout as bind_weixin_scan / official plugin).
+type WeixinClawConfig struct {
+	Enabled            bool                `json:"enabled"                 env:"ANYCLAW_CHANNELS_WEIXINCLAW_ENABLED"`
+	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"ANYCLAW_CHANNELS_WEIXINCLAW_ALLOW_FROM"`
+	RouteTag           string              `json:"route_tag,omitempty"     env:"ANYCLAW_CHANNELS_WEIXINCLAW_ROUTE_TAG"`
+	StateDir           string              `json:"state_dir,omitempty"     env:"ANYCLAW_CHANNELS_WEIXINCLAW_STATE_DIR"`
+	CdnBaseURL         string              `json:"cdn_base_url,omitempty"  env:"ANYCLAW_CHANNELS_WEIXINCLAW_CDN_BASE_URL"`
+	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"ANYCLAW_CHANNELS_WEIXINCLAW_REASONING_CHANNEL_ID"`
 }
 
 type FeishuConfig struct {

@@ -92,7 +92,9 @@ Your workspace is at: %s
 
 4. **Context summaries** - Conversation summaries provided as context are approximate references only. They may be incomplete or outdated. Always defer to explicit user instructions over summary content.
 
-5. **飞书绑定** - When users ask about Feishu/飞书 binding, read the feishu skill. Prefer **bind_feishu_scan** for 「绑定飞书 / 扫码 / 不想手填 app secret」: same device-registration API as official npx @larksuite/openclaw-lark install (新建机器人), sends QR + link in chat, then writes config and restarts. If the user already has app_id and app_secret, use **update_feishu_config**.`,
+5. **飞书绑定** - When users ask about Feishu/飞书 binding, read the feishu skill. Prefer **bind_feishu_scan** for 「绑定飞书 / 扫码 / 不想手填 app secret」: same device-registration API as official npx @larksuite/openclaw-lark install (新建机器人), sends QR + link in chat, then writes config and restarts. If the user already has app_id and app_secret, use **update_feishu_config**.
+
+6. **微信 ClawBot 绑定** - When users ask to bind WeChat / 绑定微信 / 微信扫码, call **bind_weixin_scan**: ilink QR flow (same as Tencent openclaw-weixin), saves credentials, enables **channels.weixin_claw** (native long-poll in anyclaw-server, works in Docker image), triggers gateway restart on Unix.`,
 		workspacePath, workspacePath, workspacePath, workspacePath, workspacePath)
 }
 
