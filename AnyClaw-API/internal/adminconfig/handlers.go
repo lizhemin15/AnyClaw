@@ -297,10 +297,11 @@ func (h *Handler) PutConfig(w http.ResponseWriter, r *http.Request) {
 
 // TestChannelRequest 测试渠道/模型连通性
 type TestChannelRequest struct {
-	ChannelID  string `json:"channel_id"`  // 从已保存配置查找
-	Model      string `json:"model"`       // 模型名
-	APIBase string `json:"api_base"` // 或直接传凭证
-	APIKey  string `json:"api_key"`
+	ChannelID  string `json:"channel_id"` // 从已保存配置查找
+	Model      string `json:"model"`      // 模型名
+	APIBase    string `json:"api_base"`   // 或直接传凭证
+	APIKey     string `json:"api_key"`
+	Multimodal string `json:"multimodal,omitempty"` // 空/text=文本 ping；image=图多模态；video=Moonshot 系视频（上传+ms://）
 }
 
 func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
@@ -312,6 +313,14 @@ func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
 	var req TestChannelRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+
+	mm := strings.TrimSpace(strings.ToLower(req.Multimodal))
+	switch mm {
+	case "", "text", "image", "video":
+	default:
+		http.Error(w, `{"error":"invalid multimodal: use text, image, or video"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -354,31 +363,68 @@ func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reqURL := apiBase + "/chat/completions"
-	body := map[string]any{
-		"model": model,
-		"messages": []map[string]string{
-			{"role": "user", "content": "hi"},
-		},
-		"max_tokens": 5,
+	if mm == "video" && !moonshotLikeAPIBase(apiBase) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]any{
+			"ok": false,
+			"message": "多模态(视频)自动测试仅支持 API Base 包含 moonshot 的渠道（需 /v1/files 上传 + ms:// 引用）。其它上游请用「多模态(图)」或按厂商文档自测。",
+		})
+		return
 	}
-	bodyBytes, _ := json.Marshal(body)
-	proxyReq, err := http.NewRequestWithContext(r.Context(), "POST", reqURL, bytes.NewReader(bodyBytes))
-	if err != nil {
+
+	var bodyBytes []byte
+	var err error
+	switch mm {
+	case "image":
+		bodyBytes, err = buildMultimodalImageChatBody(model)
+		if err != nil {
+			http.Error(w, `{"error":"build image request"}`, http.StatusInternalServerError)
+			return
+		}
+	case "video":
+		fileID, upErr := moonshotUploadVideoFile(r.Context(), apiBase, apiKey)
+		if upErr != nil {
+			log.Printf("[admin] multimodal video upload: %v", upErr)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]any{
+				"ok":      false,
+				"message": "多模态(视频)上传失败: " + upErr.Error(),
+			})
+			return
+		}
+		bodyBytes, err = buildMoonshotVideoChatBody(model, fileID)
+		if err != nil {
+			http.Error(w, `{"error":"build video request"}`, http.StatusInternalServerError)
+			return
+		}
+	default:
+		body := map[string]any{
+			"model": model,
+			"messages": []map[string]string{
+				{"role": "user", "content": "hi"},
+			},
+			"max_tokens": 5,
+		}
+		bodyBytes, _ = json.Marshal(body)
+	}
+
+	reqURL := apiBase + "/chat/completions"
+	proxyReq, reqErr := http.NewRequestWithContext(r.Context(), "POST", reqURL, bytes.NewReader(bodyBytes))
+	if reqErr != nil {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
 	proxyReq.Header.Set("Content-Type", "application/json")
 	proxyReq.Header.Set("Authorization", "Bearer "+apiKey)
-	if u, err := url.Parse(reqURL); err == nil && u.Host != "" {
-		host := u.Hostname()
-		if p := u.Port(); p != "" && p != "443" && p != "80" {
-			host = u.Host
-		}
-		proxyReq.Host = host
-	}
+	applyRequestHost(proxyReq, reqURL)
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	timeout := 30 * time.Second
+	if mm == "image" || mm == "video" {
+		timeout = 90 * time.Second
+	}
+	client := &http.Client{Timeout: timeout}
 	resp, err := client.Do(proxyReq)
 	if err != nil {
 		log.Printf("[admin] config test failed: url=%s model=%s err=%v", reqURL, model, err)
@@ -405,10 +451,50 @@ func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"ok":      true,
-		"message": "连接正常",
-	})
+	switch mm {
+	case "image":
+		txt := extractFirstAssistantText(respBody)
+		if !strings.Contains(strings.ToUpper(txt), "MULTIMODAL_IMAGE_OK") {
+			json.NewEncoder(w).Encode(map[string]any{
+				"ok":      false,
+				"message": "上游返回 200，但模型未回复 MULTIMODAL_IMAGE_OK（可能非视觉模型或内容格式被拒）: " + truncateForLog(txt, 280),
+			})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"ok":      true,
+			"message": "多模态(图)正常" + previewSuffix(txt),
+		})
+	case "video":
+		txt := extractFirstAssistantText(respBody)
+		if txt == "" {
+			json.NewEncoder(w).Encode(map[string]any{
+				"ok":      false,
+				"message": "多模态(视频)：上游 200 但助手内容为空（可能模型不支持视频或需关闭 thinking 等参数）",
+			})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"ok":      true,
+			"message": "多模态(视频)正常" + previewSuffix(txt),
+		})
+	default:
+		json.NewEncoder(w).Encode(map[string]any{
+			"ok":      true,
+			"message": "连接正常",
+		})
+	}
+}
+
+func previewSuffix(txt string) string {
+	t := strings.TrimSpace(txt)
+	if t == "" {
+		return ""
+	}
+	if len(t) > 120 {
+		t = t[:120] + "…"
+	}
+	return " · " + t
 }
 
 // TestVoiceAPIRequest 测试语音 API 端点连通性

@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { getAdminConfig, putAdminConfig, getChannelStatus, setUsageCorrection, testChannelConfig, testSMTPConfig, testVoiceAPIConfig, adminReconnectInstances, type AdminConfig, type Channel, type ChannelStatus, type SMTPConfig, type PaymentConfig, type PaymentPlan, type EnergyConfig, type ContainerConfig, type COSConfig, type VoiceAPIEndpoint } from '../api'
 import { useUnsavedConfig } from '../contexts/UnsavedConfigContext'
 
+type ChannelTestKind = 'text' | 'image' | 'video'
+
 function genId() {
   return 'c-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
 }
@@ -73,10 +75,10 @@ export default function AdminConfig() {
   const [addingChannel, setAddingChannel] = useState(false)
   const [newChannel, setNewChannel] = useState({ name: '', api_key: '', api_base: '', model: 'gpt-4o', daily_tokens_limit: 0, qps_limit: 0 })
   const [editingChannel, setEditingChannel] = useState<string | null>(null)
-  const [testingChannel, setTestingChannel] = useState<string | null>(null)
-  const [testResult, setTestResult] = useState<{ id: string; ok: boolean; message: string } | null>(null)
-  const [testingNew, setTestingNew] = useState(false)
-  const [newTestResult, setNewTestResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [channelTestBusy, setChannelTestBusy] = useState<{ id: string; kind: ChannelTestKind } | null>(null)
+  const [testResult, setTestResult] = useState<{ id: string; kind: ChannelTestKind; ok: boolean; message: string } | null>(null)
+  const [testingNew, setTestingNew] = useState<ChannelTestKind | null>(null)
+  const [newTestResult, setNewTestResult] = useState<{ ok: boolean; message: string; kind: ChannelTestKind } | null>(null)
   const [testingSMTP, setTestingSMTP] = useState(false)
   const [smtpTestResult, setSmtpTestResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [reconnecting, setReconnecting] = useState(false)
@@ -271,55 +273,62 @@ export default function AdminConfig() {
     })
   }
 
-  const handleTestNewChannel = async () => {
+  const handleTestNewChannel = async (kind: ChannelTestKind) => {
     if (!newChannel.api_key?.trim()) {
-      setNewTestResult({ ok: false, message: '请先填写 API Key' })
+      setNewTestResult({ ok: false, message: '请先填写 API Key', kind })
       return
     }
-    setTestingNew(true)
+    setTestingNew(kind)
     setNewTestResult(null)
     try {
-      const res = await testChannelConfig({
+      const basePayload = {
         api_base: newChannel.api_base?.trim() || 'https://api.openai.com/v1',
         api_key: newChannel.api_key.trim(),
         model: (newChannel.model || 'gpt-4o').trim(),
-      })
-      setNewTestResult({ ok: res.ok, message: res.message })
+      }
+      const res = await testChannelConfig(
+        kind === 'text' ? basePayload : { ...basePayload, multimodal: kind }
+      )
+      setNewTestResult({ ok: res.ok, message: res.message, kind })
     } catch (err) {
-      setNewTestResult({ ok: false, message: err instanceof Error ? err.message : '测试失败' })
+      setNewTestResult({ ok: false, message: err instanceof Error ? err.message : '测试失败', kind })
     } finally {
-      setTestingNew(false)
+      setTestingNew(null)
     }
   }
 
-  const handleTestChannel = async (ch: Channel) => {
+  const handleTestChannel = async (ch: Channel, kind: ChannelTestKind) => {
     const model = (ch.models || [])[0]?.name || 'gpt-4o'
     const apiKeyMasked = (ch.api_key?.trim() || '').startsWith('****')
     if (!ch.api_key?.trim()) {
-      setTestResult({ id: ch.id, ok: false, message: '请先填写 API Key' })
+      setTestResult({ id: ch.id, kind, ok: false, message: '请先填写 API Key' })
       return
     }
-    setTestingChannel(ch.id)
+    setChannelTestBusy({ id: ch.id, kind })
     setTestResult(null)
     try {
-      // 脱敏时只传 channel_id+model，由后端从已保存配置取真实密钥
+      const mm = kind === 'text' ? undefined : kind
       const res = await testChannelConfig(
         apiKeyMasked
-          ? { channel_id: ch.id, model }
+          ? { channel_id: ch.id, model, ...(mm ? { multimodal: mm } : {}) }
           : {
               channel_id: ch.id,
               api_base: ch.api_base?.trim() || 'https://api.openai.com/v1',
               api_key: ch.api_key.trim(),
               model,
+              ...(mm ? { multimodal: mm } : {}),
             }
       )
-      setTestResult({ id: ch.id, ok: res.ok, message: res.message })
+      setTestResult({ id: ch.id, kind, ok: res.ok, message: res.message })
     } catch (err) {
-      setTestResult({ id: ch.id, ok: false, message: err instanceof Error ? err.message : '测试失败' })
+      setTestResult({ id: ch.id, kind, ok: false, message: err instanceof Error ? err.message : '测试失败' })
     } finally {
-      setTestingChannel(null)
+      setChannelTestBusy(null)
     }
   }
+
+  const channelTestLabel = (k: ChannelTestKind) =>
+    k === 'text' ? '连通性' : k === 'image' ? '多模态·图' : '多模态·视频'
 
   const updateSmtp = (upd: Partial<SMTPConfig>) => {
     if (!form) return
@@ -913,11 +922,29 @@ export default function AdminConfig() {
                 </div>
                 <button
                   type="button"
-                  onClick={handleTestNewChannel}
-                  disabled={testingNew || !newChannel.api_key?.trim()}
-                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50"
+                  onClick={() => handleTestNewChannel('text')}
+                  disabled={testingNew !== null || !newChannel.api_key?.trim()}
+                  className="px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50"
                 >
-                  {testingNew ? '测试中...' : '测试连通性'}
+                  {testingNew === 'text' ? '测试中...' : '测试连通性'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTestNewChannel('image')}
+                  disabled={testingNew !== null || !newChannel.api_key?.trim()}
+                  className="px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50"
+                  title="发送内嵌 base64 小图，校验 image_url 多模态"
+                >
+                  {testingNew === 'image' ? '测试中...' : '多模态·图'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTestNewChannel('video')}
+                  disabled={testingNew !== null || !newChannel.api_key?.trim()}
+                  className="px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50"
+                  title="仅 Moonshot API Base：上传内置短视频后 ms:// 调用"
+                >
+                  {testingNew === 'video' ? '测试中...' : '多模态·视频'}
                 </button>
                 <button type="button" onClick={addChannel} className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
                   添加
@@ -938,7 +965,7 @@ export default function AdminConfig() {
                       newTestResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
                     }`}
                   >
-                    {newTestResult.ok ? '✓ ' : '✗ '}
+                    [{channelTestLabel(newTestResult.kind)}] {newTestResult.ok ? '✓ ' : '✗ '}
                     {newTestResult.message}
                   </span>
                 )}
@@ -1100,14 +1127,34 @@ export default function AdminConfig() {
                         编辑
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => handleTestChannel(ch)}
-                      disabled={testingChannel === ch.id || !ch.api_key?.trim()}
-                      className="text-sm text-slate-600 hover:text-slate-800 disabled:opacity-50"
-                    >
-                      {testingChannel === ch.id ? '测试中...' : '测试连通性'}
-                    </button>
+                    <div className="flex flex-wrap gap-1 items-center">
+                      <button
+                        type="button"
+                        onClick={() => handleTestChannel(ch, 'text')}
+                        disabled={channelTestBusy?.id === ch.id || !ch.api_key?.trim()}
+                        className="text-sm text-slate-600 hover:text-slate-800 disabled:opacity-50 px-1"
+                      >
+                        {channelTestBusy?.id === ch.id && channelTestBusy.kind === 'text' ? '测试中...' : '测试连通性'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleTestChannel(ch, 'image')}
+                        disabled={channelTestBusy?.id === ch.id || !ch.api_key?.trim()}
+                        className="text-sm text-slate-600 hover:text-slate-800 disabled:opacity-50 px-1"
+                        title="base64 小图 + image_url"
+                      >
+                        {channelTestBusy?.id === ch.id && channelTestBusy.kind === 'image' ? '测试中...' : '多模态·图'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleTestChannel(ch, 'video')}
+                        disabled={channelTestBusy?.id === ch.id || !ch.api_key?.trim()}
+                        className="text-sm text-slate-600 hover:text-slate-800 disabled:opacity-50 px-1"
+                        title="仅 Moonshot：内置短视频上传 + ms://"
+                      >
+                        {channelTestBusy?.id === ch.id && channelTestBusy.kind === 'video' ? '测试中...' : '多模态·视频'}
+                      </button>
+                    </div>
                     <button type="button" onClick={() => removeChannel(ch.id)} className="text-sm text-red-600 hover:text-red-700">
                       删除
                     </button>
@@ -1118,7 +1165,7 @@ export default function AdminConfig() {
                         testResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
                       }`}
                     >
-                      {testResult.ok ? '✓ ' : '✗ '}
+                      [{channelTestLabel(testResult.kind)}] {testResult.ok ? '✓ ' : '✗ '}
                       {testResult.message}
                     </div>
                   )}
