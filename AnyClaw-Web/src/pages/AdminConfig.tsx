@@ -942,7 +942,7 @@ export default function AdminConfig() {
                   onClick={() => handleTestNewChannel('video')}
                   disabled={testingNew !== null || !newChannel.api_key?.trim()}
                   className="px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50"
-                  title="仅 Moonshot API Base：上传内置短视频后 ms:// 调用"
+                  title="Moonshot：上传+ms://；其它兼容网关：内嵌短视频 base64，模型与上方一致"
                 >
                   {testingNew === 'video' ? '测试中...' : '多模态·视频'}
                 </button>
@@ -1150,7 +1150,7 @@ export default function AdminConfig() {
                         onClick={() => handleTestChannel(ch, 'video')}
                         disabled={channelTestBusy?.id === ch.id || !ch.api_key?.trim()}
                         className="text-sm text-slate-600 hover:text-slate-800 disabled:opacity-50 px-1"
-                        title="仅 Moonshot：内置短视频上传 + ms://"
+                        title="Moonshot 走上传+ms://；One API 等走内嵌 mp4 + 当前模型"
                       >
                         {channelTestBusy?.id === ch.id && channelTestBusy.kind === 'video' ? '测试中...' : '多模态·视频'}
                       </button>

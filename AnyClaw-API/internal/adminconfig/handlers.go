@@ -363,16 +363,6 @@ func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if mm == "video" && !moonshotLikeAPIBase(apiBase) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{
-			"ok": false,
-			"message": "多模态(视频)自动测试仅支持 API Base 包含 moonshot 的渠道（需 /v1/files 上传 + ms:// 引用）。其它上游请用「多模态(图)」或按厂商文档自测。",
-		})
-		return
-	}
-
 	var bodyBytes []byte
 	var err error
 	switch mm {
@@ -383,21 +373,30 @@ func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case "video":
-		fileID, upErr := moonshotUploadVideoFile(r.Context(), apiBase, apiKey)
-		if upErr != nil {
-			log.Printf("[admin] multimodal video upload: %v", upErr)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]any{
-				"ok":      false,
-				"message": "多模态(视频)上传失败: " + upErr.Error(),
-			})
-			return
-		}
-		bodyBytes, err = buildMoonshotVideoChatBody(model, fileID)
-		if err != nil {
-			http.Error(w, `{"error":"build video request"}`, http.StatusInternalServerError)
-			return
+		if moonshotLikeAPIBase(apiBase) {
+			fileID, upErr := moonshotUploadVideoFile(r.Context(), apiBase, apiKey)
+			if upErr != nil {
+				log.Printf("[admin] multimodal video upload: %v", upErr)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(map[string]any{
+					"ok":      false,
+					"message": "多模态(视频)上传失败: " + upErr.Error(),
+				})
+				return
+			}
+			bodyBytes, err = buildMoonshotVideoChatBody(model, fileID)
+			if err != nil {
+				http.Error(w, `{"error":"build video request"}`, http.StatusInternalServerError)
+				return
+			}
+		} else {
+			// One API / 其它 OpenAI 兼容：内嵌短视频 base64，模型与渠道一致（如 astron-code-latest）
+			bodyBytes, err = buildInlineMP4VideoChatBody(model)
+			if err != nil {
+				http.Error(w, `{"error":"build video request"}`, http.StatusInternalServerError)
+				return
+			}
 		}
 	default:
 		body := map[string]any{
@@ -422,7 +421,7 @@ func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
 
 	timeout := 30 * time.Second
 	if mm == "image" || mm == "video" {
-		timeout = 90 * time.Second
+		timeout = 120 * time.Second
 	}
 	client := &http.Client{Timeout: timeout}
 	resp, err := client.Do(proxyReq)

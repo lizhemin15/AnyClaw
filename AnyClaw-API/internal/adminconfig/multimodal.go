@@ -3,8 +3,12 @@ package adminconfig
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -18,8 +22,24 @@ import (
 //go:embed testdata/probe.mp4
 var embeddedProbeMP4 []byte
 
-// 1×1 PNG (red pixel), OpenAI-style data URL for vision probes.
-const multimodalTestPNGDataURL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+// multimodalTestPNGDataURL returns a solid-color PNG as an OpenAI-style data URL.
+// Some upstreams (e.g. 讯飞 / One API 聚合) reject 1×1 probes as "resolution over limit";
+// 256×256 keeps payload small while satisfying common minimums.
+func multimodalTestPNGDataURL() (string, error) {
+	const side = 256
+	img := image.NewRGBA(image.Rect(0, 0, side, side))
+	fill := color.RGBA{R: 220, G: 20, B: 60, A: 255}
+	for y := 0; y < side; y++ {
+		for x := 0; x < side; x++ {
+			img.Set(x, y, fill)
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return "", fmt.Errorf("encode probe png: %w", err)
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes()), nil
+}
 
 func moonshotLikeAPIBase(apiBase string) bool {
 	lb := strings.ToLower(strings.TrimSpace(apiBase))
@@ -39,6 +59,10 @@ func applyRequestHost(req *http.Request, requestURL string) {
 }
 
 func buildMultimodalImageChatBody(model string) ([]byte, error) {
+	dataURL, err := multimodalTestPNGDataURL()
+	if err != nil {
+		return nil, err
+	}
 	body := map[string]any{
 		"model": model,
 		"messages": []any{
@@ -52,7 +76,7 @@ func buildMultimodalImageChatBody(model string) ([]byte, error) {
 					map[string]any{
 						"type": "image_url",
 						"image_url": map[string]any{
-							"url": multimodalTestPNGDataURL,
+							"url": dataURL,
 						},
 					},
 				},
@@ -129,6 +153,38 @@ func buildMoonshotVideoChatBody(model, fileID string) ([]byte, error) {
 					map[string]any{
 						"type": "text",
 						"text": "Admin probe: reply with one short phrase describing the video (or say BLANK if you see no motion).",
+					},
+				},
+			},
+		},
+		"max_tokens": 128,
+	}
+	return json.Marshal(body)
+}
+
+// buildInlineMP4VideoChatBody sends the embedded probe clip as data:video/mp4;base64,... in one chat/completions
+// request. Used for OpenAI-compatible / One API gateways that do not support Moonshot ms:// or /v1/files routing.
+// The model parameter is the channel model (e.g. astron-code-latest).
+func buildInlineMP4VideoChatBody(model string) ([]byte, error) {
+	if len(embeddedProbeMP4) == 0 {
+		return nil, fmt.Errorf("embedded probe video is empty")
+	}
+	dataURL := "data:video/mp4;base64," + base64.StdEncoding.EncodeToString(embeddedProbeMP4)
+	body := map[string]any{
+		"model": model,
+		"messages": []any{
+			map[string]any{
+				"role": "user",
+				"content": []any{
+					map[string]any{
+						"type": "video_url",
+						"video_url": map[string]any{
+							"url": dataURL,
+						},
+					},
+					map[string]any{
+						"type": "text",
+						"text": "Admin probe: reply with one short phrase describing the video (or say BLANK if you cannot process video).",
 					},
 				},
 			},

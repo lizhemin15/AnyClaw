@@ -581,7 +581,7 @@ export async function testChannelConfig(params: {
   model?: string;
   api_base?: string;
   api_key?: string;
-  /** 不传或 text：短文本 ping；image：base64 小图；video：仅 Moonshot（上传+ms://） */
+  /** 不传或 text：短文本 ping；image：PNG 多模态；video：Moonshot 上传+ms://，其它为内嵌 mp4 base64 */
   multimodal?: 'text' | 'image' | 'video';
 }): Promise<{ ok: boolean; message: string }> {
   return fetchApi<{ ok: boolean; message: string }>('/admin/config/test', {

@@ -53,6 +53,9 @@ jobs:
       - name: Generate go.sum
         run: go mod tidy
 
+      - name: Test
+        run: go test ./... -count=1
+
       - name: Build
         run: go build -o /tmp/anyclaw-api ./cmd/api
 

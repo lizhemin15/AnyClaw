@@ -35,3 +35,21 @@ func TestBuildMultimodalImageChatBody(t *testing.T) {
 		t.Fatalf("unexpected body: %s", s[:pl])
 	}
 }
+
+func TestBuildInlineMP4VideoChatBody(t *testing.T) {
+	b, err := buildInlineMP4VideoChatBody("astron-code-latest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	if !strings.Contains(s, `"model":"astron-code-latest"`) && !strings.Contains(s, "astron-code-latest") {
+		t.Fatalf("expected model in body")
+	}
+	if !strings.Contains(s, "data:video/mp4;base64,") || !strings.Contains(s, "video_url") {
+		pl := 120
+		if len(s) < pl {
+			pl = len(s)
+		}
+		t.Fatalf("expected inline video_url, got prefix: %s", s[:pl])
+	}
+}
