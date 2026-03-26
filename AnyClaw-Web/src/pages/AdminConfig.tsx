@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { getAdminConfig, putAdminConfig, getChannelStatus, setUsageCorrection, testChannelConfig, testSMTPConfig, testVoiceAPIConfig, adminReconnectInstances, type AdminConfig, type Channel, type ChannelStatus, type SMTPConfig, type PaymentConfig, type PaymentPlan, type EnergyConfig, type ContainerConfig, type COSConfig, type VoiceAPIEndpoint } from '../api'
 import { useUnsavedConfig } from '../contexts/UnsavedConfigContext'
 
-type ChannelTestKind = 'text' | 'image' | 'video'
+type ChannelTestKind = 'text' | 'image'
 
 function genId() {
   return 'c-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
@@ -328,7 +328,7 @@ export default function AdminConfig() {
   }
 
   const channelTestLabel = (k: ChannelTestKind) =>
-    k === 'text' ? '连通性' : k === 'image' ? '多模态·图' : '多模态·视频'
+    k === 'text' ? '连通性' : '多模态·图'
 
   const updateSmtp = (upd: Partial<SMTPConfig>) => {
     if (!form) return
@@ -937,15 +937,6 @@ export default function AdminConfig() {
                 >
                   {testingNew === 'image' ? '测试中...' : '多模态·图'}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleTestNewChannel('video')}
-                  disabled={testingNew !== null || !newChannel.api_key?.trim()}
-                  className="px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50"
-                  title="Moonshot：上传+ms://；其它兼容网关：内嵌短视频 base64，模型与上方一致"
-                >
-                  {testingNew === 'video' ? '测试中...' : '多模态·视频'}
-                </button>
                 <button type="button" onClick={addChannel} className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
                   添加
                 </button>
@@ -1144,15 +1135,6 @@ export default function AdminConfig() {
                         title="base64 小图 + image_url"
                       >
                         {channelTestBusy?.id === ch.id && channelTestBusy.kind === 'image' ? '测试中...' : '多模态·图'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleTestChannel(ch, 'video')}
-                        disabled={channelTestBusy?.id === ch.id || !ch.api_key?.trim()}
-                        className="text-sm text-slate-600 hover:text-slate-800 disabled:opacity-50 px-1"
-                        title="Moonshot 走上传+ms://；One API 等走内嵌 mp4 + 当前模型"
-                      >
-                        {channelTestBusy?.id === ch.id && channelTestBusy.kind === 'video' ? '测试中...' : '多模态·视频'}
                       </button>
                     </div>
                     <button type="button" onClick={() => removeChannel(ch.id)} className="text-sm text-red-600 hover:text-red-700">

@@ -301,7 +301,7 @@ type TestChannelRequest struct {
 	Model      string `json:"model"`      // 模型名
 	APIBase    string `json:"api_base"`   // 或直接传凭证
 	APIKey     string `json:"api_key"`
-	Multimodal string `json:"multimodal,omitempty"` // 空/text=文本 ping；image=图多模态；video=Moonshot 系视频（上传+ms://）
+	Multimodal string `json:"multimodal,omitempty"` // 空/text=文本 ping；image=图多模态
 }
 
 func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
@@ -318,9 +318,9 @@ func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
 
 	mm := strings.TrimSpace(strings.ToLower(req.Multimodal))
 	switch mm {
-	case "", "text", "image", "video":
+	case "", "text", "image":
 	default:
-		http.Error(w, `{"error":"invalid multimodal: use text, image, or video"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"invalid multimodal: use text or image"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -372,32 +372,6 @@ func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"build image request"}`, http.StatusInternalServerError)
 			return
 		}
-	case "video":
-		if moonshotLikeAPIBase(apiBase) {
-			fileID, upErr := moonshotUploadVideoFile(r.Context(), apiBase, apiKey)
-			if upErr != nil {
-				log.Printf("[admin] multimodal video upload: %v", upErr)
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]any{
-					"ok":      false,
-					"message": "多模态(视频)上传失败: " + upErr.Error(),
-				})
-				return
-			}
-			bodyBytes, err = buildMoonshotVideoChatBody(model, fileID)
-			if err != nil {
-				http.Error(w, `{"error":"build video request"}`, http.StatusInternalServerError)
-				return
-			}
-		} else {
-			// One API / 其它 OpenAI 兼容：内嵌短视频 base64，模型与渠道一致（如 astron-code-latest）
-			bodyBytes, err = buildInlineMP4VideoChatBody(model)
-			if err != nil {
-				http.Error(w, `{"error":"build video request"}`, http.StatusInternalServerError)
-				return
-			}
-		}
 	default:
 		body := map[string]any{
 			"model": model,
@@ -420,7 +394,7 @@ func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
 	applyRequestHost(proxyReq, reqURL)
 
 	timeout := 30 * time.Second
-	if mm == "image" || mm == "video" {
+	if mm == "image" {
 		timeout = 120 * time.Second
 	}
 	client := &http.Client{Timeout: timeout}
@@ -463,19 +437,6 @@ func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{
 			"ok":      true,
 			"message": "多模态(图)正常" + previewSuffix(txt),
-		})
-	case "video":
-		txt := extractFirstAssistantText(respBody)
-		if txt == "" {
-			json.NewEncoder(w).Encode(map[string]any{
-				"ok":      false,
-				"message": "多模态(视频)：上游 200 但助手内容为空（可能模型不支持视频或需关闭 thinking 等参数）",
-			})
-			return
-		}
-		json.NewEncoder(w).Encode(map[string]any{
-			"ok":      true,
-			"message": "多模态(视频)正常" + previewSuffix(txt),
 		})
 	default:
 		json.NewEncoder(w).Encode(map[string]any{

@@ -101,7 +101,8 @@ func countRecentToolCalls(history []providers.Message) int {
 
 // hasAttachments returns true when the message content contains embedded media.
 // It checks for base64 data URIs (data:image/, data:audio/, data:video/) and
-// common image/audio URL extensions. This is intentionally conservative -// false negatives (missing an attachment) just mean the routing falls back to
+// common image/audio URL extensions. This is intentionally conservative:
+// false negatives (missing an attachment) just mean the routing falls back to
 // the primary model anyway.
 func hasAttachments(msg string) bool {
 	lower := strings.ToLower(msg)
