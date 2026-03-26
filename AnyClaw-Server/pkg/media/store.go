@@ -35,6 +35,11 @@ type MediaStore interface {
 	// and removes the mapping entries. File-not-exist errors are ignored.
 	ReleaseAll(scope string) error
 
+	// TransferRefsToScope moves refs from their current scope to targetScope
+	// without deleting files. Unknown refs are skipped. Used so inbound message
+	// scopes can be released while session history keeps media:// refs valid.
+	TransferRefsToScope(refs []string, targetScope string)
+
 	// ReleaseRefs deletes the given refs and their files. Unknown refs are ignored.
 	// Use after outbound media is sent to avoid accumulation (e.g. TTS audio).
 	ReleaseRefs(refs []string)
@@ -171,6 +176,38 @@ func (s *FileMediaStore) ReleaseAll(scope string) error {
 	}
 
 	return nil
+}
+
+// TransferRefsToScope moves refs to targetScope so ReleaseAll(oldScope) no longer removes them.
+func (s *FileMediaStore) TransferRefsToScope(refs []string, targetScope string) {
+	if targetScope == "" || len(refs) == 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, ref := range refs {
+		if ref == "" {
+			continue
+		}
+		oldScope, ok := s.refToScope[ref]
+		if !ok {
+			continue
+		}
+		if oldScope == targetScope {
+			continue
+		}
+		if oldRefs, ok := s.scopeToRefs[oldScope]; ok {
+			delete(oldRefs, ref)
+			if len(oldRefs) == 0 {
+				delete(s.scopeToRefs, oldScope)
+			}
+		}
+		if s.scopeToRefs[targetScope] == nil {
+			s.scopeToRefs[targetScope] = make(map[string]struct{})
+		}
+		s.scopeToRefs[targetScope][ref] = struct{}{}
+		s.refToScope[ref] = targetScope
+	}
 }
 
 // ReleaseRefs deletes the given refs and their files. Unknown refs are ignored.

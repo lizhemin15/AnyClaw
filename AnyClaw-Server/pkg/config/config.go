@@ -196,16 +196,42 @@ type AgentDefaults struct {
 	SummarizeMessageThreshold int            `json:"summarize_message_threshold"     env:"ANYCLAW_AGENTS_DEFAULTS_SUMMARIZE_MESSAGE_THRESHOLD"`
 	SummarizeTokenPercent     int            `json:"summarize_token_percent"         env:"ANYCLAW_AGENTS_DEFAULTS_SUMMARIZE_TOKEN_PERCENT"`
 	MaxMediaSize              int            `json:"max_media_size,omitempty"        env:"ANYCLAW_AGENTS_DEFAULTS_MAX_MEDIA_SIZE"`
+	MaxImageEdge              int            `json:"max_image_edge,omitempty"        env:"ANYCLAW_AGENTS_DEFAULTS_MAX_IMAGE_EDGE"`               // 最长边像素上限；0=默认 2048；-1=关闭缩放
+	InboundImageJPEGQuality   int            `json:"inbound_image_jpeg_quality,omitempty" env:"ANYCLAW_AGENTS_DEFAULTS_INBOUND_IMAGE_JPEG_QUALITY"` // 1–100，缩放后非透明图用 JPEG
 	Routing                   *RoutingConfig `json:"routing,omitempty"`
 }
 
 const DefaultMaxMediaSize = 20 * 1024 * 1024 // 20 MB
+
+// DefaultMaxImageEdge 入站图送模型前若最长边超过此值则缩小，减轻超时与上游限流。
+const DefaultMaxImageEdge = 2048
 
 func (d *AgentDefaults) GetMaxMediaSize() int {
 	if d.MaxMediaSize > 0 {
 		return d.MaxMediaSize
 	}
 	return DefaultMaxMediaSize
+}
+
+func (d *AgentDefaults) GetMaxImageEdge() int {
+	if d.MaxImageEdge < 0 {
+		return 0
+	}
+	if d.MaxImageEdge == 0 {
+		return DefaultMaxImageEdge
+	}
+	return d.MaxImageEdge
+}
+
+func (d *AgentDefaults) GetInboundImageJPEGQuality() int {
+	q := d.InboundImageJPEGQuality
+	if q <= 0 {
+		return 85
+	}
+	if q > 100 {
+		return 100
+	}
+	return q
 }
 
 // GetModelName returns the effective model name for the agent defaults.

@@ -791,12 +791,21 @@ func (al *AgentLoop) runAgentLoop(
 		opts.ChatID,
 	)
 
-	// Resolve media:// refs to base64 data URLs (streaming)
+	// Resolve media:// refs to base64 data URLs (streaming); optional downscale for images
 	maxMediaSize := al.cfg.Agents.Defaults.GetMaxMediaSize()
-	messages = resolveMediaRefs(messages, al.mediaStore, maxMediaSize)
+	maxEdge := al.cfg.Agents.Defaults.GetMaxImageEdge()
+	jpegQ := al.cfg.Agents.Defaults.GetInboundImageJPEGQuality()
+	messages = resolveMediaRefs(messages, al.mediaStore, maxMediaSize, maxEdge, jpegQ)
 
-	// 2. Save user message to session
-	agent.Sessions.AddMessage(opts.SessionKey, "user", opts.UserMessage)
+	// 2. Save user message (keep media:// refs in session so follow-up text can re-resolve)
+	agent.Sessions.AddFullMessage(opts.SessionKey, providers.Message{
+		Role:    "user",
+		Content: opts.UserMessage,
+		Media:   append([]string(nil), opts.Media...),
+	})
+	if al.mediaStore != nil && len(opts.Media) > 0 {
+		al.mediaStore.TransferRefsToScope(opts.Media, "session:"+opts.SessionKey)
+	}
 
 	// 3. Run LLM iteration loop
 	finalContent, iteration, err := al.runLLMIteration(ctx, agent, messages, opts)

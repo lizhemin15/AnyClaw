@@ -113,6 +113,34 @@ func TestMultiScopeIsolation(t *testing.T) {
 	}
 }
 
+func TestTransferRefsToScope(t *testing.T) {
+	dir := t.TempDir()
+	store := NewFileMediaStore()
+	path := createTempFile(t, dir, "a.jpg")
+	ref, err := store.Store(path, MediaMeta{Source: "test"}, "inbound")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.TransferRefsToScope([]string{ref}, "session:key1")
+	if err := store.ReleaseAll("inbound"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.Resolve(ref)
+	if err != nil {
+		t.Fatalf("after transfer, ref should survive inbound ReleaseAll: %v", err)
+	}
+	if got != path {
+		t.Errorf("Resolve path = %q, want %q", got, path)
+	}
+	store.TransferRefsToScope([]string{ref}, "session:key1") // no-op same scope
+	if err := store.ReleaseAll("session:key1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Resolve(ref); err == nil {
+		t.Fatal("expected ref gone after session ReleaseAll")
+	}
+}
+
 func TestReleaseAllIdempotent(t *testing.T) {
 	store := NewFileMediaStore()
 
