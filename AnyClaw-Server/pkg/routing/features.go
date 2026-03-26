@@ -12,8 +12,9 @@ import (
 const lookbackWindow = 6
 
 // Features holds the structural signals extracted from a message and its session context.
-// Every dimension is language-agnostic by construction -no keyword or pattern matching
-// against natural-language content. This ensures consistent routing for all locales.
+// Token and code-block signals avoid locale-specific keywords; attachment detection also
+// recognizes fixed inbound channel markers (e.g. "[image: photo]") in addition to URLs
+// and data URIs.
 type Features struct {
 	// TokenEstimate is a proxy for token count.
 	// CJK runes count as 1 token each; non-CJK runes as 0.25 tokens each.
@@ -33,7 +34,9 @@ type Features struct {
 	ConversationDepth int
 
 	// HasAttachments is true when the message appears to contain media (images,
-	// audio, video). Multi-modal inputs require vision-capable heavy models.
+	// audio, video), including channel-normalized placeholders such as
+	// "[image: photo]" when inbound pipelines attach binary parts. Multi-modal
+	// inputs require vision-capable heavy models.
 	HasAttachments bool
 }
 
@@ -122,5 +125,48 @@ func hasAttachments(msg string) bool {
 		}
 	}
 
+	// Inbound channels (Feishu, Telegram, LINE, WeixinClaw, etc.) append fixed
+	// English tags when media was downloaded for the LLM. Without this, short
+	// captions route to light text-only models while the request still carries
+	// image parts — a production footgun. These markers are server-controlled,
+	// not end-user prose.
+	if hasInboundMediaPlaceholder(msg) {
+		return true
+	}
+
+	return false
+}
+
+// hasInboundMediaPlaceholder reports tags produced by AnyClaw channel adapters
+// when associating binary media with a user turn.
+func hasInboundMediaPlaceholder(msg string) bool {
+	if msg == "" {
+		return false
+	}
+	switch {
+	case strings.Contains(msg, "[image:"):
+		return true
+	case strings.Contains(msg, "[audio]"):
+		return true
+	case strings.Contains(msg, "[video]"):
+		return true
+	case strings.Contains(msg, "[file]"):
+		return true
+	case strings.Contains(msg, "[attachment]"):
+		return true
+	default:
+		return false
+	}
+}
+
+// AnyMessageHasMedia returns true if any message carries Media refs or resolved
+// data URLs (used after BuildMessages + resolveMediaRefs). This is a second line
+// of defense when the visible user string does not include placeholders.
+func AnyMessageHasMedia(msgs []providers.Message) bool {
+	for i := range msgs {
+		if len(msgs[i].Media) > 0 {
+			return true
+		}
+	}
 	return false
 }

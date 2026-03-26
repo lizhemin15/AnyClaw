@@ -1341,6 +1341,14 @@ func (al *AgentLoop) selectCandidates(
 		return agent.Candidates, agent.Model
 	}
 
+	// Multimodal request: always use primary tier so vision/audio parts are not
+	// sent to a text-only light model (see routing.hasInboundMediaPlaceholder).
+	if routing.AnyMessageHasMedia(history) {
+		logger.DebugCF("agent", "Model routing: primary model selected (non-empty Media on request)",
+			map[string]any{"agent_id": agent.ID})
+		return agent.Candidates, agent.Model
+	}
+
 	_, usedLight, score := agent.Router.SelectModel(userMsg, history, agent.Model)
 	if !usedLight {
 		logger.DebugCF("agent", "Model routing: primary model selected",

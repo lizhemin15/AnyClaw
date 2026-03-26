@@ -143,6 +143,43 @@ func TestExtractFeatures_HasAttachments_Extension(t *testing.T) {
 	}
 }
 
+func TestExtractFeatures_HasAttachments_InboundPlaceholders(t *testing.T) {
+	cases := []struct {
+		msg  string
+		want bool
+	}{
+		{"[image: photo]", true},
+		{"look [image: photo]", true},
+		{"[image: test.png]", true},
+		{"[audio]", true},
+		{"[video]", true},
+		{"[file]", true},
+		{"[attachment]", true},
+		{"plain chat no brackets", false},
+	}
+	for _, tc := range cases {
+		f := ExtractFeatures(tc.msg, nil)
+		if f.HasAttachments != tc.want {
+			t.Errorf("msg=%q: HasAttachments got %v, want %v", tc.msg, f.HasAttachments, tc.want)
+		}
+	}
+}
+
+func TestAnyMessageHasMedia(t *testing.T) {
+	if !AnyMessageHasMedia([]providers.Message{{Role: "user", Media: []string{"data:image/png;base64,ab=="}}}) {
+		t.Fatal("expected true when user message has Media")
+	}
+	if AnyMessageHasMedia([]providers.Message{{Role: "user", Content: "hi"}}) {
+		t.Fatal("expected false when no Media")
+	}
+	if !AnyMessageHasMedia([]providers.Message{
+		{Role: "system", Content: "x"},
+		{Role: "user", Content: "y", Media: []string{"media://x"}},
+	}) {
+		t.Fatal("expected true when any message has Media")
+	}
+}
+
 // ── RuleClassifier ───────────────────────────────────────────────────────────
 
 func TestRuleClassifier_ZeroFeatures(t *testing.T) {
@@ -288,6 +325,18 @@ func TestRouter_SelectModel_AttachmentUsesPrimary(t *testing.T) {
 	}
 	if model != "claude-sonnet-4-6" {
 		t.Errorf("attachment: model got %q, want %q", model, "claude-sonnet-4-6")
+	}
+}
+
+func TestRouter_SelectModel_ChannelImagePlaceholderUsesPrimary(t *testing.T) {
+	r := New(RouterConfig{LightModel: "gemini-flash", Threshold: 0.35})
+	msg := "[image: photo]"
+	model, usedLight, _ := r.SelectModel(msg, nil, "claude-sonnet-4-6")
+	if usedLight {
+		t.Error("channel image tag: expected primary model to be selected")
+	}
+	if model != "claude-sonnet-4-6" {
+		t.Errorf("channel image tag: model got %q, want %q", model, "claude-sonnet-4-6")
 	}
 }
 
