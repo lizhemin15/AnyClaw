@@ -4,6 +4,7 @@ import { getInstances, createInstance, deleteInstance, subscribeInstance, update
 import SearchInput from '../components/SearchInput'
 import Pagination from '../components/Pagination'
 import HomeCollabOrchestrateModal from '../components/HomeCollabOrchestrateModal'
+import CompanyMailsModal from '../components/CompanyMailsModal'
 
 const PAGE_SIZE = 8
 
@@ -29,29 +30,11 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
   editingIdRef.current = editingId
 
   const [orchMode, setOrchMode] = useState(false)
-  const [orchInst, setOrchInst] = useState<Instance | null>(null)
-  const [orchInitialCollabTab, setOrchInitialCollabTab] = useState<'topo' | 'mails'>('topo')
+  const [orchInlineInst, setOrchInlineInst] = useState<Instance | null>(null)
+  const [companyMailOpen, setCompanyMailOpen] = useState(false)
 
   const navigate = useNavigate()
   const location = useLocation()
-
-  const openOrchestrate = (inst: Instance) => {
-    setOrchInitialCollabTab('topo')
-    setOrchInst(inst)
-  }
-
-  useEffect(() => {
-    const st = location.state as { orchestrateInstanceId?: number; orchestrateCollabTab?: 'topo' | 'mails' } | null
-    const sid = st?.orchestrateInstanceId
-    if (sid == null || typeof sid !== 'number') return
-    if (loading) return
-    const match = instances.find((i) => i.id === sid)
-    if (match) {
-      setOrchInitialCollabTab(st?.orchestrateCollabTab === 'mails' ? 'mails' : 'topo')
-      setOrchInst(match)
-    }
-    navigate(`${location.pathname}${location.search}`, { replace: true, state: {} })
-  }, [loading, instances, location.state, location.pathname, location.search, navigate])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -63,6 +46,32 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
     const start = (page - 1) * PAGE_SIZE
     return filtered.slice(start, start + PAGE_SIZE)
   }, [filtered, page])
+
+  useEffect(() => {
+    const st = location.state as { orchestrateInstanceId?: number; orchestrateCollabTab?: 'topo' | 'mails' } | null
+    const sid = st?.orchestrateInstanceId
+    if (sid == null || typeof sid !== 'number') return
+    if (loading) return
+    const match = instances.find((i) => i.id === sid)
+    if (match) {
+      setOrchMode(true)
+      setOrchInlineInst(match)
+      if (st?.orchestrateCollabTab === 'mails') setCompanyMailOpen(true)
+    }
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: {} })
+  }, [loading, instances, location.state, location.pathname, location.search, navigate])
+
+  useEffect(() => {
+    if (!orchMode) setOrchInlineInst(null)
+  }, [orchMode])
+
+  useEffect(() => {
+    if (!orchMode || instances.length === 0) return
+    setOrchInlineInst((prev) => {
+      if (prev && instances.some((i) => i.id === prev.id)) return prev
+      return filtered[0] ?? instances[0]
+    })
+  }, [orchMode, instances, filtered])
 
   useEffect(() => {
     setPage(1)
@@ -307,18 +316,28 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-base sm:text-lg font-semibold text-slate-800">我的公司</h2>
           {instances.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setOrchMode((v) => !v)}
-              className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors ${
-                orchMode
-                  ? 'border-violet-500 bg-violet-50 text-violet-800'
-                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-              title="开启后点击员工卡片进入协作拓扑编排，不再直接进入对话"
-            >
-              {orchMode ? '编排模式（开）' : '编排模式'}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setOrchMode((v) => !v)}
+                className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors ${
+                  orchMode
+                    ? 'border-violet-500 bg-violet-50 text-violet-800'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+                title="开启后在本页编排通讯拓扑；点击卡片切换要编辑的员工（实例）"
+              >
+                {orchMode ? '编排模式（开）' : '编排模式'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCompanyMailOpen(true)}
+                className="px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+                title="查看全部员工的内部邮件往来"
+              >
+                邮箱
+              </button>
+            </>
           )}
         </div>
         {instances.length > 0 && (
@@ -329,8 +348,21 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
       </div>
       {orchMode && instances.length > 0 && (
         <p className="text-xs text-violet-700 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2 mb-3">
-          已开启编排模式：点击员工卡片打开拓扑画布；点「对话」进入聊天。卡片上的「编排」可随时打开画布。
+          已开启编排模式：点击下方区域依次点击两个节点连线；点击卡片切换当前要编辑的员工；点卡片内「对话 →」进入聊天。
         </p>
+      )}
+      {orchMode && orchInlineInst && (
+        <div className="mb-4">
+          <HomeCollabOrchestrateModal
+            key={orchInlineInst.id}
+            variant="inline"
+            open
+            instanceId={orchInlineInst.id}
+            instanceName={orchInlineInst.name}
+            onClose={() => setOrchMode(false)}
+            onSaved={loadInstances}
+          />
+        </div>
       )}
       {loading ? (
         <p className="text-slate-500 py-8">加载中...</p>
@@ -352,14 +384,16 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
               key={inst.id}
               onClick={() => {
                 if (orchMode) {
-                  openOrchestrate(inst)
+                  setOrchInlineInst(inst)
                   return
                 }
                 navigate(`/instances/${inst.id}`)
               }}
               className={`bg-white border rounded-xl p-4 transition-colors relative ${
                 orchMode
-                  ? 'border-violet-200 cursor-pointer hover:bg-violet-50/40'
+                  ? orchInlineInst?.id === inst.id
+                    ? 'border-violet-500 ring-2 ring-violet-200 cursor-pointer bg-violet-50/30'
+                    : 'border-violet-200 cursor-pointer hover:bg-violet-50/40'
                   : 'border-slate-200 active:bg-slate-50 cursor-pointer'
               }`}
             >
@@ -454,17 +488,6 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
                     {inst.status === 'running' ? '在线' : inst.status === 'creating' ? '创建中' : inst.status === 'error' ? '异常' : inst.status}
                   </span>
                   <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      openOrchestrate(inst)
-                    }}
-                    className="px-2 py-1 text-xs text-violet-700 border border-violet-200 rounded-lg active:bg-violet-50"
-                    title="在本页打开协作拓扑编排"
-                  >
-                    编排
-                  </button>
-                  <button
                     onClick={(e) => handleAbandon(e, inst)}
                     disabled={!!deleting}
                     className="px-2 py-1 text-xs text-red-600 border border-red-200 rounded-lg active:bg-red-50 disabled:opacity-50"
@@ -483,16 +506,7 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
         </>
       )}
 
-      {orchInst && (
-        <HomeCollabOrchestrateModal
-          open
-          instanceId={orchInst.id}
-          instanceName={orchInst.name}
-          initialCollabTab={orchInitialCollabTab}
-          onClose={() => setOrchInst(null)}
-          onSaved={loadInstances}
-        />
-      )}
+      <CompanyMailsModal open={companyMailOpen} instances={instances} onClose={() => setCompanyMailOpen(false)} />
     </div>
   )
 }

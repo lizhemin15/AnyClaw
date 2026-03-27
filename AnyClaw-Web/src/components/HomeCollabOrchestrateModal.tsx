@@ -21,6 +21,8 @@ export type HomeCollabOrchestrateModalProps = {
   onSaved?: () => void
   /** 打开时默认子标签（如从对话页直达邮件） */
   initialCollabTab?: 'topo' | 'mails'
+  /** modal 为弹层；inline 为页面内嵌，仅拓扑（邮件请使用首页「邮箱」） */
+  variant?: 'modal' | 'inline'
 }
 
 function canonPair(a: string, b: string): [string, string] {
@@ -62,6 +64,7 @@ export default function HomeCollabOrchestrateModal({
   onClose,
   onSaved,
   initialCollabTab = 'topo',
+  variant = 'modal',
 }: HomeCollabOrchestrateModalProps) {
   const [collabTab, setCollabTab] = useState<'topo' | 'mails'>(initialCollabTab)
   const [loading, setLoading] = useState(true)
@@ -89,8 +92,12 @@ export default function HomeCollabOrchestrateModal({
 
   useEffect(() => {
     if (!open) return
+    if (variant === 'inline') {
+      setCollabTab('topo')
+      return
+    }
     setCollabTab(initialCollabTab === 'mails' ? 'mails' : 'topo')
-  }, [open, instanceId, initialCollabTab])
+  }, [open, instanceId, initialCollabTab, variant])
 
   const maxMailListLimit = limits?.max_internal_mail_list_limit ?? 500
   const maxMailListOffsetCap = limits?.max_internal_mail_list_offset ?? 500_000
@@ -289,13 +296,13 @@ export default function HomeCollabOrchestrateModal({
   }, [dirty, onClose])
 
   useEffect(() => {
-    if (!open) return
+    if (!open || variant === 'inline') return
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
       document.body.style.overflow = prevOverflow
     }
-  }, [open])
+  }, [open, variant])
 
   useEffect(() => {
     if (!open) return
@@ -310,12 +317,12 @@ export default function HomeCollabOrchestrateModal({
   }, [open, requestClose])
 
   useEffect(() => {
-    if (!open || loading) return
+    if (!open || loading || variant === 'inline') return
     const t = window.setTimeout(() => {
       panelRef.current?.focus()
     }, 50)
     return () => clearTimeout(t)
-  }, [open, loading])
+  }, [open, loading, variant])
 
   useEffect(() => {
     if (!open || typeof BroadcastChannel === 'undefined') return
@@ -410,7 +417,7 @@ export default function HomeCollabOrchestrateModal({
       setEdges(cleaned)
       broadcastCollabEvent('topology', instanceId)
       onSaved?.()
-      onClose()
+      if (variant === 'modal') onClose()
     } catch (e) {
       const lim = (e as CollabApiError).collabLimits
       if (lim) setLimits(lim)
@@ -425,19 +432,24 @@ export default function HomeCollabOrchestrateModal({
 
   if (!open) return null
 
+  const panelClassName =
+    variant === 'inline'
+      ? 'bg-white rounded-2xl shadow-sm w-full max-w-4xl flex flex-col border border-violet-200 outline-none'
+      : 'bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col border border-slate-200 outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-violet-400'
+
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-      role="dialog"
-      aria-modal="true"
-      aria-describedby={orchDescId}
-      onClick={() => requestClose()}
+      className={variant === 'modal' ? 'fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50' : 'w-full'}
+      role={variant === 'modal' ? 'dialog' : undefined}
+      aria-modal={variant === 'modal' ? true : undefined}
+      aria-describedby={variant === 'modal' ? orchDescId : undefined}
+      onClick={variant === 'modal' ? () => requestClose() : undefined}
     >
       <div
         ref={panelRef}
-        tabIndex={-1}
-        className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col border border-slate-200 outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-violet-400"
-        onClick={(e) => e.stopPropagation()}
+        tabIndex={variant === 'modal' ? -1 : undefined}
+        className={panelClassName}
+        onClick={variant === 'modal' ? (e) => e.stopPropagation() : undefined}
         role="document"
         aria-labelledby="home-orch-title"
       >
@@ -454,28 +466,34 @@ export default function HomeCollabOrchestrateModal({
               </span>
             )}
           </div>
-          <div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit mt-3">
-            <button
-              type="button"
-              onClick={() => setCollabTab('topo')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                collabTab === 'topo' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              编排
-            </button>
-            <button
-              type="button"
-              onClick={() => setCollabTab('mails')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                collabTab === 'mails' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              邮件
-            </button>
-          </div>
+          {variant !== 'inline' && (
+            <div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit mt-3">
+              <button
+                type="button"
+                onClick={() => setCollabTab('topo')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  collabTab === 'topo' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                编排
+              </button>
+              <button
+                type="button"
+                onClick={() => setCollabTab('mails')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  collabTab === 'mails' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                邮件
+              </button>
+            </div>
+          )}
           <p id={orchDescId} className="text-xs text-slate-500 mt-2">
-            {collabTab === 'topo' ? (
+            {variant === 'inline' ? (
+              <>
+                依次点击两个节点添加或移除连线（无向邻居）。员工列表由容器 <code className="bg-slate-100 px-0.5 rounded">agents.list</code> 启动时自动同步。内部邮件汇总请点上方「邮箱」。
+              </>
+            ) : collabTab === 'topo' ? (
               <>
                 依次点击两个节点添加或移除连线（无向邻居）。员工列表由容器 <code className="bg-slate-100 px-0.5 rounded">agents.list</code> 启动时自动同步。
               </>
@@ -486,7 +504,7 @@ export default function HomeCollabOrchestrateModal({
         </div>
 
         <div className="px-5 py-4 flex-1 overflow-y-auto min-h-0">
-          {collabTab === 'mails' ? (
+          {collabTab === 'mails' && variant !== 'inline' ? (
             <div className="space-y-3">
               {mailErr && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{mailErr}</div>
