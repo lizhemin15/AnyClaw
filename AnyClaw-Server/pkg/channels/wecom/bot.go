@@ -369,20 +369,35 @@ func (c *WeComBotChannel) processMessage(ctx context.Context, msg WeComBotMessag
 			}
 		}
 	case "image", "file":
-		// For image and file, we don't have text content
 		content = ""
 	}
 
-	// Build metadata
 	peer := bus.Peer{Kind: peerKind, ID: peerID}
 
-	// In group chats, apply unified group trigger filtering
 	if isGroupChat {
-		respond, cleaned := c.ShouldRespondInGroup(false, content)
+		check := strings.TrimSpace(content)
+		if check == "" {
+			switch msg.MsgType {
+			case "image":
+				check = "[image: photo]"
+			case "file":
+				check = "[file]"
+			case "mixed":
+				for _, it := range msg.Mixed.MsgItem {
+					if it.MsgType == "image" && strings.TrimSpace(it.Image.URL) != "" {
+						check = "[image: photo]"
+						break
+					}
+				}
+			}
+		}
+		respond, cleaned := c.ShouldRespondInGroup(false, check)
 		if !respond {
 			return
 		}
-		content = cleaned
+		if strings.TrimSpace(content) != "" {
+			content = cleaned
+		}
 	}
 
 	metadata := map[string]string{
@@ -415,8 +430,44 @@ func (c *WeComBotChannel) processMessage(ctx context.Context, msg WeComBotMessag
 		return
 	}
 
-	// Handle the message through the base channel
-	c.HandleMessage(ctx, peer, msg.MsgID, senderID, chatID, content, nil, metadata, sender)
+	var mediaRefs []string
+	store := c.GetMediaStore()
+	switch msg.MsgType {
+	case "image":
+		if store != nil && strings.TrimSpace(msg.Image.URL) != "" {
+			scope := channels.BuildMediaScope("wecom", chatID, msg.MsgID)
+			ref, err := channels.DownloadHTTPURLToMediaStore(ctx, c.client, store, strings.TrimSpace(msg.Image.URL), scope, msg.MsgID, "", "wecom")
+			if err != nil {
+				logger.WarnCF("wecom", "inbound image download failed", map[string]any{"err": err.Error()})
+			} else {
+				mediaRefs = append(mediaRefs, ref)
+			}
+		}
+		content = channels.AppendImageMediaPlaceholder(content)
+	case "mixed":
+		idx := 0
+		for _, item := range msg.Mixed.MsgItem {
+			if item.MsgType != "image" || strings.TrimSpace(item.Image.URL) == "" {
+				continue
+			}
+			if store == nil {
+				break
+			}
+			sc := channels.BuildMediaScope("wecom", chatID, fmt.Sprintf("%s-%d", msg.MsgID, idx))
+			idx++
+			ref, err := channels.DownloadHTTPURLToMediaStore(ctx, c.client, store, strings.TrimSpace(item.Image.URL), sc, msg.MsgID, "", "wecom")
+			if err != nil {
+				logger.WarnCF("wecom", "inbound mixed image failed", map[string]any{"err": err.Error()})
+				continue
+			}
+			mediaRefs = append(mediaRefs, ref)
+		}
+		if len(mediaRefs) > 0 {
+			content = channels.AppendImageMediaPlaceholder(content)
+		}
+	}
+
+	c.HandleMessage(ctx, peer, msg.MsgID, senderID, chatID, content, mediaRefs, metadata, sender)
 }
 
 // sendWebhookReply sends a reply using the webhook URL

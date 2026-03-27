@@ -26,6 +26,7 @@ import (
 type WeComAIBotChannel struct {
 	*channels.BaseChannel
 	config      config.WeComAIBotConfig
+	httpClient  *http.Client
 	ctx         context.Context
 	cancel      context.CancelFunc
 	streamTasks map[string]*streamTask   // streamID -> task (for poll lookups)
@@ -151,6 +152,7 @@ func NewWeComAIBotChannel(
 	return &WeComAIBotChannel{
 		BaseChannel: base,
 		config:      cfg,
+		httpClient:  &http.Client{Timeout: 120 * time.Second},
 		streamTasks: make(map[string]*streamTask),
 		chatTasks:   make(map[string][]*streamTask),
 	}, nil
@@ -607,26 +609,80 @@ func (c *WeComAIBotChannel) handleImageMessage(
 	msg WeComAIBotMessage,
 	timestamp, nonce string,
 ) string {
-	logger.WarnC("wecom_aibot", "Image message type not yet fully implemented")
-	if msg.Image == nil {
+	if msg.Image == nil || strings.TrimSpace(msg.Image.URL) == "" {
 		logger.ErrorC("wecom_aibot", "Image message missing image field")
 		return c.encryptEmptyResponse(timestamp, nonce)
 	}
 
-	imageURL := msg.Image.URL
+	userID := msg.From.UserID
+	if userID == "" {
+		userID = "unknown"
+	}
+	chatID := msg.ChatID
+	if chatID == "" {
+		chatID = userID
+	}
 
-	// For now, just acknowledge receipt without echoing the image
-	return c.encryptResponse("", timestamp, nonce, WeComAIBotStreamResponse{
-		MsgType: "stream",
-		Stream: WeComAIBotStreamInfo{
-			ID:     c.generateStreamID(),
-			Finish: true,
-			Content: fmt.Sprintf(
-				"Image received (URL: %s), but image messages are not yet supported",
-				imageURL,
-			),
-		},
-	})
+	streamID := c.generateStreamID()
+	deadline := time.Now().Add(30 * time.Second)
+	taskCtx, taskCancel := context.WithCancel(c.ctx)
+
+	task := &streamTask{
+		StreamID:    streamID,
+		ChatID:      chatID,
+		ResponseURL: msg.ResponseURL,
+		Question:    "[image]",
+		CreatedTime: time.Now(),
+		Deadline:    deadline,
+		Finished:    false,
+		answerCh:    make(chan string, 1),
+		ctx:         taskCtx,
+		cancel:      taskCancel,
+	}
+
+	c.taskMu.Lock()
+	c.streamTasks[streamID] = task
+	c.chatTasks[chatID] = append(c.chatTasks[chatID], task)
+	c.taskMu.Unlock()
+
+	go func() {
+		rawURL := strings.TrimSpace(msg.Image.URL)
+		var mediaRefs []string
+		if store := c.GetMediaStore(); store != nil && c.httpClient != nil {
+			sc := channels.BuildMediaScope("wecom_aibot", chatID, msg.MsgID)
+			ref, err := channels.DownloadHTTPURLToMediaStore(taskCtx, c.httpClient, store, rawURL, sc, msg.MsgID, "", "wecom_aibot")
+			if err != nil {
+				logger.WarnCF("wecom_aibot", "inbound image download failed", map[string]any{"err": err.Error()})
+			} else {
+				mediaRefs = append(mediaRefs, ref)
+			}
+		}
+		content := "[image: photo]"
+		sender := bus.SenderInfo{
+			Platform:    "wecom_aibot",
+			PlatformID:  userID,
+			CanonicalID: identity.BuildCanonicalID("wecom_aibot", userID),
+			DisplayName: userID,
+		}
+		peerKind := "direct"
+		if msg.ChatType == "group" {
+			peerKind = "group"
+		}
+		peer := bus.Peer{Kind: peerKind, ID: chatID}
+		metadata := map[string]string{
+			"channel":      "wecom_aibot",
+			"chat_type":    msg.ChatType,
+			"msg_type":     "image",
+			"msgid":        msg.MsgID,
+			"aibotid":      msg.AIBotID,
+			"stream_id":    streamID,
+			"response_url": msg.ResponseURL,
+		}
+		c.HandleMessage(taskCtx, peer, msg.MsgID, userID, chatID,
+			content, mediaRefs, metadata, sender)
+	}()
+
+	return c.getStreamResponse(task, timestamp, nonce)
 }
 
 // handleMixedMessage handles mixed (text + image) messages
@@ -635,15 +691,107 @@ func (c *WeComAIBotChannel) handleMixedMessage(
 	msg WeComAIBotMessage,
 	timestamp, nonce string,
 ) string {
-	logger.WarnC("wecom_aibot", "Mixed message type not yet fully implemented")
-	return c.encryptResponse("", timestamp, nonce, WeComAIBotStreamResponse{
-		MsgType: "stream",
-		Stream: WeComAIBotStreamInfo{
-			ID:      c.generateStreamID(),
-			Finish:  true,
-			Content: "Mixed message type is not yet supported",
-		},
-	})
+	if msg.Mixed == nil || len(msg.Mixed.MsgItem) == 0 {
+		return c.encryptEmptyResponse(timestamp, nonce)
+	}
+
+	var text string
+	var imageURLs []string
+	for _, item := range msg.Mixed.MsgItem {
+		if item.MsgType == "text" && item.Text != nil {
+			text += item.Text.Content
+		}
+		if item.MsgType == "image" && strings.TrimSpace(item.Image.URL) != "" {
+			imageURLs = append(imageURLs, strings.TrimSpace(item.Image.URL))
+		}
+	}
+
+	if len(imageURLs) == 0 {
+		if strings.TrimSpace(text) == "" {
+			return c.encryptEmptyResponse(timestamp, nonce)
+		}
+		msg2 := *msg
+		msg2.MsgType = "text"
+		msg2.Mixed = nil
+		msg2.Image = nil
+		msg2.Text = &struct {
+			Content string `json:"content"`
+		}{Content: text}
+		return c.handleTextMessage(ctx, msg2, timestamp, nonce)
+	}
+
+	userID := msg.From.UserID
+	if userID == "" {
+		userID = "unknown"
+	}
+	chatID := msg.ChatID
+	if chatID == "" {
+		chatID = userID
+	}
+
+	streamID := c.generateStreamID()
+	deadline := time.Now().Add(30 * time.Second)
+	taskCtx, taskCancel := context.WithCancel(c.ctx)
+
+	task := &streamTask{
+		StreamID:    streamID,
+		ChatID:      chatID,
+		ResponseURL: msg.ResponseURL,
+		Question:    channels.AppendImageMediaPlaceholder(text),
+		CreatedTime: time.Now(),
+		Deadline:    deadline,
+		Finished:    false,
+		answerCh:    make(chan string, 1),
+		ctx:         taskCtx,
+		cancel:      taskCancel,
+	}
+
+	c.taskMu.Lock()
+	c.streamTasks[streamID] = task
+	c.chatTasks[chatID] = append(c.chatTasks[chatID], task)
+	c.taskMu.Unlock()
+
+	go func() {
+		var mediaRefs []string
+		store := c.GetMediaStore()
+		for i, u := range imageURLs {
+			if store == nil || c.httpClient == nil {
+				break
+			}
+			sc := channels.BuildMediaScope("wecom_aibot", chatID, fmt.Sprintf("%s-%d", msg.MsgID, i))
+			ref, err := channels.DownloadHTTPURLToMediaStore(taskCtx, c.httpClient, store, u, sc, msg.MsgID, "", "wecom_aibot")
+			if err != nil {
+				logger.WarnCF("wecom_aibot", "mixed image download failed", map[string]any{"i": i, "err": err.Error()})
+				continue
+			}
+			mediaRefs = append(mediaRefs, ref)
+		}
+		content := channels.AppendImageMediaPlaceholder(text)
+		sender := bus.SenderInfo{
+			Platform:    "wecom_aibot",
+			PlatformID:  userID,
+			CanonicalID: identity.BuildCanonicalID("wecom_aibot", userID),
+			DisplayName: userID,
+		}
+		peerKind := "direct"
+		if msg.ChatType == "group" {
+			peerKind = "group"
+		}
+		peer := bus.Peer{Kind: peerKind, ID: chatID}
+		metadata := map[string]string{
+			"channel":      "wecom_aibot",
+			"chat_type":    msg.ChatType,
+			"msg_type":     "mixed",
+			"msgid":        msg.MsgID,
+			"aibotid":      msg.AIBotID,
+			"stream_id":    streamID,
+			"response_url": msg.ResponseURL,
+		}
+		c.HandleMessage(taskCtx, peer, msg.MsgID, userID, chatID,
+			content, mediaRefs, metadata, sender)
+	}()
+
+	return c.getStreamResponse(task, timestamp, nonce)
 }
 
 // handleEventMessage handles event messages

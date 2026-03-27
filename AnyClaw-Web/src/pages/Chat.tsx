@@ -347,6 +347,8 @@ export default function Chat() {
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
   const [voiceUploading, setVoiceUploading] = useState(false)
   const [voiceError, setVoiceError] = useState('')
+  const [imageUploading, setImageUploading] = useState(false)
+  const [imageError, setImageError] = useState('')
 
   const wsRef = useRef<WebSocket | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -363,6 +365,7 @@ export default function Chat() {
   const recordingStartYRef = useRef(0)
   const touchUsedRef = useRef(false)
   const streamRef = useRef<MediaStream | null>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
   const isMobile = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
   const MAX_RECORDING_SECONDS = 60
 
@@ -754,6 +757,48 @@ export default function Chat() {
       setVoiceUploading(false)
     }
   }, [instanceId])
+
+  const sendImageFile = useCallback(async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setImageError('请选择图片文件')
+      return
+    }
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      setImageError('未连接或连接已断开')
+      return
+    }
+    const caption = (inputRef.current?.value ?? '').trim()
+    setImageError('')
+    setImageUploading(true)
+    try {
+      const { url } = await uploadMedia(instanceId, file, file.name || `image_${Date.now()}.jpg`)
+      const display = caption ? `${caption}\n\n![图片](${url})` : `![图片](${url})`
+      setInput('')
+      isAtBottomRef.current = true
+      const userMsgId = 'u-' + Date.now()
+      setMessages((prev) => [...prev, { id: userMsgId, content: display, role: 'user', created_at: new Date().toISOString() }])
+      const ws = wsRef.current
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        setImageError('发送失败：连接已断开')
+        setMessages((prev) => prev.filter((m) => m.id !== userMsgId))
+        return
+      }
+      ws.send(JSON.stringify({
+        type: 'message.send',
+        payload: { content: caption, media_url: url, media_type: 'image' },
+      }))
+    } catch (e) {
+      setImageError(e instanceof Error ? e.message : '图片发送失败')
+    } finally {
+      setImageUploading(false)
+    }
+  }, [instanceId])
+
+  const onImageInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (f) void sendImageFile(f)
+  }, [sendImageFile])
 
   const sendVoiceBlobRef = useRef(sendVoiceBlob)
   sendVoiceBlobRef.current = sendVoiceBlob
@@ -1173,7 +1218,34 @@ export default function Chat() {
           onSubmit={sendMessage}
           className="flex gap-2 p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white/95 backdrop-blur-sm border-t border-slate-200/80 flex-shrink-0"
         >
-          <div className="flex-1 min-w-0 flex items-end gap-2 bg-slate-100 rounded-2xl px-4 py-2 focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:bg-white transition-all">
+          <div className="flex-1 min-w-0 flex items-end gap-2 bg-slate-100 rounded-2xl px-2 sm:px-4 py-2 focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:bg-white transition-all">
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden
+              onChange={onImageInputChange}
+            />
+            {!isRecording || isMobile ? (
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={!connected || imageUploading || isRecording}
+                className="flex-shrink-0 w-9 h-9 mb-0.5 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-white/80 rounded-xl transition-colors disabled:opacity-40 touch-manipulation"
+                title="发送图片"
+                aria-label="发送图片"
+              >
+                {imageUploading ? (
+                  <span className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                )}
+              </button>
+            ) : null}
             {isRecording && !isMobile ? (
               <div className="flex-1 flex items-center gap-3 min-h-[44px] py-2.5">
                 <span className="voice-rec-dot" />
@@ -1242,9 +1314,9 @@ export default function Chat() {
           )}
         </form>
       )}
-      {(voiceError || voiceUploading) && (
-        <div className={`px-4 py-1.5 text-xs text-center flex-shrink-0 ${voiceError ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'}`}>
-          {voiceError || '语音上传中...'}
+      {(voiceError || voiceUploading || imageError || imageUploading) && (
+        <div className={`px-4 py-1.5 text-xs text-center flex-shrink-0 ${voiceError || imageError ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'}`}>
+          {[voiceError, imageError].filter(Boolean).join(' ') || (imageUploading ? '图片上传中...' : '') || (voiceUploading ? '语音上传中...' : '')}
         </div>
       )}
     </div>

@@ -306,53 +306,83 @@ func (c *BridgeChannel) handleMessageSend(bc *bridgeConn, msg pico.PicoMessage) 
 	}
 
 	var mediaRefs []string
-	if mediaURL != "" && (mediaType == "audio" || mediaType == "") {
+	mt := strings.ToLower(strings.TrimSpace(mediaType))
+	httpDL := &http.Client{Timeout: 2 * time.Minute}
+
+	if mediaURL != "" {
 		if store := c.GetMediaStore(); store != nil {
-			filename := "voice.webm"
-			if u, err := url.Parse(mediaURL); err == nil {
-				base := filepath.Base(u.Path)
-				if base != "" && base != "." && base != "/" {
-					filename = base
-				}
-			}
-			localPath := utils.DownloadFileSimple(mediaURL, filename)
-			if localPath == "" {
-				logger.WarnCF(channelName, "Failed to download inbound audio, transcription will be skipped. Ensure COS bucket/objects are publicly readable.", map[string]any{
-					"media_url": mediaURL,
-				})
-			}
-			if localPath != "" {
-				ct := "audio/webm"
-				ext := strings.ToLower(filepath.Ext(filename))
-				switch ext {
-				case ".wav":
-					ct = "audio/wav"
-				case ".ogg":
-					ct = "audio/ogg"
-				case ".mp3":
-					ct = "audio/mpeg"
-				case ".m4a":
-					ct = "audio/mp4"
+			switch {
+			case mt == "image" || strings.HasPrefix(mt, "image/"):
+				fn := "image.jpg"
+				if u, err := url.Parse(mediaURL); err == nil {
+					base := filepath.Base(u.Path)
+					if base != "" && base != "." && base != "/" {
+						fn = base
+					}
 				}
 				scope := channels.BuildMediaScope(channelName, chatID, msg.ID)
-				ref, err := store.Store(localPath, media.MediaMeta{
-					Filename:    filename,
-					ContentType: ct,
-					Source:      "anyclaw_web",
-				}, scope)
-				if err == nil {
-					mediaRefs = append(mediaRefs, ref)
-					logger.DebugCF(channelName, "Stored web audio in media store", map[string]any{
-						"ref": ref, "filename": filename,
-					})
+				ref, err := channels.DownloadHTTPURLToMediaStore(c.ctx, httpDL, store, mediaURL, scope, fn, mt, "anyclaw_web")
+				if err != nil {
+					logger.WarnCF(channelName, "Failed to download inbound image", map[string]any{"error": err.Error()})
 				} else {
-					logger.WarnCF(channelName, "Failed to store web audio", map[string]any{"error": err.Error()})
+					mediaRefs = append(mediaRefs, ref)
 				}
+			case mt == "audio" || mt == "":
+				filename := "voice.webm"
+				if u, err := url.Parse(mediaURL); err == nil {
+					base := filepath.Base(u.Path)
+					if base != "" && base != "." && base != "/" {
+						filename = base
+					}
+				}
+				localPath := utils.DownloadFileSimple(mediaURL, filename)
+				if localPath == "" {
+					logger.WarnCF(channelName, "Failed to download inbound audio, transcription will be skipped. Ensure COS bucket/objects are publicly readable.", map[string]any{
+						"media_url": mediaURL,
+					})
+				}
+				if localPath != "" {
+					ct := "audio/webm"
+					ext := strings.ToLower(filepath.Ext(filename))
+					switch ext {
+					case ".wav":
+						ct = "audio/wav"
+					case ".ogg":
+						ct = "audio/ogg"
+					case ".mp3":
+						ct = "audio/mpeg"
+					case ".m4a":
+						ct = "audio/mp4"
+					}
+					scope := channels.BuildMediaScope(channelName, chatID, msg.ID)
+					ref, err := store.Store(localPath, media.MediaMeta{
+						Filename:    filename,
+						ContentType: ct,
+						Source:      "anyclaw_web",
+					}, scope)
+					if err == nil {
+						mediaRefs = append(mediaRefs, ref)
+						logger.DebugCF(channelName, "Stored web audio in media store", map[string]any{
+							"ref": ref, "filename": filename,
+						})
+					} else {
+						logger.WarnCF(channelName, "Failed to store web audio", map[string]any{"error": err.Error()})
+					}
+				}
+				content = "[audio]"
+			default:
+				logger.WarnCF(channelName, "Unknown inbound media_type", map[string]any{"media_type": mediaType})
 			}
 		}
-		// Always use [audio] so transcribeAudioInMessage can locate and replace it,
-		// and to prevent the LLM from treating any markdown URL as a fetchable link.
-		content = "[audio]"
+		if mt == "image" || strings.HasPrefix(mt, "image/") {
+			content = channels.AppendImageMediaPlaceholder(content)
+		}
+	}
+
+	if strings.TrimSpace(content) == "" && len(mediaRefs) == 0 && mediaURL != "" {
+		errMsg := pico.NewError("bad_media", "unsupported media_type or media could not be processed")
+		bc.writeJSON(errMsg)
+		return
 	}
 
 	logger.DebugCF(channelName, "Received message", map[string]any{

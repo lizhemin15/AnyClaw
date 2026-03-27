@@ -21,6 +21,7 @@ import (
 	"github.com/anyclaw/anyclaw-server/pkg/config"
 	"github.com/anyclaw/anyclaw-server/pkg/identity"
 	"github.com/anyclaw/anyclaw-server/pkg/logger"
+	"github.com/anyclaw/anyclaw-server/pkg/media"
 	"github.com/anyclaw/anyclaw-server/pkg/utils"
 )
 
@@ -649,6 +650,32 @@ func (c *WeComAppChannel) processMessage(ctx context.Context, msg WeComXMLMessag
 	}
 
 	content := msg.Content
+	var mediaRefs []string
+
+	if msg.MsgType == "image" && strings.TrimSpace(msg.MediaId) != "" {
+		store := c.GetMediaStore()
+		at := c.getAccessToken()
+		if store != nil && at != "" {
+			localPath, ct, err := DownloadWeComAppMediaFile(ctx, c.client, at, strings.TrimSpace(msg.MediaId))
+			if err != nil {
+				logger.WarnCF("wecom_app", "inbound image media get failed", map[string]any{"err": err.Error()})
+			} else {
+				scope := channels.BuildMediaScope("wecom_app", chatID, messageID)
+				ref, serr := store.Store(localPath, media.MediaMeta{
+					Filename:    filepath.Base(localPath),
+					ContentType: ct,
+					Source:      "wecom_app",
+				}, scope)
+				if serr != nil {
+					logger.WarnCF("wecom_app", "inbound image store failed", map[string]any{"err": serr.Error()})
+					_ = os.Remove(localPath)
+				} else {
+					mediaRefs = append(mediaRefs, ref)
+				}
+			}
+		}
+		content = channels.AppendImageMediaPlaceholder(content)
+	}
 
 	logger.DebugCF("wecom_app", "Received message", map[string]any{
 		"sender_id": senderID,
@@ -663,8 +690,7 @@ func (c *WeComAppChannel) processMessage(ctx context.Context, msg WeComXMLMessag
 		CanonicalID: identity.BuildCanonicalID("wecom", senderID),
 	}
 
-	// Handle the message through the base channel
-	c.HandleMessage(ctx, peer, messageID, senderID, chatID, content, nil, metadata, appSender)
+	c.HandleMessage(ctx, peer, messageID, senderID, chatID, content, mediaRefs, metadata, appSender)
 }
 
 // tokenRefreshLoop periodically refreshes the access token
