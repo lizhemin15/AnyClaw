@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { getInstances, createInstance, deleteInstance, subscribeInstance, updateInstanceName, getAuthConfig, getEnergyConfig, type Instance, type User } from '../api'
 import SearchInput from '../components/SearchInput'
 import Pagination from '../components/Pagination'
+import HomeCollabOrchestrateModal from '../components/HomeCollabOrchestrateModal'
 
 const PAGE_SIZE = 8
 
@@ -27,7 +28,24 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
   const editingIdRef = useRef<number | null>(null)
   editingIdRef.current = editingId
 
+  const [orchMode, setOrchMode] = useState(false)
+  const [orchInst, setOrchInst] = useState<Instance | null>(null)
+
   const navigate = useNavigate()
+  const location = useLocation()
+
+  const openOrchestrate = (inst: Instance) => {
+    setOrchInst(inst)
+  }
+
+  useEffect(() => {
+    const sid = (location.state as { orchestrateInstanceId?: number } | null)?.orchestrateInstanceId
+    if (sid == null || typeof sid !== 'number') return
+    if (loading) return
+    const match = instances.find((i) => i.id === sid)
+    if (match) setOrchInst(match)
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: {} })
+  }, [loading, instances, location.state, location.pathname, location.search, navigate])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -280,13 +298,34 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
 
       {/* 公司：搜索、分页 */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-        <h2 className="text-base sm:text-lg font-semibold text-slate-800">我的公司</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-base sm:text-lg font-semibold text-slate-800">我的公司</h2>
+          {instances.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setOrchMode((v) => !v)}
+              className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors ${
+                orchMode
+                  ? 'border-violet-500 bg-violet-50 text-violet-800'
+                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+              title="开启后点击员工卡片进入协作拓扑编排，不再直接进入对话"
+            >
+              {orchMode ? '编排模式（开）' : '编排模式'}
+            </button>
+          )}
+        </div>
         {instances.length > 0 && (
           <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
             <SearchInput value={search} onChange={setSearch} placeholder="按名称搜索员工" className="sm:w-48" />
           </div>
         )}
       </div>
+      {orchMode && instances.length > 0 && (
+        <p className="text-xs text-violet-700 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2 mb-3">
+          已开启编排模式：点击员工卡片打开拓扑画布；点「对话」进入聊天。卡片上的「编排」可随时打开画布。
+        </p>
+      )}
       {loading ? (
         <p className="text-slate-500 py-8">加载中...</p>
       ) : instances.length === 0 ? (
@@ -301,12 +340,22 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
         </div>
       ) : (
         <>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className={`grid gap-4 sm:grid-cols-2 ${orchMode ? 'ring-2 ring-violet-200 rounded-xl p-1 -m-1' : ''}`}>
           {paginated.map((inst) => (
             <div
               key={inst.id}
-              onClick={() => navigate(`/instances/${inst.id}`)}
-              className="bg-white border border-slate-200 rounded-xl p-4 active:bg-slate-50 cursor-pointer transition-colors relative"
+              onClick={() => {
+                if (orchMode) {
+                  openOrchestrate(inst)
+                  return
+                }
+                navigate(`/instances/${inst.id}`)
+              }}
+              className={`bg-white border rounded-xl p-4 transition-colors relative ${
+                orchMode
+                  ? 'border-violet-200 cursor-pointer hover:bg-violet-50/40'
+                  : 'border-slate-200 active:bg-slate-50 cursor-pointer'
+              }`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -340,19 +389,33 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
                       aria-label="员工名称"
                     />
                   ) : (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setEditingId(inst.id)
-                        setEditDraft(inst.name)
-                        setError('')
-                      }}
-                      className="font-medium text-slate-800 truncate text-left min-w-0 hover:text-slate-600 underline-offset-2 hover:underline"
-                      title="点击修改名称"
-                    >
-                      {inst.name}
-                    </button>
+                    <div className="flex flex-col items-start gap-0.5 min-w-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setEditingId(inst.id)
+                          setEditDraft(inst.name)
+                          setError('')
+                        }}
+                        className="font-medium text-slate-800 truncate text-left min-w-0 hover:text-slate-600 underline-offset-2 hover:underline"
+                        title="点击修改名称"
+                      >
+                        {inst.name}
+                      </button>
+                      {orchMode && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            navigate(`/instances/${inst.id}`)
+                          }}
+                          className="text-[11px] text-slate-500 hover:text-indigo-600"
+                        >
+                          对话 →
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -384,14 +447,17 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
                   >
                     {inst.status === 'running' ? '在线' : inst.status === 'creating' ? '创建中' : inst.status === 'error' ? '异常' : inst.status}
                   </span>
-                  <Link
-                    to={`/instances/${inst.id}/collab`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="px-2 py-1 text-xs text-indigo-600 border border-indigo-200 rounded-lg active:bg-indigo-50"
-                    title="员工与内部邮件"
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      openOrchestrate(inst)
+                    }}
+                    className="px-2 py-1 text-xs text-violet-700 border border-violet-200 rounded-lg active:bg-violet-50"
+                    title="在本页打开协作拓扑编排"
                   >
-                    协作
-                  </Link>
+                    编排
+                  </button>
                   <button
                     onClick={(e) => handleAbandon(e, inst)}
                     disabled={!!deleting}
@@ -409,6 +475,16 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
           <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
         )}
         </>
+      )}
+
+      {orchInst && (
+        <HomeCollabOrchestrateModal
+          open
+          instanceId={orchInst.id}
+          instanceName={orchInst.name}
+          onClose={() => setOrchInst(null)}
+          onSaved={loadInstances}
+        />
       )}
     </div>
   )

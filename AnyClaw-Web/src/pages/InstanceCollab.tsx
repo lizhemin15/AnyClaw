@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { SafeLink } from '../components/SafeLink'
 import {
+  broadcastCollabEvent,
   getInstance,
   getCollabAgents,
   putCollabAgents,
@@ -20,6 +21,7 @@ type Tab = 'agents' | 'topology' | 'mails'
 
 export default function InstanceCollab() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const instanceId = parseInt(id || '', 10)
 
   const [tab, setTab] = useState<Tab>('agents')
@@ -310,6 +312,7 @@ export default function InstanceCollab() {
       }
       const putA = await putCollabAgents(instanceId, cleaned)
       if (putA.limits) setCollabLimits(putA.limits)
+      broadcastCollabEvent('topology', instanceId)
       await loadAgents()
       await loadTopology()
     } catch (e) {
@@ -370,6 +373,7 @@ export default function InstanceCollab() {
       }
       const putT = await putCollabTopology(instanceId, edges)
       if (putT.limits) setCollabLimits(putT.limits)
+      broadcastCollabEvent('topology', instanceId)
       await loadTopology()
     } catch (e) {
       const lim = (e as CollabApiError).collabLimits
@@ -431,6 +435,14 @@ export default function InstanceCollab() {
         >
           ← 返回对话
         </SafeLink>
+        <span className="text-slate-300">|</span>
+        <button
+          type="button"
+          onClick={() => navigate('/', { state: { orchestrateInstanceId: instanceId } })}
+          className="text-sm text-violet-600 hover:text-violet-800"
+        >
+          首页编排
+        </button>
         <span className="text-slate-300">|</span>
         <h1 className="text-lg font-semibold text-slate-800">协作 · {instanceName || `#${instanceId}`}</h1>
       </div>
@@ -569,6 +581,16 @@ export default function InstanceCollab() {
                 两端即互为邻居，内部邮件仅允许发给邻居。请先保存员工列表再添加边。无向边合计最多 {maxEdgesCap}{' '}
                 条。
               </p>
+              <div className="rounded-lg border border-violet-100 bg-violet-50/80 px-3 py-2 text-xs text-violet-900 flex flex-wrap items-center justify-between gap-2">
+                <span>更习惯在首页用画布点选连线？</span>
+                <button
+                  type="button"
+                  onClick={() => navigate('/', { state: { orchestrateInstanceId: instanceId } })}
+                  className="shrink-0 px-2 py-1 rounded-md bg-white border border-violet-200 text-violet-800 hover:bg-violet-100"
+                >
+                  打开首页编排画布
+                </button>
+              </div>
               <div className="flex flex-wrap gap-2 items-end">
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">员工 A</label>

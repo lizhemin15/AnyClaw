@@ -250,7 +250,7 @@ export async function getCollabAgents(instanceId: number): Promise<{
   agents: CollabAgent[];
   limits?: CollabLimits;
 }> {
-  return fetchApi(`/instances/${instanceId}/collab/agents`);
+  return fetchCollabJson(`/instances/${instanceId}/collab/agents`);
 }
 
 export async function putCollabAgents(
@@ -268,7 +268,7 @@ export async function getCollabTopology(instanceId: number): Promise<{
   version: number;
   limits?: CollabLimits;
 }> {
-  return fetchApi(`/instances/${instanceId}/collab/topology`);
+  return fetchCollabJson(`/instances/${instanceId}/collab/topology`);
 }
 
 export async function putCollabTopology(

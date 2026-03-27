@@ -82,8 +82,8 @@ export default function Help() {
             <span>🦞</span> 多员工与内部协作
           </h2>
           <p className="text-sm text-slate-600 mb-3">
-            在<strong>首页员工卡片</strong>或<strong>对话页顶栏</strong>进入「协作」，可维护员工展示名（与容器里{' '}
-            <code className="bg-slate-100 px-1 rounded text-xs">agents.list</code> 的 id 对应）、配置<strong>无向通讯拓扑</strong>（仅邻居之间可走内部邮件），并查看<strong>内部邮件</strong>记录。
+            在<strong>首页</strong>可开启「编排模式」或点击卡片上的「编排」，在本页用点击节点的方式配置<strong>无向通讯拓扑</strong>；「完整设置」中可维护展示名（与容器里{' '}
+            <code className="bg-slate-100 px-1 rounded text-xs">agents.list</code> 的 id 对应）并查看<strong>内部邮件</strong>。对话页顶栏「编排」会回到首页并弹出该实例画布；「协作」进入完整设置页。
           </p>
           <p className="text-sm text-slate-500">
             云端实例需在容器出站连接 API 的前提下，智能体才会启用内部邮件相关工具；拓扑与员工变更保存后会通过 WebSocket 通知运行中的容器。
