@@ -147,7 +147,6 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	model, _ := req["model"].(string)
-	log.Printf("[llm] request model=%q", model)
 	cfg, cfgErr := p.loadConfig()
 	if cfgErr != nil {
 		http.Error(w, `{"error":{"message":"config error"}}`, http.StatusInternalServerError)
@@ -160,6 +159,7 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		model = "gpt-4o"
 	}
 	req["model"] = model
+	log.Printf("[llm] request model=%q", model)
 	var candidates []config.ChannelEndpoint
 	candidates = cfg.FindChannelsForModel(model)
 	if len(candidates) == 0 {

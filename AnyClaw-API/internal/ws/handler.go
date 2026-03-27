@@ -14,22 +14,21 @@ type Handler struct {
 }
 
 // parseContainerMsg 解析容器消息，兼容多种 payload 格式（Pico、网页、飞书等）
-// 对 message.create/update 的 assistant 消息，content 可为空（占位符或流式首 chunk）
-func parseContainerMsg(data []byte) (msgType, content, role string, ok bool) {
+// jsonOK：顶层 JSON 合法；persistAssistant：message.create/update 且 role 为 assistant、可解析 payload，应走入库逻辑
+func parseContainerMsg(data []byte) (msgType, content, role string, jsonOK bool, persistAssistant bool) {
 	var base struct {
 		Type    string          `json:"type"`
 		Payload json.RawMessage `json:"payload"`
 	}
-	if json.Unmarshal(data, &base) != nil {
-		return "", "", "", false
+	if err := json.Unmarshal(data, &base); err != nil {
+		return "", "", "", false, false
 	}
-	msgType = base.Type
-	if base.Payload == nil {
-		return msgType, "", "", false
-	}
-	// 只处理需要存储的类型
+	msgType = strings.TrimSpace(base.Type)
 	if msgType != "message.create" && msgType != "message.update" {
-		return msgType, "", "", false
+		return msgType, "", "", true, false
+	}
+	if len(base.Payload) == 0 || string(base.Payload) == "null" {
+		return msgType, "", "", true, false
 	}
 	// 标准格式：payload.content, payload.role
 	var std struct {
@@ -37,18 +36,16 @@ func parseContainerMsg(data []byte) (msgType, content, role string, ok bool) {
 		MessageID string `json:"message_id"`
 		Role      string `json:"role"`
 	}
-	if json.Unmarshal(base.Payload, &std) == nil {
+	if err := json.Unmarshal(base.Payload, &std); err == nil {
 		content = strings.TrimSpace(std.Content)
 		role = std.Role
 		if role == "" {
 			role = "assistant"
 		}
-		// assistant 的 create/update 都尝试存储，content 空也存（占位符）
-		return msgType, content, role, role == "assistant"
+		return msgType, content, role, true, role == "assistant"
 	}
-	// 兜底：尝试从 map 提取
 	var m map[string]any
-	if json.Unmarshal(base.Payload, &m) == nil {
+	if err := json.Unmarshal(base.Payload, &m); err == nil {
 		if c, _ := m["content"].(string); c != "" {
 			content = strings.TrimSpace(c)
 		}
@@ -57,21 +54,20 @@ func parseContainerMsg(data []byte) (msgType, content, role string, ok bool) {
 		} else {
 			role = "assistant"
 		}
-		return msgType, content, role, role == "assistant"
+		return msgType, content, role, true, role == "assistant"
 	}
-	return msgType, "", "", false
+	return msgType, "", "", true, false
 }
 
 func NewHandler(database *db.DB, hub *Hub) *Handler {
 	h := &Handler{db: database, hub: hub}
 	hub.SetOnContainerMessage(func(instanceID int64, data []byte) {
-		msgType, content, role, ok := parseContainerMsg(data)
-		if !ok {
-			log.Printf("[ws] instance %d: failed to parse container msg raw=%s", instanceID, string(data))
+		msgType, content, role, jsonOK, persist := parseContainerMsg(data)
+		if !jsonOK {
+			log.Printf("[ws] instance %d: failed to parse container msg (invalid JSON) raw=%s", instanceID, string(data))
 			return
 		}
-		// 只存储 assistant 消息，忽略 user
-		if role != "assistant" {
+		if !persist {
 			return
 		}
 		// 空内容不存（占位符 Thinking... 有内容会存）
