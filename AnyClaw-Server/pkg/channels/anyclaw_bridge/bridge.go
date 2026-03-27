@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -72,6 +73,7 @@ func (bc *bridgeConn) close() {
 type BridgeChannel struct {
 	*channels.BaseChannel
 	config       config.AnyClawBridgeConfig
+	rosterSlugs  []string
 	conn         *bridgeConn
 	ctx          context.Context
 	cancel       context.CancelFunc
@@ -80,21 +82,55 @@ type BridgeChannel struct {
 	collabClient *tools.CollabAPIClient
 }
 
+func agentSlugsFromAgentConfig(cfg *config.Config) []string {
+	if cfg == nil {
+		return []string{"main"}
+	}
+	if len(cfg.Agents.List) == 0 {
+		return []string{"main"}
+	}
+	ids := make([]string, 0, len(cfg.Agents.List))
+	for i := range cfg.Agents.List {
+		ids = append(ids, routing.NormalizeAgentID(cfg.Agents.List[i].ID))
+	}
+	sort.Strings(ids)
+	return ids
+}
+
 // NewBridgeChannel creates an outbound bridge channel.
-func NewBridgeChannel(cfg config.AnyClawBridgeConfig, messageBus *bus.MessageBus) (*BridgeChannel, error) {
-	if !cfg.IsEnabled() {
+func NewBridgeChannel(cfg *config.Config, messageBus *bus.MessageBus) (*BridgeChannel, error) {
+	br := cfg.Channels.AnyClawBridge
+	if !br.IsEnabled() {
 		return nil, fmt.Errorf("anyclaw_bridge requires ANYCLAW_API_URL, ANYCLAW_INSTANCE_ID, ANYCLAW_TOKEN")
 	}
 
-	base := channels.NewBaseChannel(channelName, cfg, messageBus, nil)
-	chatID := channelName + ":" + cfg.InstanceID
+	base := channels.NewBaseChannel(channelName, br, messageBus, nil)
+	chatID := channelName + ":" + br.InstanceID
 	return &BridgeChannel{
 		BaseChannel:  base,
-		config:       cfg,
+		config:       br,
+		rosterSlugs:  agentSlugsFromAgentConfig(cfg),
 		chatID:       chatID,
-		sessionID:    cfg.InstanceID,
-		collabClient: tools.NewCollabAPIClient(cfg.APIURL, cfg.InstanceID, cfg.Token),
+		sessionID:    br.InstanceID,
+		collabClient: tools.NewCollabAPIClient(br.APIURL, br.InstanceID, br.Token),
 	}, nil
+}
+
+func (c *BridgeChannel) syncRosterOnce() {
+	if c.collabClient == nil || len(c.rosterSlugs) == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	ids := append([]string(nil), c.rosterSlugs...)
+	added, err := c.collabClient.SyncRosterSlugs(ctx, ids)
+	if err != nil {
+		logger.WarnCF(channelName, "协作员工与容器 agents.list 同步失败（可稍后在网页编排中查看）",
+			map[string]any{"error": err.Error()})
+	} else if added > 0 {
+		logger.InfoCF(channelName, "已自动追加协作员工记录",
+			map[string]any{"added": added, "slugs": ids})
+	}
 }
 
 // Start implements Channel. Connects outbound to API and starts read loop.
@@ -195,6 +231,8 @@ func (c *BridgeChannel) connect() error {
 	logger.InfoCF(channelName, "Connected to AnyClaw-API", map[string]any{
 		"instance_id": c.config.InstanceID,
 	})
+
+	go c.syncRosterOnce()
 
 	c.readLoop(bc)
 	return nil

@@ -27,6 +27,10 @@ services:
     restart: on-failure
     profiles:
       - gateway
+    environment:
+      ANYCLAW_API_URL: ${ANYCLAW_API_URL:-}
+      ANYCLAW_INSTANCE_ID: ${ANYCLAW_INSTANCE_ID:-}
+      ANYCLAW_TOKEN: ${ANYCLAW_TOKEN:-}
     # Uncomment to access host network; leave commented unless needed.
     #extra_hosts:
     #  - "host.docker.internal:host-gateway"

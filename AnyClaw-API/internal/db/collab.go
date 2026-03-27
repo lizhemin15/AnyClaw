@@ -364,39 +364,70 @@ func (d *DB) SetCollabRosterSlugsJSON(instanceID int64, rawSlugs []string) error
 	return err
 }
 
-// SyncCollabAgentsFromStoredSlugs 根据 instances.collab_roster_slugs（或回退为当前 instance_agents）调用 EnsureInstanceAgentSlugs，供网页 GET 协作名单时自动补全节点。
+func stringSliceEqualSorted(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// SyncCollabAgentsFromStoredSlugs 合并 collab_roster_slugs 快照、instance_agents 与拓扑边端点，再调用 EnsureInstanceAgentSlugs，供网页 GET 协作名单时自动补全节点（不依赖容器单独同步）。
 func (d *DB) SyncCollabAgentsFromStoredSlugs(instanceID, userID int64) (added int, err error) {
 	var raw sql.NullString
 	if err := d.QueryRow(`SELECT collab_roster_slugs FROM instances WHERE id = ?`, instanceID).Scan(&raw); err != nil {
 		return 0, err
 	}
-	var slugs []string
+	var fromJSON []string
 	if raw.Valid && strings.TrimSpace(raw.String) != "" {
-		if err := json.Unmarshal([]byte(raw.String), &slugs); err != nil {
-			slugs = nil
+		if err := json.Unmarshal([]byte(raw.String), &fromJSON); err != nil {
+			fromJSON = nil
 		}
 	}
-	slugs = normalizeCollabSlugList(slugs)
-	if len(slugs) == 0 {
-		list, err := d.ListInstanceAgents(instanceID)
-		if err != nil {
-			return 0, err
-		}
-		for _, a := range list {
-			s := strings.TrimSpace(a.AgentSlug)
-			if s != "" {
-				slugs = append(slugs, s)
-			}
-		}
-		slugs = normalizeCollabSlugList(slugs)
-		if len(slugs) > 0 {
-			if err := d.SetCollabRosterSlugsJSON(instanceID, slugs); err != nil {
-				return 0, err
-			}
+	jsonNorm := normalizeCollabSlugList(fromJSON)
+
+	ia, err := d.ListInstanceAgents(instanceID)
+	if err != nil {
+		return 0, err
+	}
+	seen := make(map[string]struct{})
+	for _, s := range jsonNorm {
+		seen[s] = struct{}{}
+	}
+	for _, a := range ia {
+		s := strings.TrimSpace(a.AgentSlug)
+		if s != "" {
+			seen[s] = struct{}{}
 		}
 	}
+	edges, err := d.ListTopologyEdges(instanceID)
+	if err != nil {
+		return 0, err
+	}
+	for _, e := range edges {
+		if s := strings.TrimSpace(e.AgentSlugLo); s != "" {
+			seen[s] = struct{}{}
+		}
+		if s := strings.TrimSpace(e.AgentSlugHi); s != "" {
+			seen[s] = struct{}{}
+		}
+	}
+	var union []string
+	for s := range seen {
+		union = append(union, s)
+	}
+	slugs := normalizeCollabSlugList(union)
 	if len(slugs) == 0 {
 		return 0, nil
+	}
+	if !stringSliceEqualSorted(slugs, jsonNorm) {
+		if err := d.SetCollabRosterSlugsJSON(instanceID, slugs); err != nil {
+			return 0, err
+		}
 	}
 	return d.EnsureInstanceAgentSlugs(instanceID, userID, slugs)
 }

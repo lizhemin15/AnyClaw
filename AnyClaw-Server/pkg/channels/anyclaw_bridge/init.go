@@ -8,6 +8,6 @@ import (
 
 func init() {
 	channels.RegisterFactory("anyclaw_bridge", func(cfg *config.Config, b *bus.MessageBus) (channels.Channel, error) {
-		return NewBridgeChannel(cfg.Channels.AnyClawBridge, b)
+		return NewBridgeChannel(cfg, b)
 	})
 }

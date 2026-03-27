@@ -63,6 +63,11 @@
     }
   ],
   "channels": {
+    "anyclaw_bridge": {
+      "api_url": "",
+      "instance_id": "",
+      "token": ""
+    },
     "telegram": {
       "enabled": false,
       "token": "YOUR_TELEGRAM_BOT_TOKEN",

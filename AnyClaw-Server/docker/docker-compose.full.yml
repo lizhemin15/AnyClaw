@@ -30,6 +30,10 @@ services:
     restart: unless-stopped
     profiles:
       - gateway
+    environment:
+      ANYCLAW_API_URL: ${ANYCLAW_API_URL:-}
+      ANYCLAW_INSTANCE_ID: ${ANYCLAW_INSTANCE_ID:-}
+      ANYCLAW_TOKEN: ${ANYCLAW_TOKEN:-}
     volumes:
       # Configuration file
       - ../config/config.json:/root/.anyclaw/config.json:ro
