@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -327,6 +328,125 @@ func (d *DB) EnsureInstanceAgentSlugs(instanceID, userID int64, rawSlugs []strin
 		return 0, err
 	}
 	return added, nil
+}
+
+// normalizeCollabSlugList 去重、排序，用于协作 roster 快照 JSON。
+func normalizeCollabSlugList(raw []string) []string {
+	seen := make(map[string]struct{})
+	var slugs []string
+	for _, s0 := range raw {
+		s := strings.TrimSpace(s0)
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		slugs = append(slugs, s)
+	}
+	sort.Strings(slugs)
+	return slugs
+}
+
+// SetCollabRosterSlugsJSON 将容器或网页保存的 agent_slug 列表写入 instances.collab_roster_slugs（JSON 数组）。
+func (d *DB) SetCollabRosterSlugsJSON(instanceID int64, rawSlugs []string) error {
+	slugs := normalizeCollabSlugList(rawSlugs)
+	if len(slugs) == 0 {
+		_, err := d.Exec(`UPDATE instances SET collab_roster_slugs = NULL WHERE id = ?`, instanceID)
+		return err
+	}
+	b, err := json.Marshal(slugs)
+	if err != nil {
+		return err
+	}
+	_, err = d.Exec(`UPDATE instances SET collab_roster_slugs = ? WHERE id = ?`, string(b), instanceID)
+	return err
+}
+
+// SyncCollabAgentsFromStoredSlugs 根据 instances.collab_roster_slugs（或回退为当前 instance_agents）调用 EnsureInstanceAgentSlugs，供网页 GET 协作名单时自动补全节点。
+func (d *DB) SyncCollabAgentsFromStoredSlugs(instanceID, userID int64) (added int, err error) {
+	var raw sql.NullString
+	if err := d.QueryRow(`SELECT collab_roster_slugs FROM instances WHERE id = ?`, instanceID).Scan(&raw); err != nil {
+		return 0, err
+	}
+	var slugs []string
+	if raw.Valid && strings.TrimSpace(raw.String) != "" {
+		if err := json.Unmarshal([]byte(raw.String), &slugs); err != nil {
+			slugs = nil
+		}
+	}
+	slugs = normalizeCollabSlugList(slugs)
+	if len(slugs) == 0 {
+		list, err := d.ListInstanceAgents(instanceID)
+		if err != nil {
+			return 0, err
+		}
+		for _, a := range list {
+			s := strings.TrimSpace(a.AgentSlug)
+			if s != "" {
+				slugs = append(slugs, s)
+			}
+		}
+		slugs = normalizeCollabSlugList(slugs)
+		if len(slugs) > 0 {
+			if err := d.SetCollabRosterSlugsJSON(instanceID, slugs); err != nil {
+				return 0, err
+			}
+		}
+	}
+	if len(slugs) == 0 {
+		return 0, nil
+	}
+	return d.EnsureInstanceAgentSlugs(instanceID, userID, slugs)
+}
+
+// BackfillCollabRosterSlugsColumn 为已有 instance_agents 但尚未写入快照列的实例补一行 JSON（迁移用，幂等）。
+func (d *DB) BackfillCollabRosterSlugsColumn() (int, error) {
+	rows, err := d.Query(`
+		SELECT i.id FROM instances i
+		WHERE (i.collab_roster_slugs IS NULL OR TRIM(i.collab_roster_slugs) = '')
+		  AND EXISTS (SELECT 1 FROM instance_agents ia WHERE ia.instance_id = i.id)`)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return 0, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, iid := range ids {
+		list, err := d.ListInstanceAgents(iid)
+		if err != nil {
+			log.Printf("[db] backfill collab_roster_slugs instance %d: %v", iid, err)
+			continue
+		}
+		var slugs []string
+		for _, a := range list {
+			s := strings.TrimSpace(a.AgentSlug)
+			if s != "" {
+				slugs = append(slugs, s)
+			}
+		}
+		slugs = normalizeCollabSlugList(slugs)
+		if len(slugs) == 0 {
+			continue
+		}
+		if err := d.SetCollabRosterSlugsJSON(iid, slugs); err != nil {
+			log.Printf("[db] backfill collab_roster_slugs instance %d: %v", iid, err)
+			continue
+		}
+		n++
+	}
+	return n, nil
 }
 
 // ReplaceInstanceAgents 全量替换实例员工（事务）；展示名在 user_id 下唯一由 DB 保证

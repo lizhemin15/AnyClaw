@@ -191,7 +191,7 @@ export default function InstanceCollab() {
         <h1 className="text-lg font-semibold text-slate-800">协作展示名 · {instanceName || `#${instanceId}`}</h1>
       </div>
       <p className="text-sm text-slate-500">
-        容器启动时会按 <code className="bg-slate-100 px-1 rounded text-xs">agents.list</code> 自动补全协作员工；下方可编辑展示名（账号内唯一）并编排通讯拓扑。
+        协作员工名单与容器 <code className="bg-slate-100 px-1 rounded text-xs">agents.list</code> 同步后会在 API 侧持久化，打开编排/本页时会自动补全节点；下方可编辑展示名（账号内唯一）并编排通讯拓扑。
         内部邮件请在首页「邮箱」或编排弹窗「邮件」中查看。
       </p>
 

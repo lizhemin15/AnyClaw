@@ -306,10 +306,18 @@ func (d *DB) migrate() error {
 	if _, err := d.Exec("ALTER TABLE instances ADD COLUMN agent_topology_version BIGINT NOT NULL DEFAULT 0"); err != nil && !isDuplicateColumn(err) {
 		log.Printf("[db] alter instances agent_topology_version: %v", err)
 	}
+	if _, err := d.Exec("ALTER TABLE instances ADD COLUMN collab_roster_slugs TEXT"); err != nil && !isDuplicateColumn(err) {
+		log.Printf("[db] alter instances collab_roster_slugs: %v", err)
+	}
 	if n, err := d.BackfillCollabAgentsForInstancesWithoutRoster(); err != nil {
 		log.Printf("[db] backfill collab agents: %v", err)
 	} else if n > 0 {
 		log.Printf("[db] backfilled default collab roster for %d instance(s)", n)
+	}
+	if n, err := d.BackfillCollabRosterSlugsColumn(); err != nil {
+		log.Printf("[db] backfill collab_roster_slugs: %v", err)
+	} else if n > 0 {
+		log.Printf("[db] backfilled collab_roster_slugs snapshot for %d instance(s)", n)
 	}
 	return nil
 }

@@ -355,8 +355,8 @@ export default function CollabTopologyPanel({
         )}
       </div>
       <p className="text-xs text-slate-500 leading-relaxed">
-        画布上为当前实例全部协作成员。可<strong>拖拽</strong>从一节点拉到另一节点以添加或移除连线（无向）；也可依次<strong>点击</strong>两个节点。与容器{' '}
-        <code className="bg-slate-100 px-0.5 rounded text-[11px]">agents.list</code> 中的 id 对应关系请在上方表格维护。
+        画布上为当前实例全部协作成员（打开时由 API 按已同步的{' '}
+        <code className="bg-slate-100 px-0.5 rounded text-[11px]">agents.list</code> 自动补全）。可<strong>拖拽</strong>从一节点拉到另一节点以添加或移除连线（无向）；也可依次<strong>点击</strong>两个节点。展示名可在「协作展示名」页修改。
       </p>
 
       {staleRemote && (
@@ -394,7 +394,7 @@ export default function CollabTopologyPanel({
         <>
           {agents.length === 1 && (
             <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-              当前仅一名协作成员。请在上方「员工展示名」中添加多行并保存后，即可在此连线。
+              当前仅一名协作成员。多智能体时请先让容器启动并完成与 API 的协作同步，或在「协作展示名」页添加多名员工并保存后再连线。
             </p>
           )}
           <div className="flex flex-wrap items-center gap-2 min-h-[1.5rem]">

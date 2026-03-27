@@ -85,9 +85,18 @@ func (h *Handler) GetAgents(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
 		return
 	}
-	if _, ok := h.authOwner(r, iid); !ok {
+	inst, ok := h.authOwner(r, iid)
+	if !ok {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
+	}
+	added, err := h.db.SyncCollabAgentsFromStoredSlugs(iid, inst.UserID)
+	if err != nil {
+		writeJSONErrorWithLimits(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if added > 0 {
+		h.pushTopologyUpdated(iid)
 	}
 	list, err := h.db.ListInstanceAgents(iid)
 	if err != nil {
@@ -131,6 +140,13 @@ func (h *Handler) PutAgents(w http.ResponseWriter, r *http.Request) {
 	if err := h.db.ReplaceInstanceAgents(iid, inst.UserID, rows); err != nil {
 		writeJSONErrorWithLimits(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	slugSnap := make([]string, 0, len(rows))
+	for _, a := range rows {
+		slugSnap = append(slugSnap, strings.TrimSpace(a.AgentSlug))
+	}
+	if err := h.db.SetCollabRosterSlugsJSON(iid, slugSnap); err != nil {
+		log.Printf("[collab] SetCollabRosterSlugsJSON after PutAgents instance %d: %v", iid, err)
 	}
 	h.pushTopologyUpdated(iid)
 	writeJSON(w, map[string]any{"status": "ok", "limits": collaborationLimitsPayload()})
@@ -313,6 +329,9 @@ func (h *Handler) ContainerSyncRoster(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSONErrorWithLimits(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if err := h.db.SetCollabRosterSlugsJSON(iid, body.Slugs); err != nil {
+		log.Printf("[collab] SetCollabRosterSlugsJSON after container sync instance %d: %v", iid, err)
 	}
 	if n > 0 {
 		h.pushTopologyUpdated(iid)

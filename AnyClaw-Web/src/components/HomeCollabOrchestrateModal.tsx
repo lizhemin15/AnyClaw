@@ -246,7 +246,7 @@ export default function HomeCollabOrchestrateModal({
           )}
           <p id={orchDescId} className="text-xs text-slate-500 mt-2">
             {variant === 'inline' ? (
-              <>拓扑画布见下方；员工展示名请在「协作展示名」页修改。内部邮件汇总请点首页「邮箱」。</>
+              <>拓扑画布见下方；协作成员节点由 API 自动拉取（与容器 agents.list 同步）。展示名请在「协作展示名」页修改。内部邮件汇总请点首页「邮箱」。</>
             ) : collabTab === 'topo' ? (
               <>编排标签下可拖拽或点击连线；员工列表来自 API。按 Esc 关闭。</>
             ) : (
