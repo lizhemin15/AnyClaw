@@ -394,7 +394,7 @@ export default function CollabTopologyPanel({
         <>
           {agents.length === 1 && (
             <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-              当前仅一名协作成员。多智能体时请先让容器启动并完成与 API 的协作同步，或在「协作展示名」页添加多名员工并保存后再连线。
+              当前仅一名协作成员。多智能体时请先让容器启动并完成与 API 的协作同步；若实例已绑定宿主机，打开本页时会从工作区 `config.json` 的 `agents.list` 自动补全。也可在「协作展示名」页手动添加员工并保存后再连线。
             </p>
           )}
           <div className="flex flex-wrap items-center gap-2 min-h-[1.5rem]">

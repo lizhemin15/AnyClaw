@@ -5,23 +5,26 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/anyclaw/anyclaw-api/internal/db"
 	"github.com/anyclaw/anyclaw-api/internal/request"
+	"github.com/anyclaw/anyclaw-api/internal/scheduler"
 	"github.com/anyclaw/anyclaw-api/internal/ws"
 	"github.com/go-chi/chi/v5"
 )
 
 // Handler 多员工协作 API（拓扑、 roster、内部邮件、指人解析）
 type Handler struct {
-	db  *db.DB
-	hub *ws.Hub
+	db    *db.DB
+	hub   *ws.Hub
+	sched *scheduler.Scheduler
 }
 
-func New(database *db.DB, hub *ws.Hub) *Handler {
-	return &Handler{db: database, hub: hub}
+func New(database *db.DB, hub *ws.Hub, sched *scheduler.Scheduler) *Handler {
+	return &Handler{db: database, hub: hub, sched: sched}
 }
 
 func collaborationLimitsPayload() map[string]int {
@@ -90,7 +93,11 @@ func (h *Handler) GetAgents(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	added, err := h.db.SyncCollabAgentsFromStoredSlugs(iid, inst.UserID)
+	var extraSlugs []string
+	if h.sched != nil {
+		extraSlugs, _ = h.sched.ReadWorkspaceConfigAgentSlugs(inst)
+	}
+	added, err := h.db.SyncCollabAgentsFromStoredSlugs(iid, inst.UserID, extraSlugs)
 	if err != nil {
 		writeJSONErrorWithLimits(w, http.StatusBadRequest, err.Error())
 		return
@@ -330,7 +337,8 @@ func (h *Handler) ContainerSyncRoster(w http.ResponseWriter, r *http.Request) {
 		writeJSONErrorWithLimits(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := h.db.SetCollabRosterSlugsJSON(iid, body.Slugs); err != nil {
+	mergedRoster := mergeCollabSlugsWithExisting(body.Slugs, iid, h.db)
+	if err := h.db.SetCollabRosterSlugsJSON(iid, mergedRoster); err != nil {
 		log.Printf("[collab] SetCollabRosterSlugsJSON after container sync instance %d: %v", iid, err)
 	}
 	if n > 0 {
@@ -509,6 +517,33 @@ func writeJSONValueWithCollaborationLimits(w http.ResponseWriter, v any) {
 	}
 	m["limits"] = collaborationLimitsPayload()
 	writeJSON(w, m)
+}
+
+// mergeCollabSlugsWithExisting 将容器上报的 slug 与 API 已有员工合并后再写入 collab_roster_slugs，避免部分同步覆盖掉网页侧已追加的员工。
+func mergeCollabSlugsWithExisting(fromSync []string, instanceID int64, d *db.DB) []string {
+	seen := make(map[string]struct{})
+	for _, s := range fromSync {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		seen[s] = struct{}{}
+	}
+	list, err := d.ListInstanceAgents(instanceID)
+	if err == nil {
+		for _, a := range list {
+			s := strings.TrimSpace(a.AgentSlug)
+			if s != "" {
+				seen[s] = struct{}{}
+			}
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for s := range seen {
+		out = append(out, s)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

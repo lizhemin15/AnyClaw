@@ -105,7 +105,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 
 	wsHub := ws.NewHub()
 	wsHandler := ws.NewHandler(database, wsHub)
-	collabHandler := collab.New(database, wsHub)
+	collabHandler := collab.New(database, wsHub, sched)
 	msgHandler := messages.New(database)
 	mediaHandler := media.New(database, configPath)
 	proxyHandler := proxy.New(configPath)

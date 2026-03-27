@@ -376,8 +376,8 @@ func stringSliceEqualSorted(a, b []string) bool {
 	return true
 }
 
-// SyncCollabAgentsFromStoredSlugs 合并 collab_roster_slugs 快照、instance_agents 与拓扑边端点，再调用 EnsureInstanceAgentSlugs，供网页 GET 协作名单时自动补全节点（不依赖容器单独同步）。
-func (d *DB) SyncCollabAgentsFromStoredSlugs(instanceID, userID int64) (added int, err error) {
+// SyncCollabAgentsFromStoredSlugs 合并 collab_roster_slugs 快照、instance_agents、拓扑边端点以及 extraSlugs（如从宿主机工作区 config.json 读取的 agents.list），再调用 EnsureInstanceAgentSlugs，供网页 GET 协作名单时自动补全节点（不依赖容器单独同步）。
+func (d *DB) SyncCollabAgentsFromStoredSlugs(instanceID, userID int64, extraSlugs []string) (added int, err error) {
 	var raw sql.NullString
 	if err := d.QueryRow(`SELECT collab_roster_slugs FROM instances WHERE id = ?`, instanceID).Scan(&raw); err != nil {
 		return 0, err
@@ -396,6 +396,9 @@ func (d *DB) SyncCollabAgentsFromStoredSlugs(instanceID, userID int64) (added in
 	}
 	seen := make(map[string]struct{})
 	for _, s := range jsonNorm {
+		seen[s] = struct{}{}
+	}
+	for _, s := range normalizeCollabSlugList(extraSlugs) {
 		seen[s] = struct{}{}
 	}
 	for _, a := range ia {
