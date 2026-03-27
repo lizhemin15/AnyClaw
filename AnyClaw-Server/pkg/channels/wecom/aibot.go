@@ -710,7 +710,7 @@ func (c *WeComAIBotChannel) handleMixedMessage(
 		if strings.TrimSpace(text) == "" {
 			return c.encryptEmptyResponse(timestamp, nonce)
 		}
-		msg2 := *msg
+		msg2 := msg
 		msg2.MsgType = "text"
 		msg2.Mixed = nil
 		msg2.Image = nil
