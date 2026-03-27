@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { SafeLink } from '../components/SafeLink'
+import CollabTopologyPanel from '../components/CollabTopologyPanel'
 import {
   broadcastCollabEvent,
   getInstance,
@@ -27,6 +28,8 @@ export default function InstanceCollab() {
   const [resolveName, setResolveName] = useState('')
   const [resolveOut, setResolveOut] = useState<string | null>(null)
   const [collabLimits, setCollabLimits] = useState<CollabLimits | null>(null)
+  /** 员工名单保存后递增，刷新下方拓扑画布节点 */
+  const [rosterRevision, setRosterRevision] = useState(0)
 
   const maxAgentsCap = collabLimits?.max_agents ?? 64
   const maxSlugRunes = collabLimits?.max_agent_slug_runes ?? 128
@@ -136,6 +139,7 @@ export default function InstanceCollab() {
       if (putA.limits) setCollabLimits(putA.limits)
       broadcastCollabEvent('topology', instanceId)
       await loadAgents()
+      setRosterRevision((n) => n + 1)
     } catch (e) {
       const lim = (e as CollabApiError).collabLimits
       if (lim) setCollabLimits(lim)
@@ -167,7 +171,7 @@ export default function InstanceCollab() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4">
+    <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex flex-wrap items-center gap-3">
         <SafeLink
           to={`/instances/${instanceId}`}
@@ -187,8 +191,8 @@ export default function InstanceCollab() {
         <h1 className="text-lg font-semibold text-slate-800">协作展示名 · {instanceName || `#${instanceId}`}</h1>
       </div>
       <p className="text-sm text-slate-500">
-        容器启动时会按 <code className="bg-slate-100 px-1 rounded text-xs">agents.list</code> 自动补全协作员工；此处仅调整展示名（账号内唯一）。
-        通讯拓扑与内部邮件请在首页「编排模式」弹窗中的「编排」「邮件」查看。
+        容器启动时会按 <code className="bg-slate-100 px-1 rounded text-xs">agents.list</code> 自动补全协作员工；下方可编辑展示名（账号内唯一）并编排通讯拓扑。
+        内部邮件请在首页「邮箱」或编排弹窗「邮件」中查看。
       </p>
 
       {err && (
@@ -284,6 +288,10 @@ export default function InstanceCollab() {
             {resolveOut && <p className="mt-2 text-sm text-slate-600">{resolveOut}</p>}
           </div>
         </div>
+      )}
+
+      {!loading && (
+        <CollabTopologyPanel instanceId={instanceId} rosterRevision={rosterRevision} />
       )}
     </div>
   )
