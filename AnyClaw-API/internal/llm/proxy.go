@@ -168,6 +168,10 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if msgs, ok := req["messages"].([]any); ok {
+		req["messages"] = normalizeMessagesMediaForUpstream(msgs)
+	}
+
 	bodyBytes, _ := json.Marshal(req)
 
 	// 有错误就换下一个渠道，直到成功或全部试完；优先保证请求不失败
