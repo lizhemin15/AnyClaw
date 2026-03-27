@@ -4,11 +4,13 @@ import {
   ANYCLAW_COLLAB_BROADCAST,
   broadcastCollabEvent,
   getCollabAgents,
+  getCollabMails,
   getCollabTopology,
   putCollabTopology,
   type CollabAgent,
   type CollabApiError,
   type CollabLimits,
+  type InternalMailRow,
 } from '../api'
 
 export type HomeCollabOrchestrateModalProps = {
@@ -17,6 +19,8 @@ export type HomeCollabOrchestrateModalProps = {
   instanceName: string
   onClose: () => void
   onSaved?: () => void
+  /** 打开时默认子标签（如从对话页直达邮件） */
+  initialCollabTab?: 'topo' | 'mails'
 }
 
 function canonPair(a: string, b: string): [string, string] {
@@ -57,7 +61,9 @@ export default function HomeCollabOrchestrateModal({
   instanceName,
   onClose,
   onSaved,
+  initialCollabTab = 'topo',
 }: HomeCollabOrchestrateModalProps) {
+  const [collabTab, setCollabTab] = useState<'topo' | 'mails'>(initialCollabTab)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -70,10 +76,99 @@ export default function HomeCollabOrchestrateModal({
   const [topoVersion, setTopoVersion] = useState(0)
   const [topologyReady, setTopologyReady] = useState(false)
   const [staleRemote, setStaleRemote] = useState(false)
+  const [mails, setMails] = useState<InternalMailRow[]>([])
+  const [mailLoading, setMailLoading] = useState(false)
+  const [mailLoadingMore, setMailLoadingMore] = useState(false)
+  const [mailErr, setMailErr] = useState<string | null>(null)
+  const [mailHasMore, setMailHasMore] = useState(false)
+  const mailNextOffsetRef = useRef(0)
   const panelRef = useRef<HTMLDivElement>(null)
   /** 防止快速切换实例时，较早发起的 load 覆盖较晚实例的界面 */
   const instanceIdRef = useRef(instanceId)
   instanceIdRef.current = instanceId
+
+  useEffect(() => {
+    if (!open) return
+    setCollabTab(initialCollabTab === 'mails' ? 'mails' : 'topo')
+  }, [open, instanceId, initialCollabTab])
+
+  const maxMailListLimit = limits?.max_internal_mail_list_limit ?? 500
+  const maxMailListOffsetCap = limits?.max_internal_mail_list_offset ?? 500_000
+  const mailPageSize = Math.min(100, Math.max(1, maxMailListLimit))
+
+  const loadMails = useCallback(
+    async (append: boolean) => {
+      const expectedId = instanceId
+      if (!append) {
+        setMailLoading(true)
+        setMailErr(null)
+      }
+      try {
+        const off = append ? mailNextOffsetRef.current : 0
+        if (off > maxMailListOffsetCap) {
+          setMailErr(`邮件列表 offset 超过上限（${maxMailListOffsetCap}）。`)
+          if (!append) {
+            setMails([])
+            mailNextOffsetRef.current = 0
+            setMailHasMore(false)
+          }
+          return
+        }
+        const { mails: list, total, limits: ml } = await getCollabMails(expectedId, {
+          limit: mailPageSize,
+          offset: off,
+        })
+        if (instanceIdRef.current !== expectedId) return
+        if (ml) setLimits(ml)
+        const batch = list || []
+        const totalN = typeof total === 'number' && Number.isFinite(total) ? total : null
+        const newOff = off + batch.length
+        if (append) {
+          setMails((prev) => [...prev, ...batch])
+          mailNextOffsetRef.current = newOff
+        } else {
+          setMails(batch)
+          mailNextOffsetRef.current = newOff
+        }
+        if (totalN != null && totalN >= 0) {
+          setMailHasMore(newOff < totalN)
+        } else {
+          setMailHasMore(batch.length >= mailPageSize && newOff <= maxMailListOffsetCap)
+        }
+        setMailErr(null)
+      } catch (e) {
+        if (instanceIdRef.current !== expectedId) return
+        const lim = (e as CollabApiError).collabLimits
+        if (lim) setLimits(lim)
+        setMailErr(e instanceof Error ? e.message : String(e))
+        if (!append) {
+          setMails([])
+          mailNextOffsetRef.current = 0
+          setMailHasMore(false)
+        }
+      } finally {
+        if (instanceIdRef.current === expectedId && !append) {
+          setMailLoading(false)
+        }
+      }
+    },
+    [instanceId, mailPageSize, maxMailListOffsetCap]
+  )
+
+  const loadMoreMails = useCallback(async () => {
+    if (mailLoadingMore || mailLoading || !mailHasMore) return
+    setMailLoadingMore(true)
+    try {
+      await loadMails(true)
+    } finally {
+      setMailLoadingMore(false)
+    }
+  }, [loadMails, mailHasMore, mailLoading, mailLoadingMore])
+
+  useEffect(() => {
+    if (!open || collabTab !== 'mails') return
+    void loadMails(false)
+  }, [open, collabTab, instanceId, loadMails])
 
   const mergeLimits = useCallback((a?: CollabLimits, b?: CollabLimits) => {
     if (b) setLimits(b)
@@ -183,6 +278,8 @@ export default function HomeCollabOrchestrateModal({
 
   const dirtyRef = useRef(false)
   dirtyRef.current = dirty
+  const collabTabRef = useRef(collabTab)
+  collabTabRef.current = collabTab
 
   const requestClose = useCallback(() => {
     if (dirty) {
@@ -228,6 +325,10 @@ export default function HomeCollabOrchestrateModal({
       bc.onmessage = (ev: MessageEvent) => {
         const d = ev.data as { kind?: string; instanceId?: number }
         if (d.instanceId !== instanceId) return
+        if (d.kind === 'internal_mail' && collabTabRef.current === 'mails') {
+          void loadMails(false)
+          return
+        }
         if (d.kind !== 'topology') return
         if (dirtyRef.current) {
           setStaleRemote(true)
@@ -239,7 +340,7 @@ export default function HomeCollabOrchestrateModal({
       /* noop */
     }
     return () => bc?.close()
-  }, [open, instanceId, load])
+  }, [open, instanceId, load, loadMails])
 
   const maxEdges = limits?.max_edges ?? 4096
   const pos = useMemo(() => layoutAgents(agents.length), [agents.length])
@@ -335,7 +436,7 @@ export default function HomeCollabOrchestrateModal({
       <div
         ref={panelRef}
         tabIndex={-1}
-        className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] flex flex-col border border-slate-200 outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-violet-400"
+        className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col border border-slate-200 outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-violet-400"
         onClick={(e) => e.stopPropagation()}
         role="document"
         aria-labelledby="home-orch-title"
@@ -343,9 +444,9 @@ export default function HomeCollabOrchestrateModal({
         <div className="px-5 pt-4 pb-2 border-b border-slate-100">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <h2 id="home-orch-title" className="text-lg font-semibold text-slate-800">
-              协作编排 · {instanceName || `#${instanceId}`}
+              协作 · {instanceName || `#${instanceId}`}
             </h2>
-            {agents.length > 1 && !loading && topologyReady && (
+            {collabTab === 'topo' && agents.length > 1 && !loading && topologyReady && (
               <span className="text-xs tabular-nums text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
                 连线 {edges.length}/{maxEdges}
                 {topoVersion > 0 ? ` · v${topoVersion}` : ''}
@@ -353,13 +454,97 @@ export default function HomeCollabOrchestrateModal({
               </span>
             )}
           </div>
-          <p id={orchDescId} className="text-xs text-slate-500 mt-1">
-            依次点击两个节点可添加或移除连线。拓扑仅作用于本实例内的多智能体（与容器 <code className="bg-slate-100 px-0.5 rounded">agents.list</code>{' '}
-            的 id 对应）。按 Esc 关闭。
+          <div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit mt-3">
+            <button
+              type="button"
+              onClick={() => setCollabTab('topo')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                collabTab === 'topo' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              编排
+            </button>
+            <button
+              type="button"
+              onClick={() => setCollabTab('mails')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                collabTab === 'mails' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              邮件
+            </button>
+          </div>
+          <p id={orchDescId} className="text-xs text-slate-500 mt-2">
+            {collabTab === 'topo' ? (
+              <>
+                依次点击两个节点添加或移除连线（无向邻居）。员工列表由容器 <code className="bg-slate-100 px-0.5 rounded">agents.list</code> 启动时自动同步。
+              </>
+            ) : (
+              <>员工之间往来的内部邮件，按时间倒序，最新在最上。按 Esc 关闭。</>
+            )}
           </p>
         </div>
 
         <div className="px-5 py-4 flex-1 overflow-y-auto min-h-0">
+          {collabTab === 'mails' ? (
+            <div className="space-y-3">
+              {mailErr && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{mailErr}</div>
+              )}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-slate-500">本实例全部内部邮件，最新在最上。</p>
+                <button
+                  type="button"
+                  disabled={mailLoading}
+                  onClick={() => void loadMails(false)}
+                  className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {mailLoading ? '刷新中…' : '刷新'}
+                </button>
+              </div>
+              {mailLoading && mails.length === 0 ? (
+                <p className="text-slate-500 text-sm py-12 text-center">加载邮件…</p>
+              ) : mails.length === 0 ? (
+                <p className="text-slate-400 text-sm py-8 text-center">暂无内部邮件</p>
+              ) : (
+                <div className="space-y-3">
+                  {mails.map((m) => (
+                    <div key={m.id} className="border border-slate-200 rounded-xl p-3 bg-slate-50/40 space-y-1.5">
+                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-slate-500">
+                        <span className="font-mono">#{m.id}</span>
+                        <span>{m.created_at}</span>
+                        <span>
+                          {m.from_slug} → {m.to_slug}
+                        </span>
+                        {m.thread_id ? (
+                          <code
+                            className="text-[10px] bg-slate-200/80 px-1 rounded max-w-[200px] truncate"
+                            title={m.thread_id}
+                          >
+                            {m.thread_id}
+                          </code>
+                        ) : null}
+                        {m.in_reply_to != null && <span>↩ {m.in_reply_to}</span>}
+                      </div>
+                      <div className="font-medium text-slate-800 text-sm">{m.subject || '—'}</div>
+                      <div className="text-xs text-slate-600 whitespace-pre-wrap break-words">{m.body}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {mailHasMore && mails.length > 0 && (
+                <button
+                  type="button"
+                  disabled={mailLoadingMore}
+                  onClick={() => void loadMoreMails()}
+                  className="w-full py-2 rounded-lg border border-slate-200 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {mailLoadingMore ? '加载中…' : '加载更早的邮件'}
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
           {staleRemote && (
             <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex flex-wrap items-center justify-between gap-2">
               <span>其它标签页已保存协作拓扑，与当前编辑不一致。</span>
@@ -394,8 +579,11 @@ export default function HomeCollabOrchestrateModal({
           ) : agents.length === 1 ? (
             <div className="space-y-3">
               <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                当前仅一名协作成员。请在「完整设置」中按容器 <code className="bg-amber-100 px-0.5 rounded">agents.list</code>{' '}
-                增加多名 <code className="bg-amber-100 px-0.5 rounded">agent_slug</code> 并保存员工后，再回此处连线。
+                当前仅一名协作成员。若容器已配置多名 <code className="bg-amber-100 px-0.5 rounded">agents.list</code>，请待员工进程连上云端后会自动补全；也可在{' '}
+                <Link to={`/instances/${instanceId}/collab`} className="text-amber-900 underline" onClick={() => onClose()}>
+                  展示名设置
+                </Link>{' '}
+                中核对。
               </p>
               <div className="relative w-full aspect-square max-h-64 mx-auto">
                 <svg viewBox="0 0 100 100" className="w-full h-full" aria-hidden>
@@ -486,9 +674,26 @@ export default function HomeCollabOrchestrateModal({
             </>
           )}
           {err && agents.length > 0 && <p className="text-red-600 text-xs mt-3">{err}</p>}
+            </>
+          )}
         </div>
 
-        <div className="px-5 py-3 border-t border-slate-100 flex flex-wrap gap-2 justify-end bg-slate-50/80 rounded-b-2xl">
+        <div className="px-5 py-3 border-t border-slate-100 flex flex-wrap gap-2 justify-end items-center bg-slate-50/80 rounded-b-2xl">
+          <Link
+            to={`/instances/${instanceId}/collab`}
+            onClick={(e) => {
+              if (dirty) {
+                if (!confirm('有未保存的拓扑变更，离开将关闭此窗口，未保存的连线将丢失，确定？')) {
+                  e.preventDefault()
+                  return
+                }
+              }
+              onClose()
+            }}
+            className="text-xs text-slate-500 hover:text-indigo-600 mr-auto"
+          >
+            修改展示名…
+          </Link>
           <button
             type="button"
             onClick={() => requestClose()}
@@ -496,22 +701,7 @@ export default function HomeCollabOrchestrateModal({
           >
             关闭
           </button>
-          <Link
-            to={`/instances/${instanceId}/collab`}
-            onClick={(e) => {
-              if (dirty) {
-                if (!confirm('有未保存的拓扑变更，进入完整设置将关闭此窗口，未保存的连线将丢失，确定？')) {
-                  e.preventDefault()
-                  return
-                }
-              }
-              onClose()
-            }}
-            className="px-3 py-2 text-sm text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 inline-flex items-center"
-          >
-            完整设置
-          </Link>
-          {agents.length > 1 && (
+          {collabTab === 'topo' && agents.length > 1 && (
             <button
               type="button"
               disabled={!canSave}

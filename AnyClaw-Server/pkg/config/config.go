@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 
 	"github.com/caarlos0/env/v11"
@@ -302,8 +304,16 @@ type TelegramConfig struct {
 	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"ANYCLAW_CHANNELS_TELEGRAM_REASONING_CHANNEL_ID"`
 }
 
-// WeixinClawConfig enables the native WeChat ClawBot (ilink) channel; credentials live under
-// {state_dir or home}/openclaw-weixin/ (same layout as bind_weixin_scan / official plugin).
+// WeixinClawAccount 微信 ilink 单账号凭证；与飞书同样保存在 config.json，容器只挂载该文件即可持久化。
+type WeixinClawAccount struct {
+	AccountID string `json:"account_id"`
+	Token     string `json:"token"`
+	BaseURL   string `json:"base_url,omitempty"`
+	UserID    string `json:"user_id,omitempty"`
+}
+
+// WeixinClawConfig enables the native WeChat ClawBot (ilink) channel.
+// 凭证优先读 channels.weixin_claw.accounts（config.json）；若无则回退到 openclaw-weixin/ 目录（与官方插件布局一致）。
 type WeixinClawConfig struct {
 	Enabled            bool                `json:"enabled"                 env:"ANYCLAW_CHANNELS_WEIXINCLAW_ENABLED"`
 	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"ANYCLAW_CHANNELS_WEIXINCLAW_ALLOW_FROM"`
@@ -311,6 +321,7 @@ type WeixinClawConfig struct {
 	StateDir           string              `json:"state_dir,omitempty"     env:"ANYCLAW_CHANNELS_WEIXINCLAW_STATE_DIR"`
 	CdnBaseURL         string              `json:"cdn_base_url,omitempty"  env:"ANYCLAW_CHANNELS_WEIXINCLAW_CDN_BASE_URL"`
 	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"ANYCLAW_CHANNELS_WEIXINCLAW_REASONING_CHANNEL_ID"`
+	Accounts           []WeixinClawAccount `json:"accounts,omitempty"`
 }
 
 type FeishuConfig struct {
@@ -793,6 +804,20 @@ type MCPConfig struct {
 	ToolConfig `envPrefix:"ANYCLAW_TOOLS_MCP_"`
 	// Servers is a map of server name to server configuration
 	Servers map[string]MCPServerConfig `json:"servers,omitempty"`
+}
+
+// DefaultConfigPath 返回 ANYCLAW_CONFIG 指向的 config.json，否则为 ~/.anyclaw/config.json。
+func DefaultConfigPath() string {
+	if p := strings.TrimSpace(os.Getenv("ANYCLAW_CONFIG")); p != "" {
+		return p
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".anyclaw", "config.json")
+}
+
+// ConfigPersistenceDir 为 config.json 所在目录（实例数据卷通常挂载此目录）。
+func ConfigPersistenceDir() string {
+	return filepath.Dir(DefaultConfigPath())
 }
 
 func LoadConfig(path string) (*Config, error) {

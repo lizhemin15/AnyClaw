@@ -172,6 +172,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	// 容器上传媒体到 COS（使用 instance token 鉴权，不走 JWT）
 	r.Post("/instances/{id}/media", mediaHandler.UploadMedia)
 	r.Get("/instances/{id}/collab/bridge/roster", collabHandler.ContainerGetRoster)
+	r.Post("/instances/{id}/collab/bridge/roster/sync", collabHandler.ContainerSyncRoster)
 	r.Get("/instances/{id}/collab/bridge/mails", collabHandler.ContainerListMails)
 	r.Get("/instances/{id}/collab/bridge/topology", collabHandler.ContainerGetTopology)
 	r.Post("/instances/{id}/collab/bridge/resolve", collabHandler.ContainerPostResolve)

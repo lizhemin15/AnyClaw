@@ -3,8 +3,6 @@ package tools
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -57,9 +55,5 @@ func persistFeishuCredentials(ctx context.Context, appID, appSecret string, extr
 }
 
 func getConfigPath() string {
-	if p := os.Getenv("ANYCLAW_CONFIG"); p != "" {
-		return p
-	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".anyclaw", "config.json")
+	return config.DefaultConfigPath()
 }

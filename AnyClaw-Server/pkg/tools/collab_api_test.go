@@ -55,6 +55,30 @@ func TestCollabAPIClient_GetRoster_GetTopology(t *testing.T) {
 	}
 }
 
+func TestCollabAPIClient_SyncRosterSlugs(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/instances/1/collab/bridge/roster/sync", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Query().Get("token") != "tok" || r.Header.Get("Authorization") != "Bearer tok" {
+			t.Error("expected token query and Bearer header")
+		}
+		fmt.Fprint(w, `{"status":"ok","added":2,"limits":{"max_agents":64}}`)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	c := NewCollabAPIClient(srv.URL, "1", "tok")
+	added, err := c.SyncRosterSlugs(context.Background(), []string{"main", "a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if added != 2 {
+		t.Fatalf("added=%d", added)
+	}
+}
+
 func TestCollabAPIClient_GetInternalMailList(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/instances/1/collab/bridge/mails", func(w http.ResponseWriter, r *http.Request) {

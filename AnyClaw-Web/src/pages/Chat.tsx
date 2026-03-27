@@ -973,15 +973,7 @@ export default function Chat() {
             type="button"
             onClick={() => navigate('/', { state: { orchestrateInstanceId: instanceId } })}
             className="text-xs px-2 py-1 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 flex-shrink-0"
-            title="回首页打开拓扑编排"
-          >
-            编排
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate(`/instances/${instanceId}/collab`)}
-            className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 flex-shrink-0"
-            title="员工、邮件与详细拓扑"
+            title="回首页：编排连线与内部邮件"
           >
             协作
           </button>

@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -251,6 +252,22 @@ func registerSharedTools(
 
 func (al *AgentLoop) Run(ctx context.Context) error {
 	al.running.Store(true)
+
+	if br := al.cfg.Channels.AnyClawBridge; br.IsEnabled() {
+		syncCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+		c := tools.NewCollabAPIClient(br.APIURL, br.InstanceID, br.Token)
+		ids := al.registry.ListAgentIDs()
+		sort.Strings(ids)
+		added, err := c.SyncRosterSlugs(syncCtx, ids)
+		cancel()
+		if err != nil {
+			logger.WarnCF("agent", "协作员工与容器 agents.list 同步失败（可稍后在网页编排中查看）",
+				map[string]any{"error": err.Error()})
+		} else if added > 0 {
+			logger.InfoCF("agent", "已自动追加协作员工记录",
+				map[string]any{"added": added, "slugs": ids})
+		}
+	}
 
 	// Initialize MCP servers for all agents
 	if al.cfg.Tools.IsToolEnabled("mcp") {

@@ -292,6 +292,38 @@ func (h *Handler) ContainerGetRoster(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ContainerSyncRoster POST body: {"slugs":["main","worker",...]} — 将容器 agents.list 中的 id 合并进协作表（幂等追加）。
+func (h *Handler) ContainerSyncRoster(w http.ResponseWriter, r *http.Request) {
+	inst, iid, ok := h.authInstance(w, r)
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		Slugs []string `json:"slugs"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	n, err := h.db.EnsureInstanceAgentSlugs(iid, inst.UserID, body.Slugs)
+	if err != nil {
+		writeJSONErrorWithLimits(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if n > 0 {
+		h.pushTopologyUpdated(iid)
+	}
+	writeJSON(w, map[string]any{
+		"status": "ok",
+		"added":  n,
+		"limits": collaborationLimitsPayload(),
+	})
+}
+
 func (h *Handler) ContainerGetTopology(w http.ResponseWriter, r *http.Request) {
 	_, iid, ok := h.authInstance(w, r)
 	if !ok {

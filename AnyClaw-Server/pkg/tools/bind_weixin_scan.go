@@ -20,6 +20,7 @@ import (
 	qrterminal "github.com/mdp/qrterminal/v3"
 	"rsc.io/qr"
 
+	"github.com/anyclaw/anyclaw-server/pkg/config"
 	"github.com/anyclaw/anyclaw-server/pkg/logger"
 	"github.com/anyclaw/anyclaw-server/pkg/media"
 )
@@ -50,7 +51,7 @@ func (t *BindWeixinScanTool) Name() string {
 }
 
 func (t *BindWeixinScanTool) Description() string {
-	return `Start WeChat (微信 ClawBot) binding via official ilink QR flow (same APIs as @tencent-weixin/openclaw-weixin). Sends QR + link, saves token under openclaw-weixin/, enables native channels.weixin_claw, triggers gateway restart on Unix. Use for 绑定微信 / 微信扫码.`
+	return `Start WeChat (微信 ClawBot) binding via official ilink QR flow (same APIs as @tencent-weixin/openclaw-weixin). Sends QR + link, saves token into config.json (channels.weixin_claw.accounts, same persistence as Feishu) and mirrors openclaw-weixin/ next to config, enables weixin_claw, triggers gateway restart on Unix. Use for 绑定微信 / 微信扫码.`
 }
 
 func (t *BindWeixinScanTool) Parameters() map[string]any {
@@ -68,10 +69,6 @@ func (t *BindWeixinScanTool) Parameters() map[string]any {
 			"bot_type": map[string]any{
 				"type":        "string",
 				"description": "bot_type query param for get_bot_qrcode (default 3)",
-			},
-			"state_dir": map[string]any{
-				"type":        "string",
-				"description": "OpenClaw state root (parent of openclaw-weixin/). Overrides OPENCLAW_STATE_DIR / auto-detect.",
 			},
 			"timeout_ms": map[string]any{
 				"type":        "number",
@@ -111,8 +108,6 @@ func (t *BindWeixinScanTool) ExecuteAsync(ctx context.Context, args map[string]a
 	if botType == "" {
 		botType = weixinDefaultBotType
 	}
-	stateDirArg, _ := args["state_dir"].(string)
-	stateDirArg = strings.TrimSpace(stateDirArg)
 	timeoutMs := 480_000.0
 	if v, ok := args["timeout_ms"].(float64); ok && v >= 10_000 {
 		timeoutMs = v
@@ -151,25 +146,19 @@ func (t *BindWeixinScanTool) ExecuteAsync(ctx context.Context, args map[string]a
 		qrBlock = weixinRenderTerminalQR(qrURL) + "\n\n"
 	}
 
-	stateRoot, serr := resolveWeixinPluginStateRoot(stateDirArg)
-	if serr != nil {
-		t.clearRunning()
-		return ErrorResult("无法解析 OpenClaw 状态目录: " + serr.Error())
-	}
-
 	forUser := strings.TrimSpace(fmt.Sprintf(`已发起微信 ClawBot 扫码绑定（与官方插件 @tencent-weixin/openclaw-weixin 使用相同 ilink 接口）。
 
 %s
 %s
 %s
 
-数据将保存到本机插件目录：%s/openclaw-weixin/
+凭证将写入 **config.json**（与飞书相同，容器挂载该文件即可持久化），并同步到 %s/openclaw-weixin/。
 绑定成功后会自动打开 **channels.weixin_claw** 并重启网关（Linux/macOS）；Windows 请手动重启 anyclaw gateway。
 若提示微信版本过低，请按微信引导更新后再扫。`,
 		scanHint,
 		qrBlock,
 		qrURL,
-		filepath.Clean(stateRoot)))
+		filepath.Clean(config.ConfigPersistenceDir())))
 
 	deadline := time.Now().Add(time.Duration(timeoutMs) * time.Millisecond)
 
@@ -179,7 +168,6 @@ func (t *BindWeixinScanTool) ExecuteAsync(ctx context.Context, args map[string]a
 		BotType:   botType,
 		Qrcode:    qrcode,
 		QRURL:     qrURL,
-		StateRoot: stateRoot,
 		Deadline:  deadline,
 		MediaRefs: mediaRefs,
 		Scope:     scope,
@@ -208,7 +196,6 @@ type weixinWaitParams struct {
 	BotType   string
 	Qrcode    string
 	QRURL     string
-	StateRoot string
 	Deadline  time.Time
 	MediaRefs []string
 	Scope     string
@@ -303,13 +290,12 @@ func (t *BindWeixinScanTool) waitWeixinLogin(ctx context.Context, cb AsyncCallba
 				baseSave = p.BaseURL
 			}
 			userID := strings.TrimSpace(st.IlinkUserID)
-			if err := persistOpenClawWeixinAccount(p.StateRoot, normID, st.BotToken, baseSave, userID); err != nil {
-				cb(context.Background(), ErrorResult("已获取凭证但写入本地失败: "+err.Error()))
+			if err := persistWeixinClawBindingToConfig(normID, st.BotToken, baseSave, userID); err != nil {
+				cb(context.Background(), ErrorResult("已获取凭证但写入 config.json 失败: "+err.Error()))
 				return
 			}
-			if err := enableWeixinClawInConfig(userID); err != nil {
-				cb(context.Background(), ErrorResult("凭证已保存但更新 config 启用 weixin_claw 失败: "+err.Error()))
-				return
+			if err := persistOpenClawWeixinAccount(config.ConfigPersistenceDir(), normID, st.BotToken, baseSave, userID); err != nil {
+				logger.WarnCF("weixin_scan", "mirror openclaw-weixin dir failed", map[string]any{"error": err.Error()})
 			}
 			scheduleRestart()
 			okMsg := strings.TrimSpace(fmt.Sprintf(`✅ 微信绑定成功，账号已保存（%s），并已启用原生 **weixin_claw** 通道。
@@ -438,44 +424,6 @@ func weixinPollQRStatus(ctx context.Context, baseURL, qrcode, routeTag string) (
 		return &weixinStatusPayload{Status: "wait"}, nil
 	}
 	return &out, nil
-}
-
-func expandToolHome(p string) string {
-	if p == "" {
-		return p
-	}
-	if p[0] == '~' {
-		home, _ := os.UserHomeDir()
-		if len(p) > 1 && p[1] == '/' {
-			return filepath.Join(home, p[2:])
-		}
-		return home
-	}
-	return p
-}
-
-func resolveWeixinPluginStateRoot(override string) (string, error) {
-	if override != "" {
-		return filepath.Abs(expandToolHome(override))
-	}
-	if d := strings.TrimSpace(os.Getenv("OPENCLAW_STATE_DIR")); d != "" {
-		return filepath.Abs(expandToolHome(d))
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	if h := strings.TrimSpace(os.Getenv("OPENCLAW_HOME")); h != "" {
-		return filepath.Abs(expandToolHome(h))
-	}
-	openclaw := filepath.Join(home, ".openclaw")
-	if st, err := os.Stat(openclaw); err == nil && st.IsDir() {
-		return filepath.Abs(openclaw)
-	}
-	if h := strings.TrimSpace(os.Getenv("ANYCLAW_HOME")); h != "" {
-		return filepath.Abs(expandToolHome(h))
-	}
-	return filepath.Abs(filepath.Join(home, ".anyclaw"))
 }
 
 func normalizeWeixinAccountID(raw string) string {

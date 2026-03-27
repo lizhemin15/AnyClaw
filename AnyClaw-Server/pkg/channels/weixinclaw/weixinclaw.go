@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -78,12 +79,15 @@ func NewChannel(cfg *config.Config, b *bus.MessageBus) (channels.Channel, error)
 	if err != nil {
 		return nil, fmt.Errorf("weixinclaw: state dir: %w", err)
 	}
-	accs, err := loadWeixinAccounts(root)
+	if err := tryMigrateWeixinDiskIntoConfig(cfg, root); err != nil {
+		logger.WarnCF("weixinclaw", "weixin: 将磁盘凭证合并进 config.json 失败（仍尝试从磁盘读取）", map[string]any{"error": err.Error()})
+	}
+	accs, err := mergeLoadWeixinAccounts(cfg, root)
 	if err != nil {
 		return nil, fmt.Errorf("weixinclaw: load accounts: %w", err)
 	}
 	if len(accs) == 0 {
-		logger.WarnCF("weixinclaw", "No token yet under openclaw-weixin/accounts — 完成「绑定微信」后重启网关", map[string]any{"state_root": root})
+		logger.WarnCF("weixinclaw", "No weixin token in config.json (channels.weixin_claw.accounts) or openclaw-weixin/ — 完成「绑定微信」后重启网关", map[string]any{"state_root": root})
 	}
 
 	base := channels.NewBaseChannel(
@@ -110,6 +114,10 @@ func NewChannel(cfg *config.Config, b *bus.MessageBus) (channels.Channel, error)
 func resolveStateRoot(override string) (string, error) {
 	if override != "" {
 		return filepath.Abs(expandHome(override))
+	}
+	if p := strings.TrimSpace(os.Getenv("ANYCLAW_CONFIG")); p != "" {
+		dir := filepath.Dir(p)
+		return filepath.Abs(expandHome(dir))
 	}
 	if d := strings.TrimSpace(os.Getenv("OPENCLAW_STATE_DIR")); d != "" {
 		return filepath.Abs(expandHome(d))
@@ -159,7 +167,100 @@ func deriveRawAccountID(normalizedID string) string {
 	return ""
 }
 
-func loadWeixinAccounts(stateRoot string) ([]*weixinAccount, error) {
+// tryMigrateWeixinDiskIntoConfig 在 config 里尚无 accounts、但磁盘上已有 openclaw-weixin/ 时，把凭证追加写入 config.json（不删其它字段；不新建不存在的 config 文件）。
+func tryMigrateWeixinDiskIntoConfig(cfg *config.Config, stateRoot string) error {
+	if len(cfg.Channels.WeixinClaw.Accounts) > 0 {
+		return nil
+	}
+	disk, err := loadWeixinAccountsFromDisk(stateRoot)
+	if err != nil {
+		return err
+	}
+	if len(disk) == 0 {
+		return nil
+	}
+	path := config.DefaultConfigPath()
+	if st, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	} else if st.IsDir() {
+		return fmt.Errorf("ANYCLAW_CONFIG is a directory, expected config.json path")
+	}
+	onDisk, err := config.LoadConfig(path)
+	if err != nil {
+		return err
+	}
+	if len(onDisk.Channels.WeixinClaw.Accounts) > 0 {
+		cfg.Channels.WeixinClaw.Accounts = onDisk.Channels.WeixinClaw.Accounts
+		return nil
+	}
+	for _, a := range disk {
+		if a == nil || strings.TrimSpace(a.ID) == "" || strings.TrimSpace(a.Token) == "" {
+			continue
+		}
+		base := strings.TrimSpace(a.BaseURL)
+		if base == "" {
+			base = defaultBaseURL
+		}
+		onDisk.Channels.WeixinClaw.Accounts = append(onDisk.Channels.WeixinClaw.Accounts, config.WeixinClawAccount{
+			AccountID: a.ID,
+			Token:     a.Token,
+			BaseURL:   base,
+		})
+	}
+	if len(onDisk.Channels.WeixinClaw.Accounts) == 0 {
+		return nil
+	}
+	if err := config.SaveConfig(path, onDisk); err != nil {
+		return err
+	}
+	cfg.Channels.WeixinClaw.Accounts = onDisk.Channels.WeixinClaw.Accounts
+	logger.InfoCF("weixinclaw", "已把既有 openclaw-weixin/ 凭证追加写入 config.json（与飞书同级持久化）", map[string]any{"accounts": len(onDisk.Channels.WeixinClaw.Accounts)})
+	return nil
+}
+
+// mergeLoadWeixinAccounts 合并 config.json 中的 channels.weixin_claw.accounts 与磁盘 openclaw-weixin/；同 ID 以 config 为准。
+func mergeLoadWeixinAccounts(cfg *config.Config, stateRoot string) ([]*weixinAccount, error) {
+	disk, err := loadWeixinAccountsFromDisk(stateRoot)
+	if err != nil {
+		return nil, err
+	}
+	var fromCfg []*weixinAccount
+	for _, a := range cfg.Channels.WeixinClaw.Accounts {
+		id := strings.TrimSpace(a.AccountID)
+		tok := strings.TrimSpace(a.Token)
+		if id == "" || tok == "" {
+			continue
+		}
+		base := strings.TrimSpace(a.BaseURL)
+		if base == "" {
+			base = defaultBaseURL
+		}
+		fromCfg = append(fromCfg, &weixinAccount{ID: id, Token: tok, BaseURL: base})
+	}
+	if len(fromCfg) == 0 {
+		return disk, nil
+	}
+	byID := make(map[string]*weixinAccount)
+	for _, a := range disk {
+		if a != nil {
+			byID[a.ID] = a
+		}
+	}
+	for _, a := range fromCfg {
+		byID[a.ID] = a
+	}
+	out := make([]*weixinAccount, 0, len(byID))
+	for _, a := range byID {
+		out = append(out, a)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+
+func loadWeixinAccountsFromDisk(stateRoot string) ([]*weixinAccount, error) {
 	idxPath := filepath.Join(stateRoot, "openclaw-weixin", "accounts.json")
 	raw, err := os.ReadFile(idxPath)
 	if err != nil {

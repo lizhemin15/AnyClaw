@@ -216,6 +216,119 @@ func (d *DB) ListInstanceAgents(instanceID int64) ([]InstanceAgentRow, error) {
 	return list, rows.Err()
 }
 
+func displayNameAvailableForUserTx(tx *sql.Tx, userID int64, name string) (bool, error) {
+	var n int
+	err := tx.QueryRow(
+		`SELECT COUNT(*) FROM instance_agents WHERE user_id = ? AND display_name = ?`,
+		userID, name,
+	).Scan(&n)
+	if err != nil {
+		return false, err
+	}
+	return n == 0, nil
+}
+
+func pickCollabDisplayNameForSyncTx(tx *sql.Tx, userID, instanceID int64, slug string) (string, error) {
+	candidates := []string{
+		slug,
+		fmt.Sprintf("%s·%d", slug, instanceID),
+	}
+	for i := 2; i < 50; i++ {
+		candidates = append(candidates, fmt.Sprintf("%s·%d·%d", slug, instanceID, i))
+	}
+	for _, c := range candidates {
+		if c == "" || utf8.RuneCountInString(c) > MaxInstanceAgentDisplayRunes {
+			continue
+		}
+		ok, err := displayNameAvailableForUserTx(tx, userID, c)
+		if err != nil {
+			return "", err
+		}
+		if ok {
+			return c, nil
+		}
+	}
+	return "", fmt.Errorf("无法为员工 slug %q 生成唯一展示名", slug)
+}
+
+// EnsureInstanceAgentSlugs 按容器 agents.list 补全尚未出现在协作表中的 agent_slug（仅追加，不删不改已有行）；展示名默认用 slug，账号内冲突时自动加后缀。
+func (d *DB) EnsureInstanceAgentSlugs(instanceID, userID int64, rawSlugs []string) (added int, err error) {
+	seen := make(map[string]struct{})
+	var slugs []string
+	for _, raw := range rawSlugs {
+		s := strings.TrimSpace(raw)
+		if s == "" {
+			continue
+		}
+		if e := validateCollabAgentSlugSyntax(s); e != nil {
+			return 0, e
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		slugs = append(slugs, s)
+	}
+	sort.Strings(slugs)
+	if len(slugs) == 0 {
+		return 0, nil
+	}
+
+	tx, err := d.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var curCount int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM instance_agents WHERE instance_id = ?`, instanceID).Scan(&curCount); err != nil {
+		return 0, err
+	}
+
+	added = 0
+	for _, slug := range slugs {
+		var exists int
+		if err := tx.QueryRow(
+			`SELECT COUNT(*) FROM instance_agents WHERE instance_id = ? AND agent_slug = ?`,
+			instanceID, slug,
+		).Scan(&exists); err != nil {
+			return 0, err
+		}
+		if exists > 0 {
+			continue
+		}
+		if curCount >= MaxCollaborationAgentsPerInstance {
+			return 0, fmt.Errorf("协作员工已达上限（%d 名），无法自动同步 slug %q", MaxCollaborationAgentsPerInstance, slug)
+		}
+		displayName, err := pickCollabDisplayNameForSyncTx(tx, userID, instanceID, slug)
+		if err != nil {
+			return 0, err
+		}
+		_, err = tx.Exec(
+			`INSERT INTO instance_agents (instance_id, user_id, agent_slug, display_name) VALUES (?, ?, ?, ?)`,
+			instanceID, userID, slug, displayName,
+		)
+		if err != nil {
+			if fe := friendlyInstanceAgentInsertErr(err); fe != err {
+				return 0, fe
+			}
+			return 0, fmt.Errorf("insert agent %q: %w", slug, err)
+		}
+		curCount++
+		added++
+	}
+
+	if added > 0 {
+		if err := d.bumpAgentTopologyVersion(tx, instanceID); err != nil {
+			return 0, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return added, nil
+}
+
 // ReplaceInstanceAgents 全量替换实例员工（事务）；展示名在 user_id 下唯一由 DB 保证
 func (d *DB) ReplaceInstanceAgents(instanceID, userID int64, agents []InstanceAgentRow) error {
 	if err := validateInstanceAgentRows(agents); err != nil {

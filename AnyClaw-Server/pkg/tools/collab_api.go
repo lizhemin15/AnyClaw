@@ -120,6 +120,36 @@ func (c *CollabAPIClient) GetRoster(ctx context.Context) (*CollabRosterResponse,
 	return &out, nil
 }
 
+// SyncRosterSlugs 将本容器 agents.list 的 id 合并进 API 协作表（仅追加新 slug）。
+func (c *CollabAPIClient) SyncRosterSlugs(ctx context.Context, slugs []string) (added int, err error) {
+	payload := map[string]any{"slugs": slugs}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return 0, err
+	}
+	rel := "/instances/" + url.PathEscape(c.InstanceID) + "/collab/bridge/roster/sync"
+	req, err := c.req(ctx, http.MethodPost, rel, bytes.NewReader(raw))
+	if err != nil {
+		return 0, err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return 0, fmt.Errorf("api %s: %s", resp.Status, string(bytes.TrimSpace(b)))
+	}
+	var out struct {
+		Added int `json:"added"`
+	}
+	if err := json.Unmarshal(b, &out); err != nil {
+		return 0, fmt.Errorf("decode sync roster: %w", err)
+	}
+	return out.Added, nil
+}
+
 // GetTopology 拉取无向边、拓扑版本与上限（容器 token）。
 func (c *CollabAPIClient) GetTopology(ctx context.Context) (*CollabTopologyResponse, error) {
 	rel := "/instances/" + url.PathEscape(c.InstanceID) + "/collab/bridge/topology"

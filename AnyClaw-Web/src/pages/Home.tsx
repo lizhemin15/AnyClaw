@@ -30,20 +30,26 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
 
   const [orchMode, setOrchMode] = useState(false)
   const [orchInst, setOrchInst] = useState<Instance | null>(null)
+  const [orchInitialCollabTab, setOrchInitialCollabTab] = useState<'topo' | 'mails'>('topo')
 
   const navigate = useNavigate()
   const location = useLocation()
 
   const openOrchestrate = (inst: Instance) => {
+    setOrchInitialCollabTab('topo')
     setOrchInst(inst)
   }
 
   useEffect(() => {
-    const sid = (location.state as { orchestrateInstanceId?: number } | null)?.orchestrateInstanceId
+    const st = location.state as { orchestrateInstanceId?: number; orchestrateCollabTab?: 'topo' | 'mails' } | null
+    const sid = st?.orchestrateInstanceId
     if (sid == null || typeof sid !== 'number') return
     if (loading) return
     const match = instances.find((i) => i.id === sid)
-    if (match) setOrchInst(match)
+    if (match) {
+      setOrchInitialCollabTab(st?.orchestrateCollabTab === 'mails' ? 'mails' : 'topo')
+      setOrchInst(match)
+    }
     navigate(`${location.pathname}${location.search}`, { replace: true, state: {} })
   }, [loading, instances, location.state, location.pathname, location.search, navigate])
 
@@ -482,6 +488,7 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
           open
           instanceId={orchInst.id}
           instanceName={orchInst.name}
+          initialCollabTab={orchInitialCollabTab}
           onClose={() => setOrchInst(null)}
           onSaved={loadInstances}
         />
