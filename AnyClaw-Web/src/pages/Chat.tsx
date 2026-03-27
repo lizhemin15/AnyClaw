@@ -2,7 +2,17 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react
 import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { getToken, getWebSocketUrl, getMessages, getInstance, markInstanceRead, fetchProxyText, uploadMedia, type ChatMessage as ApiMessage } from '../api'
+import {
+  getToken,
+  getWebSocketUrl,
+  getMessages,
+  getInstance,
+  markInstanceRead,
+  fetchProxyText,
+  uploadMedia,
+  broadcastCollabEvent,
+  type ChatMessage as ApiMessage,
+} from '../api'
 
 // remark-gfm 使用 lookbehind 正则，Safari 16.4 以下不支持，会报 invalid group specifier name
 const supportsGfm = typeof window !== 'undefined' && (() => {
@@ -574,6 +584,12 @@ export default function Chat() {
             setTyping(false)
             loadMessages().then(({ list }) => mergeMessagesFromServer(list, setMessages))
             break
+          case 'collab.internal_mail':
+            broadcastCollabEvent('internal_mail', instanceId)
+            break
+          case 'collab.topology_updated':
+            broadcastCollabEvent('topology', instanceId)
+            break
         }
       } catch {
         /* ignore */
@@ -953,6 +969,13 @@ export default function Chat() {
         </button>
         <div className="flex-1 min-w-0 flex items-center gap-2">
           <span className="font-semibold text-slate-800 truncate">{instanceName || '...'}</span>
+          <button
+            type="button"
+            onClick={() => navigate(`/instances/${instanceId}/collab`)}
+            className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 flex-shrink-0"
+          >
+            协作
+          </button>
           <span className={`flex items-center gap-1.5 text-xs ${connected ? 'text-emerald-600' : 'text-slate-400'}`}>
             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${connected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
             <span className="hidden sm:inline">{connected ? '在线' : '离线'}</span>

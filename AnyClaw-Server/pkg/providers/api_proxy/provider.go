@@ -130,8 +130,8 @@ func sleepCtx(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// shouldRetryManagerLLM matches AnyClaw-Manager proxy transient states (channel cooldown,
-// upstream 5xx/429) that often appear right after gateway restart or Feishu re-bind.
+// shouldRetryManagerLLM matches AnyClaw-API proxy transient states (upstream 5xx/429)
+// that often appear right after gateway restart or Feishu re-bind.
 func shouldRetryManagerLLM(status int, body string) bool {
 	b := strings.ToLower(body)
 	switch status {

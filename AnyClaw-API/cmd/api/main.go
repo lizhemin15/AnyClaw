@@ -11,6 +11,7 @@ import (
 	"github.com/anyclaw/anyclaw-api/internal/adminconfig"
 	"github.com/anyclaw/anyclaw-api/internal/adminstats"
 	"github.com/anyclaw/anyclaw-api/internal/auth"
+	"github.com/anyclaw/anyclaw-api/internal/collab"
 	"github.com/anyclaw/anyclaw-api/internal/config"
 	"github.com/anyclaw/anyclaw-api/internal/db"
 	"github.com/anyclaw/anyclaw-api/internal/energy"
@@ -104,6 +105,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 
 	wsHub := ws.NewHub()
 	wsHandler := ws.NewHandler(database, wsHub)
+	collabHandler := collab.New(database, wsHub)
 	msgHandler := messages.New(database)
 	mediaHandler := media.New(database, configPath)
 	proxyHandler := proxy.New(configPath)
@@ -160,9 +162,21 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Patch("/{id}", instHandler.Patch)
 		r.Get("/{id}", instHandler.Get)
 		r.Delete("/{id}", instHandler.Delete)
+		r.Get("/{id}/collab/agents", collabHandler.GetAgents)
+		r.Put("/{id}/collab/agents", collabHandler.PutAgents)
+		r.Get("/{id}/collab/topology", collabHandler.GetTopology)
+		r.Put("/{id}/collab/topology", collabHandler.PutTopology)
+		r.Get("/{id}/collab/mails", collabHandler.ListMails)
+		r.Post("/{id}/collab/resolve", collabHandler.PostResolve)
 	})
 	// 容器上传媒体到 COS（使用 instance token 鉴权，不走 JWT）
 	r.Post("/instances/{id}/media", mediaHandler.UploadMedia)
+	r.Get("/instances/{id}/collab/bridge/roster", collabHandler.ContainerGetRoster)
+	r.Get("/instances/{id}/collab/bridge/mails", collabHandler.ContainerListMails)
+	r.Get("/instances/{id}/collab/bridge/topology", collabHandler.ContainerGetTopology)
+	r.Post("/instances/{id}/collab/bridge/resolve", collabHandler.ContainerPostResolve)
+	r.Get("/instances/{id}/collab/bridge/mail/{mailId}", collabHandler.ContainerGetMail)
+	r.Post("/instances/{id}/collab/bridge/mail", collabHandler.ContainerPostMail)
 
 	r.Get("/energy/config", energyHandler.GetPublicConfig)
 	r.Route("/energy", func(r chi.Router) {
@@ -205,6 +219,18 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "数据库结构已检查并修复"})
+		})
+		r.Post("/db/backfill-collab-agents", func(w http.ResponseWriter, r *http.Request) {
+			n, err := database.BackfillCollabAgentsForInstancesWithoutRoster()
+			if err != nil {
+				log.Printf("[admin] backfill collab agents: %v", err)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{"ok": true, "backfilled": n})
 		})
 		r.Post("/db/reset", func(w http.ResponseWriter, r *http.Request) {
 			if err := database.Reset(); err != nil {

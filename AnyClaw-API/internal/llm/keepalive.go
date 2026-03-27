@@ -15,8 +15,7 @@ import (
 	"github.com/anyclaw/anyclaw-api/internal/config"
 )
 
-// KeepAlive 保活服务：定期探测各渠道连通性，成功则清除冷却、失败则标记冷却，
-// 供调度器据此切换渠道。
+// KeepAlive 定期探测各渠道连通性（仅日志；不再因失败自动禁用渠道）。
 type KeepAlive struct {
 	configPath string
 	scheduler  *ModelScheduler
@@ -99,7 +98,7 @@ func (k *KeepAlive) probeAll() {
 		}
 		targets = append(targets, target{channelID: ep.ID, apiBase: base, apiKey: ep.APIKey, model: model})
 	}
-	// 仅对用户启用的渠道做保活检测；用户手动关闭的不参与检测、不自动禁用
+	// 仅对用户启用的渠道做保活检测；用户手动关闭的不参与检测
 	for _, ch := range cfg.Channels {
 		if !ch.Enabled || ch.APIKey == "" {
 			continue
@@ -156,28 +155,16 @@ func (k *KeepAlive) probeOne(channelID, apiBase, apiKey, model string) {
 		req.Host = host
 	}
 	resp, err := k.client.Do(req)
-	ep := config.ChannelEndpoint{ChannelID: channelID, APIBase: apiBase}
 	if err != nil {
 		log.Printf("[llm] keepalive probe %s failed: %v", apiBase, err)
-		if k.scheduler != nil {
-			k.scheduler.RecordFailureUntil(ep, time.Now().Add(CooldownTransient))
-		}
 		return
 	}
 	rb, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if resp.StatusCode == http.StatusOK {
-		if k.scheduler != nil {
-			k.scheduler.ClearFailure(ep)
-		}
 		return
 	}
-	// 5xx / 429：记录冷却，供调度器切换
 	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-		until := cooldownUntil(resp.StatusCode, rb)
-		log.Printf("[llm] keepalive probe %s status=%d cooldown_until=%v", apiBase, resp.StatusCode, until.Format("2006-01-02 15:04"))
-		if k.scheduler != nil {
-			k.scheduler.RecordFailureUntil(ep, until)
-		}
+		log.Printf("[llm] keepalive probe %s status=%d body=%s", apiBase, resp.StatusCode, truncate(string(rb), 200))
 	}
 }

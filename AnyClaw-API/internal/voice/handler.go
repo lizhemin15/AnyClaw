@@ -108,7 +108,6 @@ func (h *Handler) proxyVoice(w http.ResponseWriter, r *http.Request, path string
 		h.scheduler.Done(ep)
 		if err != nil {
 			log.Printf("[voice] upstream error (try %d): endpoint=%s err=%v", try+1, ep.ChannelName, err)
-			h.scheduler.RecordFailureUntil(ep, time.Now().Add(llm.CooldownTransient))
 			continue
 		}
 
@@ -117,7 +116,6 @@ func (h *Handler) proxyVoice(w http.ResponseWriter, r *http.Request, path string
 
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			log.Printf("[voice] upstream error (try %d): endpoint=%s status=%d", try+1, ep.ChannelName, resp.StatusCode)
-			h.scheduler.RecordFailureUntil(ep, time.Now().Add(llm.CooldownTransient))
 			if try < len(candidates)-1 {
 				continue
 			}

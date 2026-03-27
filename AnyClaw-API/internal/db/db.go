@@ -256,6 +256,61 @@ func (d *DB) migrate() error {
 	)`); err != nil {
 		log.Printf("[db] create instance_subscriptions: %v", err)
 	}
+	// 多员工协作：展示名在 user_id 维度唯一；拓扑无向边；内部邮件落库
+	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS instance_agents (
+		id BIGINT AUTO_INCREMENT PRIMARY KEY,
+		instance_id BIGINT NOT NULL,
+		user_id BIGINT NOT NULL,
+		agent_slug VARCHAR(128) NOT NULL,
+		display_name VARCHAR(255) NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+		UNIQUE KEY uk_instance_slug (instance_id, agent_slug),
+		UNIQUE KEY uk_user_display (user_id, display_name),
+		INDEX idx_instance_agents_instance (instance_id),
+		INDEX idx_instance_agents_user (user_id),
+		CONSTRAINT fk_ia_instance FOREIGN KEY (instance_id) REFERENCES instances(id) ON DELETE CASCADE
+	)`); err != nil {
+		log.Printf("[db] create instance_agents: %v", err)
+	}
+	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS instance_topology_edges (
+		id BIGINT AUTO_INCREMENT PRIMARY KEY,
+		instance_id BIGINT NOT NULL,
+		agent_slug_lo VARCHAR(128) NOT NULL,
+		agent_slug_hi VARCHAR(128) NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE KEY uk_instance_edge (instance_id, agent_slug_lo, agent_slug_hi),
+		INDEX idx_ite_instance (instance_id),
+		CONSTRAINT fk_ite_instance FOREIGN KEY (instance_id) REFERENCES instances(id) ON DELETE CASCADE
+	)`); err != nil {
+		log.Printf("[db] create instance_topology_edges: %v", err)
+	}
+	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS internal_mails (
+		id BIGINT AUTO_INCREMENT PRIMARY KEY,
+		instance_id BIGINT NOT NULL,
+		thread_id VARCHAR(64) NOT NULL,
+		from_slug VARCHAR(128) NOT NULL,
+		to_slug VARCHAR(128) NOT NULL,
+		subject VARCHAR(512) NOT NULL DEFAULT '',
+		body MEDIUMTEXT NOT NULL,
+		in_reply_to BIGINT,
+		topology_version BIGINT NOT NULL DEFAULT 0,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		INDEX idx_im_instance (instance_id),
+		INDEX idx_im_thread (instance_id, thread_id),
+		INDEX idx_im_to (instance_id, to_slug, id),
+		CONSTRAINT fk_im_instance FOREIGN KEY (instance_id) REFERENCES instances(id) ON DELETE CASCADE
+	)`); err != nil {
+		log.Printf("[db] create internal_mails: %v", err)
+	}
+	if _, err := d.Exec("ALTER TABLE instances ADD COLUMN agent_topology_version BIGINT NOT NULL DEFAULT 0"); err != nil && !isDuplicateColumn(err) {
+		log.Printf("[db] alter instances agent_topology_version: %v", err)
+	}
+	if n, err := d.BackfillCollabAgentsForInstancesWithoutRoster(); err != nil {
+		log.Printf("[db] backfill collab agents: %v", err)
+	} else if n > 0 {
+		log.Printf("[db] backfilled default collab roster for %d instance(s)", n)
+	}
 	return nil
 }
 
@@ -268,7 +323,8 @@ func (d *DB) CheckAndMigrate() error {
 // Reset 清空所有业务表并重新迁移，用于解决数据冲突。重置后需前往 /setup 创建管理员。
 func (d *DB) Reset() error {
 	tables := []string{
-		"instance_subscriptions", "usage_corrections", "usage_log", "activation_codes", "orders", "verification_codes", "messages", "invitations",
+		"instance_subscriptions", "internal_mails", "instance_topology_edges", "instance_agents",
+		"usage_corrections", "usage_log", "activation_codes", "orders", "verification_codes", "messages", "invitations",
 		"instances", "hosts", "users", "system_config",
 	}
 	if _, err := d.Exec("SET FOREIGN_KEY_CHECKS = 0"); err != nil {

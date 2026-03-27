@@ -184,6 +184,19 @@ func registerSharedTools(
 			agent.Tools.Register(messageTool)
 		}
 
+		if cfg.Channels.AnyClawBridge.IsEnabled() {
+			cCollab := tools.NewCollabAPIClient(
+				cfg.Channels.AnyClawBridge.APIURL,
+				cfg.Channels.AnyClawBridge.InstanceID,
+				cfg.Channels.AnyClawBridge.Token,
+			)
+			agent.Tools.Register(tools.NewInternalMailSendTool(cCollab))
+			agent.Tools.Register(tools.NewCollabResolvePeerTool(cCollab))
+			agent.Tools.Register(tools.NewCollabGetRosterTool(cCollab))
+			agent.Tools.Register(tools.NewCollabGetTopologyTool(cCollab))
+			agent.Tools.Register(tools.NewCollabListInternalMailsTool(cCollab))
+		}
+
 		// Send file tool (outbound media via MediaStore -store injected later by SetMediaStore)
 		if cfg.Tools.IsToolEnabled("send_file") {
 			sendFileTool := tools.NewSendFileTool(
@@ -615,6 +628,11 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		return al.processSystemMessage(ctx, msg)
 	}
 
+	// Internal collab mail (WS notify from API); bypass channel bindings
+	if msg.Channel == "internal_mail" {
+		return al.processInternalMailMessage(ctx, msg)
+	}
+
 	route, agent, routeErr := al.resolveMessageRoute(msg)
 
 	// Commands are checked before requiring a successful route.
@@ -658,6 +676,48 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		Media:           msg.Media,
 		DefaultResponse: defaultResponse,
 		EnableSummary:   true,
+		SendResponse:    false,
+	})
+}
+
+func (al *AgentLoop) processInternalMailMessage(ctx context.Context, msg bus.InboundMessage) (string, error) {
+	toSlug := strings.TrimSpace(msg.Metadata["to_slug"])
+	if toSlug == "" {
+		return "", fmt.Errorf("internal_mail: missing to_slug metadata")
+	}
+	norm := routing.NormalizeAgentID(toSlug)
+	agent, ok := al.registry.GetAgent(norm)
+	if !ok || agent == nil {
+		return "", fmt.Errorf("internal_mail: no agent %q", toSlug)
+	}
+	sessionKey := strings.TrimSpace(msg.SessionKey)
+	if sessionKey == "" {
+		thread := strings.TrimSpace(msg.Metadata["thread_id"])
+		if thread == "" {
+			return "", fmt.Errorf("internal_mail: missing thread_id")
+		}
+		sessionKey = fmt.Sprintf("agent:%s:internal_mail:%s", norm, thread)
+	}
+	logger.InfoCF("agent", "Processing internal mail",
+		map[string]any{
+			"to_slug":     toSlug,
+			"session_key": sessionKey,
+			"mail_id":     msg.Metadata["mail_id"],
+		})
+
+	if tool, ok := agent.Tools.Get("message"); ok {
+		if resetter, ok := tool.(interface{ ResetSentInRound() }); ok {
+			resetter.ResetSentInRound()
+		}
+	}
+
+	return al.runAgentLoop(ctx, agent, processOptions{
+		SessionKey:      sessionKey,
+		Channel:         "internal_mail",
+		ChatID:          msg.ChatID,
+		UserMessage:     msg.Content,
+		DefaultResponse: "Internal mail processed. Use internal_mail_send to reply or forward (neighbor only).",
+		EnableSummary:   false,
 		SendResponse:    false,
 	})
 }
@@ -797,7 +857,8 @@ func (al *AgentLoop) runAgentLoop(
 	jpegQ := al.cfg.Agents.Defaults.GetInboundImageJPEGQuality()
 	messages = resolveMediaRefs(messages, al.mediaStore, maxMediaSize, maxEdge, jpegQ)
 
-	// 2. Save user message (keep media:// refs in session so follow-up text can re-resolve)
+	// 2. Save user message (media:// refs stay in session for audit/scope; only the latest
+	// user turn is re-encoded to the LLM — see resolveMediaRefs.)
 	agent.Sessions.AddFullMessage(opts.SessionKey, providers.Message{
 		Role:    "user",
 		Content: opts.UserMessage,

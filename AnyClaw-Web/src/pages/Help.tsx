@@ -76,6 +76,20 @@ export default function Help() {
           </div>
         </section>
 
+        {/* 多员工协作 */}
+        <section className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
+          <h2 className="text-lg font-medium text-slate-800 mb-3 flex items-center gap-2">
+            <span>🦞</span> 多员工与内部协作
+          </h2>
+          <p className="text-sm text-slate-600 mb-3">
+            在<strong>首页员工卡片</strong>或<strong>对话页顶栏</strong>进入「协作」，可维护员工展示名（与容器里{' '}
+            <code className="bg-slate-100 px-1 rounded text-xs">agents.list</code> 的 id 对应）、配置<strong>无向通讯拓扑</strong>（仅邻居之间可走内部邮件），并查看<strong>内部邮件</strong>记录。
+          </p>
+          <p className="text-sm text-slate-500">
+            云端实例需在容器出站连接 API 的前提下，智能体才会启用内部邮件相关工具；拓扑与员工变更保存后会通过 WebSocket 通知运行中的容器。
+          </p>
+        </section>
+
         {/* 招聘与金币 */}
         <section className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
           <h2 className="text-lg font-medium text-slate-800 mb-3 flex items-center gap-2">

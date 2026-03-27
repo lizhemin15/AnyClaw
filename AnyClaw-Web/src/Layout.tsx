@@ -19,7 +19,8 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
   const isEnergy = loc.pathname.startsWith('/admin/energy')
   const isConfig = loc.pathname.startsWith('/admin/config')
   const isStats = loc.pathname.startsWith('/admin/stats')
-  const isChat = loc.pathname.startsWith('/instances/')
+  // 仅 `/instances/:id` 聊天全屏；`/instances/:id/collab` 保留顶栏
+  const isChat = /^\/instances\/[^/]+$/.test(loc.pathname)
   const isHelp = loc.pathname === '/help'
 
   return (

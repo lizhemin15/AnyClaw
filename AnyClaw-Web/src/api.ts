@@ -218,6 +218,158 @@ export async function getMessages(
   return fetchApi<{ messages: ChatMessage[] }>(url);
 }
 
+/** 协作：员工 roster（与容器内 agents.list id 对应） */
+export interface CollabAgent {
+  id: number;
+  instance_id: number;
+  user_id: number;
+  agent_slug: string;
+  display_name: string;
+}
+
+export interface CollabLimits {
+  max_agents: number;
+  max_edges: number;
+  /** thread_id 最大 Unicode 字符数（内部邮件与列表筛选） */
+  max_thread_id_runes?: number;
+  /** 内部邮件主题最大 Unicode 字符数 */
+  max_internal_mail_subject_runes?: number;
+  /** 内部邮件正文最大长度（KB，按 UTF-8 字节计，与 API 校验一致） */
+  max_internal_mail_body_kb?: number;
+  /** agent_slug 最大 Unicode 字符数 */
+  max_agent_slug_runes?: number;
+  /** 协作展示名最大 Unicode 字符数 */
+  max_agent_display_name_runes?: number;
+  /** 内部邮件列表单次请求最大条数 */
+  max_internal_mail_list_limit?: number;
+  /** 内部邮件列表 offset 上限 */
+  max_internal_mail_list_offset?: number;
+}
+
+export async function getCollabAgents(instanceId: number): Promise<{
+  agents: CollabAgent[];
+  limits?: CollabLimits;
+}> {
+  return fetchApi(`/instances/${instanceId}/collab/agents`);
+}
+
+export async function putCollabAgents(
+  instanceId: number,
+  agents: { agent_slug: string; display_name: string }[]
+): Promise<{ status: string; limits?: CollabLimits }> {
+  return fetchCollabJson(`/instances/${instanceId}/collab/agents`, {
+    method: 'PUT',
+    body: JSON.stringify({ agents }),
+  });
+}
+
+export async function getCollabTopology(instanceId: number): Promise<{
+  edges: [string, string][];
+  version: number;
+  limits?: CollabLimits;
+}> {
+  return fetchApi(`/instances/${instanceId}/collab/topology`);
+}
+
+export async function putCollabTopology(
+  instanceId: number,
+  edges: [string, string][]
+): Promise<{ status: string; limits?: CollabLimits }> {
+  return fetchCollabJson(`/instances/${instanceId}/collab/topology`, {
+    method: 'PUT',
+    body: JSON.stringify({ edges }),
+  });
+}
+
+export interface InternalMailRow {
+  id: number;
+  instance_id: number;
+  thread_id: string;
+  from_slug: string;
+  to_slug: string;
+  subject: string;
+  body: string;
+  in_reply_to?: number;
+  topology_version: number;
+  created_at: string;
+}
+
+/** 协作相关请求失败时，若 API JSON 含 limits，挂在此 Error 上 */
+export type CollabApiError = Error & { collabLimits?: CollabLimits };
+
+/** @deprecated 使用 CollabApiError */
+export type CollabMailListError = CollabApiError;
+
+async function fetchCollabJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getToken();
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  if (token) {
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+  }
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const text = await res.text();
+  let data: unknown;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    throw new Error(text || res.statusText || 'Request failed');
+  }
+  if (!res.ok) {
+    if (res.status === 401) {
+      clearToken();
+      const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `/login?expired=1&return_to=${returnTo}`;
+      throw new Error('登录已过期，请重新登录');
+    }
+    const d = data as { error?: string; limits?: CollabLimits };
+    const msg = d?.error || text || res.statusText;
+    const err = new Error(msg) as CollabApiError;
+    if (d?.limits) err.collabLimits = d.limits;
+    throw err;
+  }
+  return data as T;
+}
+
+export async function getCollabMails(
+  instanceId: number,
+  opts?: { thread_id?: string; limit?: number; offset?: number }
+): Promise<{ mails: InternalMailRow[]; total: number; limits?: CollabLimits }> {
+  let path = `/instances/${instanceId}/collab/mails?limit=${opts?.limit ?? 200}`;
+  if (opts?.offset != null && opts.offset > 0) path += `&offset=${opts.offset}`;
+  if (opts?.thread_id?.trim()) path += `&thread_id=${encodeURIComponent(opts.thread_id.trim())}`;
+  return fetchCollabJson(path);
+}
+
+export async function postCollabResolve(
+  instanceId: number,
+  name: string
+): Promise<{
+  ok: boolean;
+  agent_slug?: string;
+  ambiguous?: string[];
+  not_found?: boolean;
+  limits?: CollabLimits;
+}> {
+  return fetchCollabJson(`/instances/${instanceId}/collab/resolve`, {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  });
+}
+
+/** 与协作页跨标签页同步（BroadcastChannel 名称需一致） */
+export const ANYCLAW_COLLAB_BROADCAST = 'anyclaw-collab';
+
+export function broadcastCollabEvent(kind: 'internal_mail' | 'topology', instanceId: number): void {
+  if (typeof BroadcastChannel === 'undefined') return;
+  try {
+    const bc = new BroadcastChannel(ANYCLAW_COLLAB_BROADCAST);
+    bc.postMessage({ kind, instanceId });
+    bc.close();
+  } catch {
+    /* noop */
+  }
+}
+
 export function getWebSocketUrl(instanceId: number): string {
   let base: string;
   if (API_BASE) {
@@ -624,6 +776,10 @@ export async function getAdminUsage(limit = 100, offset = 0): Promise<{ items: U
 
 export async function checkAndMigrateDb(): Promise<{ status: string; message?: string }> {
   return fetchApi<{ status: string; message?: string }>('/admin/db/check-and-migrate', { method: 'POST' });
+}
+
+export async function backfillCollabAgents(): Promise<{ ok: boolean; backfilled: number }> {
+  return fetchApi<{ ok: boolean; backfilled: number }>('/admin/db/backfill-collab-agents', { method: 'POST' });
 }
 
 export async function resetAdminDb(): Promise<void> {

@@ -1,5 +1,14 @@
 import { useState, useEffect, useMemo } from 'react'
-import { getAdminStats, getAdminUsage, checkAndMigrateDb, resetAdminDb, clearToken, type AdminStats, type UsageLogEntryAdmin } from '../api'
+import {
+  getAdminStats,
+  getAdminUsage,
+  checkAndMigrateDb,
+  backfillCollabAgents,
+  resetAdminDb,
+  clearToken,
+  type AdminStats,
+  type UsageLogEntryAdmin,
+} from '../api'
 import SearchInput from '../components/SearchInput'
 import Pagination from '../components/Pagination'
 
@@ -15,6 +24,7 @@ export default function AdminStats() {
   const [resetting, setResetting] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [migrating, setMigrating] = useState(false)
+  const [backfillingCollab, setBackfillingCollab] = useState(false)
   const [usageSearch, setUsageSearch] = useState('')
   const [usagePage, setUsagePage] = useState(1)
 
@@ -86,9 +96,11 @@ export default function AdminStats() {
       <div className="mb-6 bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200">
           <h2 className="font-semibold text-slate-800">数据库维护</h2>
-          <p className="text-sm text-slate-500 mt-0.5">迭代更新服务后若 MySQL 结构未同步，可一键检查并补齐缺失的表和列</p>
+          <p className="text-sm text-slate-500 mt-0.5">
+            迭代更新服务后若 MySQL 结构未同步，可一键检查并补齐缺失的表和列；协作为尚无员工表的旧实例补默认 main（幂等）
+          </p>
         </div>
-        <div className="p-5 flex gap-3">
+        <div className="p-5 flex flex-wrap gap-3">
           <button
             type="button"
             onClick={async () => {
@@ -108,6 +120,25 @@ export default function AdminStats() {
             className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50"
           >
             {migrating ? '执行中...' : '检查修复数据库'}
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              setBackfillingCollab(true)
+              setError('')
+              try {
+                const res = await backfillCollabAgents()
+                alert(`已为 ${res.backfilled} 个实例补默认协作员工（若无缺则 0）`)
+              } catch (e) {
+                setError(e instanceof Error ? e.message : '回填失败')
+              } finally {
+                setBackfillingCollab(false)
+              }
+            }}
+            disabled={backfillingCollab || migrating}
+            className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-800 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+          >
+            {backfillingCollab ? '执行中...' : '回填协作员工'}
           </button>
         </div>
       </div>

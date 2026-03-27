@@ -1,7 +1,6 @@
 package llm
 
 import (
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -15,24 +14,19 @@ type UsageByProvider interface {
 	GetUsageByProviderToday(providers []string) (map[string]int64, error)
 }
 
-// 渠道冷却时长（仅用于 proxy 计算 until）：
-//   - CooldownTransient  瞬时错误，60 秒后恢复
-//   - 配额用尽 / 429 等：冷却到北京时间次日 0 点
-const CooldownTransient = 60 * time.Second
-
 // ModelScheduler 模型渠道调度器。
 // 选渠道逻辑：
 //  1. 过滤日 tokens 超限的渠道
-//  2. 过滤冷却期内的渠道（配额用尽等自动禁用至次日 0 点）
-//  3. 负载 = token 用量/上限比例 + 进行中请求数；各渠道上限不同，用比例比较
-//  4. 负载接近时轮转，避免只薅同一渠道
-//  5. 通过 QPS 令牌桶做最后过滤；全部 QPS 受限时仍选一个（允许上游 429）
+//  2. 负载 = token 用量/上限比例 + 进行中请求数；各渠道上限不同，用比例比较
+//  3. 负载接近时轮转，避免只薅同一渠道
+//  4. 通过 QPS 令牌桶做最后过滤；全部 QPS 受限时仍选一个（允许上游 429）
+//
+// 不再因上游 5xx/429/保活失败等自动进入冷却；管理端「系统自动关闭」已取消。
 type ModelScheduler struct {
 	mu       sync.Mutex
 	limMu    sync.RWMutex
-	usage    map[string]int64     // 进行中请求计数，key: channelID|apiBase
-	failures map[string]time.Time // 渠道冷却到期时间（到期前不选用）
-	counter  uint64               // 等负载轮转计数器
+	usage    map[string]int64 // 进行中请求计数，key: channelID|apiBase
+	counter  uint64           // 等负载轮转计数器
 	limiters map[string]*rate.Limiter
 	db       UsageByProvider
 }
@@ -41,7 +35,6 @@ type ModelScheduler struct {
 func NewModelScheduler(database UsageByProvider) *ModelScheduler {
 	return &ModelScheduler{
 		usage:    make(map[string]int64),
-		failures: make(map[string]time.Time),
 		limiters: make(map[string]*rate.Limiter),
 		db:       database,
 	}
@@ -73,21 +66,6 @@ func (s *ModelScheduler) getLimiter(key string, qps float64) *rate.Limiter {
 	l = rate.NewLimiter(rate.Limit(qps), burst)
 	s.limiters[key] = l
 	return l
-}
-
-// RecordFailureUntil 标记渠道进入冷却期，until 为冷却到期时间（到期后可再次选用）。
-// 配额用尽类错误应传入北京时间次日 0 点；瞬时错误传入 time.Now().Add(60*time.Second)。
-func (s *ModelScheduler) RecordFailureUntil(ep config.ChannelEndpoint, until time.Time) {
-	s.mu.Lock()
-	s.failures[s.endpointKey(ep)] = until
-	s.mu.Unlock()
-}
-
-// ClearFailure 清除渠道冷却，用于保活探测成功时恢复渠道。
-func (s *ModelScheduler) ClearFailure(ep config.ChannelEndpoint) {
-	s.mu.Lock()
-	delete(s.failures, s.endpointKey(ep))
-	s.mu.Unlock()
 }
 
 // ChannelStatus 渠道实时状态，供管理后台展示
@@ -122,7 +100,6 @@ func (s *ModelScheduler) GetChannelStatus(channels []config.Channel) []ChannelSt
 		}
 	}
 	s.mu.Lock()
-	now := time.Now()
 	out := make([]ChannelStatus, 0, len(channels))
 	for _, ch := range channels {
 		base := strings.TrimSuffix(ch.APIBase, "/")
@@ -130,12 +107,6 @@ func (s *ModelScheduler) GetChannelStatus(channels []config.Channel) []ChannelSt
 			base = "https://api.openai.com/v1"
 		}
 		key := ch.ID + "|" + base
-		until, inCooldown := s.failures[key]
-		available := !inCooldown || now.After(until)
-		cooldownUntil := ""
-		if inCooldown && until.After(now) {
-			cooldownUntil = until.Format("2006-01-02 15:04")
-		}
 		pk := ch.Name
 		if pk == "" {
 			pk = base
@@ -147,8 +118,7 @@ func (s *ModelScheduler) GetChannelStatus(channels []config.Channel) []ChannelSt
 		out = append(out, ChannelStatus{
 			ChannelID:       ch.ID,
 			TokenUsageToday: tokens,
-			Available:       available,
-			CooldownUntil:   cooldownUntil,
+			Available:       true,
 			InFlight:        s.usage[key],
 		})
 	}
@@ -178,17 +148,10 @@ func (s *ModelScheduler) GetVoiceAPIStatus(endpoints []config.VoiceAPIEndpoint) 
 		}
 	}
 	s.mu.Lock()
-	now := time.Now()
 	out := make([]ChannelStatus, 0, len(endpoints))
 	for _, ep := range endpoints {
 		base := strings.TrimSuffix(ep.Endpoint, "/")
 		key := ep.ID + "|" + base
-		until, inCooldown := s.failures[key]
-		available := !inCooldown || now.After(until)
-		cooldownUntil := ""
-		if inCooldown && until.After(now) {
-			cooldownUntil = until.Format("2006-01-02 15:04")
-		}
 		pk := ep.Name
 		if pk == "" {
 			pk = base
@@ -200,8 +163,7 @@ func (s *ModelScheduler) GetVoiceAPIStatus(endpoints []config.VoiceAPIEndpoint) 
 		out = append(out, ChannelStatus{
 			ChannelID:       ep.ID,
 			TokenUsageToday: tokens,
-			Available:       available,
-			CooldownUntil:   cooldownUntil,
+			Available:       true,
 			InFlight:        s.usage[key],
 		})
 	}
@@ -223,21 +185,7 @@ func (s *ModelScheduler) Pick(model string, candidates []config.ChannelEndpoint)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	now := time.Now()
-
-	// 过滤冷却期内的渠道：配额用尽等自动禁用至次日 0 点，0 点后自动恢复
-	healthy := make([]config.ChannelEndpoint, 0, len(available))
-	for _, ep := range available {
-		if until, failed := s.failures[s.endpointKey(ep)]; !failed || now.After(until) {
-			healthy = append(healthy, ep)
-		}
-	}
-	if len(healthy) == 0 {
-		// 全部在冷却常见于网关/飞书绑定后重启：并发 429/5xx 给每个渠道打了短时冷却，
-		// 若此处直接失败会立刻 502。仍从「未超日配额」的候选里按原负载逻辑选一条尝试，
-		// 由上游决定是否继续限流；真正配额用尽时上游仍会失败并再次写入长冷却。
-		healthy = slices.Clone(available)
-	}
+	healthy := available
 
 	// 负载 = token 用量/上限比例 + 进行中请求数；各渠道上限不同，用比例才能比较
 	tokenUsage := s.getTokenUsageToday(healthy)

@@ -16,6 +16,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Home from './pages/Home'
 import Chat from './pages/Chat'
+import InstanceCollab from './pages/InstanceCollab'
 import Hosts from './pages/Hosts'
 import Energy from './pages/Energy'
 import Recharge from './pages/Recharge'
@@ -132,6 +133,13 @@ export default function App() {
           <ProtectedRoute>
             <Layout user={user} onLogout={handleLogout}>
               <Chat />
+            </Layout>
+          </ProtectedRoute>
+        } />
+        <Route path="/instances/:id/collab" element={
+          <ProtectedRoute>
+            <Layout user={user} onLogout={handleLogout}>
+              <InstanceCollab />
             </Layout>
           </ProtectedRoute>
         } />

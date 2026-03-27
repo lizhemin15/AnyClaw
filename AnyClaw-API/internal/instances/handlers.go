@@ -117,6 +117,9 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to create instance"}`, http.StatusInternalServerError)
 		return
 	}
+	if err := h.db.SeedDefaultCollabAgentsForNewInstance(inst.ID, claims.UserID, name); err != nil {
+		log.Printf("[instances] seed collab agents for instance %d: %v", inst.ID, err)
+	}
 	log.Printf("[instances] creating instance id=%d name=%q, waiting for container", inst.ID, name)
 	apiURL := h.resolveAPIURL(r)
 	if apiURL == "" {

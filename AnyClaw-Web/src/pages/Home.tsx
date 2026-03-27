@@ -384,6 +384,14 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
                   >
                     {inst.status === 'running' ? '在线' : inst.status === 'creating' ? '创建中' : inst.status === 'error' ? '异常' : inst.status}
                   </span>
+                  <Link
+                    to={`/instances/${inst.id}/collab`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="px-2 py-1 text-xs text-indigo-600 border border-indigo-200 rounded-lg active:bg-indigo-50"
+                    title="员工与内部邮件"
+                  >
+                    协作
+                  </Link>
                   <button
                     onClick={(e) => handleAbandon(e, inst)}
                     disabled={!!deleting}

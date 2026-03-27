@@ -30,6 +30,8 @@ import (
 	"github.com/anyclaw/anyclaw-server/pkg/identity"
 	"github.com/anyclaw/anyclaw-server/pkg/logger"
 	"github.com/anyclaw/anyclaw-server/pkg/media"
+	"github.com/anyclaw/anyclaw-server/pkg/routing"
+	"github.com/anyclaw/anyclaw-server/pkg/tools"
 	"github.com/anyclaw/anyclaw-server/pkg/utils"
 
 	"github.com/anyclaw/anyclaw-server/pkg/channels/pico"
@@ -69,12 +71,13 @@ func (bc *bridgeConn) close() {
 // Container connects to API; messages use Pico Protocol.
 type BridgeChannel struct {
 	*channels.BaseChannel
-	config    config.AnyClawBridgeConfig
-	conn      *bridgeConn
-	ctx       context.Context
-	cancel    context.CancelFunc
-	chatID    string
-	sessionID string
+	config       config.AnyClawBridgeConfig
+	conn         *bridgeConn
+	ctx          context.Context
+	cancel       context.CancelFunc
+	chatID       string
+	sessionID    string
+	collabClient *tools.CollabAPIClient
 }
 
 // NewBridgeChannel creates an outbound bridge channel.
@@ -86,10 +89,11 @@ func NewBridgeChannel(cfg config.AnyClawBridgeConfig, messageBus *bus.MessageBus
 	base := channels.NewBaseChannel(channelName, cfg, messageBus, nil)
 	chatID := channelName + ":" + cfg.InstanceID
 	return &BridgeChannel{
-		BaseChannel: base,
-		config:      cfg,
-		chatID:      chatID,
-		sessionID:   cfg.InstanceID,
+		BaseChannel:  base,
+		config:       cfg,
+		chatID:       chatID,
+		sessionID:    cfg.InstanceID,
+		collabClient: tools.NewCollabAPIClient(cfg.APIURL, cfg.InstanceID, cfg.Token),
 	}, nil
 }
 
@@ -268,8 +272,89 @@ func (c *BridgeChannel) handleMessage(bc *bridgeConn, msg pico.PicoMessage) {
 		// Keepalive response
 	case pico.TypeMessageSend:
 		c.handleMessageSend(bc, msg)
+	case "collab.topology_updated":
+		c.handleCollabTopologyUpdated(msg)
+	case "collab.internal_mail":
+		c.handleCollabInternalMail(msg)
 	default:
 		logger.DebugCF(channelName, "Unknown message type", map[string]any{"type": msg.Type})
+	}
+}
+
+func (c *BridgeChannel) handleCollabTopologyUpdated(msg pico.PicoMessage) {
+	var ver any
+	if msg.Payload != nil {
+		ver = msg.Payload["version"]
+	}
+	logger.InfoCF(channelName, "Collab topology updated (reload roster/topology via tools if needed)",
+		map[string]any{"version": ver})
+}
+
+func (c *BridgeChannel) handleCollabInternalMail(msg pico.PicoMessage) {
+	if c.collabClient == nil || msg.Payload == nil {
+		return
+	}
+	mailID, ok := tools.CollabMailIDFromNotify(msg.Payload)
+	if !ok || mailID < 1 {
+		logger.WarnCF(channelName, "collab.internal_mail missing id", nil)
+		return
+	}
+	row, err := c.collabClient.GetInternalMail(c.ctx, mailID)
+	if err != nil {
+		logger.WarnCF(channelName, "fetch internal mail failed", map[string]any{"id": mailID, "error": err.Error()})
+		return
+	}
+	toSlug := collabMapString(row, "to_slug")
+	fromSlug := collabMapString(row, "from_slug")
+	threadID := collabMapString(row, "thread_id")
+	subject := collabMapString(row, "subject")
+	body := collabMapString(row, "body")
+	if toSlug == "" || threadID == "" {
+		logger.WarnCF(channelName, "internal mail row incomplete", map[string]any{"id": mailID})
+		return
+	}
+	norm := routing.NormalizeAgentID(toSlug)
+	sessionKey := fmt.Sprintf("agent:%s:internal_mail:%s", norm, threadID)
+	chatID := "internal_mail:" + threadID
+	meta := map[string]string{
+		"to_slug":    toSlug,
+		"from_slug":  fromSlug,
+		"thread_id":  threadID,
+		"mail_id":    fmt.Sprintf("%d", mailID),
+		"subject":    subject,
+	}
+	if tv := row["topology_version"]; tv != nil {
+		meta["topology_version"] = fmt.Sprint(tv)
+	}
+	userText := fmt.Sprintf(
+		"[Internal mail id=%d]\nFrom: %s\nTo: %s\nThread: %s\nSubject: %s\n\n%s",
+		mailID, fromSlug, toSlug, threadID, subject, body,
+	)
+	in := bus.InboundMessage{
+		Channel:    "internal_mail",
+		SenderID:   "internal_mail:" + fromSlug,
+		ChatID:     chatID,
+		Content:    userText,
+		Metadata:   meta,
+		SessionKey: sessionKey,
+		Peer:       bus.Peer{Kind: "direct", ID: chatID},
+		MessageID:  fmt.Sprintf("im-%d", mailID),
+	}
+	if err := c.MessageBus().PublishInbound(c.ctx, in); err != nil {
+		logger.WarnCF(channelName, "publish internal_mail inbound failed", map[string]any{"error": err.Error()})
+	}
+}
+
+func collabMapString(m map[string]any, key string) string {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return ""
+	}
+	switch x := v.(type) {
+	case string:
+		return x
+	default:
+		return fmt.Sprint(x)
 	}
 }
 

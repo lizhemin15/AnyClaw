@@ -25,6 +25,10 @@ import (
 // both raw bytes and encoded string in memory simultaneously.
 // When maxImageEdge > 0, raster images may be downscaled before encoding to reduce payload size.
 // Returns a new slice; original messages are not mutated.
+//
+// Only the last "user" message in the slice gets Media resolved. History still stores media://
+// refs for bookkeeping, but re-sending every past image on each turn breaks some multimodal
+// upstreams (extra cost, compliance re-checks, spurious 500s).
 func resolveMediaRefs(messages []providers.Message, store media.MediaStore, maxSize int, maxImageEdge int, jpegQuality int) []providers.Message {
 	if store == nil {
 		return messages
@@ -33,13 +37,25 @@ func resolveMediaRefs(messages []providers.Message, store media.MediaStore, maxS
 	result := make([]providers.Message, len(messages))
 	copy(result, messages)
 
-	for i, m := range result {
-		if len(m.Media) == 0 {
+	lastUserIdx := -1
+	for i := len(result) - 1; i >= 0; i-- {
+		if result[i].Role == "user" {
+			lastUserIdx = i
+			break
+		}
+	}
+
+	for i := range result {
+		if result[i].Role != "user" || len(result[i].Media) == 0 {
+			continue
+		}
+		if i != lastUserIdx {
+			result[i].Media = nil
 			continue
 		}
 
-		resolved := make([]string, 0, len(m.Media))
-		for _, ref := range m.Media {
+		resolved := make([]string, 0, len(result[i].Media))
+		for _, ref := range result[i].Media {
 			if !strings.HasPrefix(ref, "media://") {
 				resolved = append(resolved, ref)
 				continue

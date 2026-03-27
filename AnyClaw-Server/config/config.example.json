@@ -1,5 +1,6 @@
 {
   "agents": {
+    "_comment_list": "多员工协作：list 中 id 须与 anyclaw-manager 协作页 agent_slug 一致；拓扑邻居才可发内部邮件。仅需单智能体时可整段删除 list。skills 引用 workspace/skills 目录名，如 collab-internal-mail（需 API 桥接开启）。",
     "defaults": {
       "workspace": "~/.anyclaw/workspace",
       "restrict_to_workspace": true,
@@ -9,7 +10,20 @@
       "max_tool_iterations": 20,
       "summarize_message_threshold": 20,
       "summarize_token_percent": 75
-    }
+    },
+    "list": [
+      {
+        "id": "main",
+        "default": true,
+        "name": "主理",
+        "skills": ["collab-internal-mail"]
+      },
+      {
+        "id": "analyst",
+        "name": "分析师",
+        "skills": ["collab-internal-mail"]
+      }
+    ]
   },
   "model_list": [
     {

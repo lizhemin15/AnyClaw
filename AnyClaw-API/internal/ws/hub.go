@@ -1,6 +1,8 @@
 package ws
 
 import (
+	"encoding/json"
+	"fmt"
 	"log"
 	"sync"
 
@@ -11,10 +13,13 @@ import (
 type OnContainerMessage func(instanceID int64, data []byte)
 
 type containerEntry struct {
-	conn   *websocket.Conn
-	userMu sync.RWMutex
-	user   *websocket.Conn // nil when no user attached
-	done   chan struct{}  // closed when container disconnects
+	conn    *websocket.Conn
+	writeMu sync.Mutex // 与 bridge 并发写容器连接时串行化
+	userMu  sync.RWMutex
+	user    *websocket.Conn // nil when no user attached
+	// 容器下行转发与 API 下行（协作推送）共用，避免并发 WriteMessage
+	userOutboundMu sync.Mutex
+	done           chan struct{} // closed when container disconnects
 }
 
 type Hub struct {
@@ -73,7 +78,10 @@ func (h *Hub) containerReader(instanceID int64, entry *containerEntry) {
 		user := entry.user
 		entry.userMu.RUnlock()
 		if user != nil {
-			if err := user.WriteMessage(mt, data); err != nil {
+			entry.userOutboundMu.Lock()
+			err := user.WriteMessage(mt, data)
+			entry.userOutboundMu.Unlock()
+			if err != nil {
 				log.Printf("[ws] forward to user failed (user likely disconnected): %v", err)
 				entry.userMu.Lock()
 				entry.user = nil
@@ -126,4 +134,63 @@ func (h *Hub) DetachUser(instanceID int64) {
 	entry.userMu.Lock()
 	entry.user = nil
 	entry.userMu.Unlock()
+}
+
+// WriteContainerMessage 向容器 WebSocket 写入二进制帧（与 API 推送共用，避免并发写）
+func (h *Hub) WriteContainerMessage(instanceID int64, messageType int, data []byte) error {
+	h.mu.RLock()
+	entry, ok := h.containers[instanceID]
+	h.mu.RUnlock()
+	if !ok || entry == nil {
+		return fmt.Errorf("no container for instance %d", instanceID)
+	}
+	entry.writeMu.Lock()
+	defer entry.writeMu.Unlock()
+	return entry.conn.WriteMessage(messageType, data)
+}
+
+// WriteContainerJSON 向容器推送 JSON 文本帧（内部邮件唤醒、拓扑更新等）
+func (h *Hub) WriteContainerJSON(instanceID int64, v any) error {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	h.mu.RLock()
+	entry, ok := h.containers[instanceID]
+	h.mu.RUnlock()
+	if !ok || entry == nil {
+		return fmt.Errorf("no container for instance %d", instanceID)
+	}
+	entry.writeMu.Lock()
+	defer entry.writeMu.Unlock()
+	return entry.conn.WriteMessage(websocket.TextMessage, data)
+}
+
+// WriteAttachedUserJSON 向当前挂接在实例上的浏览器 WS 推送 JSON（与容器同帧结构，用于协作页与对话页联动）
+func (h *Hub) WriteAttachedUserJSON(instanceID int64, v any) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return
+	}
+	h.mu.RLock()
+	entry, ok := h.containers[instanceID]
+	h.mu.RUnlock()
+	if !ok || entry == nil {
+		return
+	}
+	entry.userMu.RLock()
+	user := entry.user
+	entry.userMu.RUnlock()
+	if user == nil {
+		return
+	}
+	entry.userOutboundMu.Lock()
+	err = user.WriteMessage(websocket.TextMessage, data)
+	entry.userOutboundMu.Unlock()
+	if err != nil {
+		log.Printf("[ws] push JSON to attached user instance %d: %v", instanceID, err)
+		entry.userMu.Lock()
+		entry.user = nil
+		entry.userMu.Unlock()
+	}
 }

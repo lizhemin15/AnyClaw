@@ -1094,6 +1094,48 @@ func TestResolveMediaRefs_DoesNotMutateOriginal(t *testing.T) {
 	}
 }
 
+func TestResolveMediaRefs_OnlyLastUserMessageResolvesMedia(t *testing.T) {
+	store := media.NewFileMediaStore()
+	dir := t.TempDir()
+	pngHeader := []byte{
+		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+		0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+		0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02,
+		0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE,
+	}
+	oldPath := filepath.Join(dir, "old.png")
+	newPath := filepath.Join(dir, "new.png")
+	if err := os.WriteFile(oldPath, pngHeader, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(newPath, pngHeader, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	refOld, err := store.Store(oldPath, media.MediaMeta{}, "scope-old")
+	if err != nil {
+		t.Fatal(err)
+	}
+	refNew, err := store.Store(newPath, media.MediaMeta{}, "scope-new")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	messages := []providers.Message{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: "first pic", Media: []string{refOld}},
+		{Role: "assistant", Content: "ok"},
+		{Role: "user", Content: "follow up", Media: []string{refNew}},
+	}
+	result := resolveMediaRefs(messages, store, config.DefaultMaxMediaSize, 0, 85)
+
+	if len(result[1].Media) != 0 {
+		t.Fatalf("expected history user media stripped, got len=%d", len(result[1].Media))
+	}
+	if len(result[3].Media) != 1 || !strings.HasPrefix(result[3].Media[0], "data:image/png;base64,") {
+		t.Fatalf("expected last user media resolved, got %v", result[3].Media)
+	}
+}
+
 func TestResolveMediaRefs_UsesMetaContentType(t *testing.T) {
 	store := media.NewFileMediaStore()
 	dir := t.TempDir()

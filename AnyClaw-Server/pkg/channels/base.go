@@ -162,6 +162,11 @@ func (c *BaseChannel) Name() string {
 	return c.name
 }
 
+// MessageBus returns the inbound/outbound bus (for bridge-side synthetic messages).
+func (c *BaseChannel) MessageBus() *bus.MessageBus {
+	return c.bus
+}
+
 func (c *BaseChannel) ReasoningChannelID() string {
 	return c.reasoningChannelID
 }

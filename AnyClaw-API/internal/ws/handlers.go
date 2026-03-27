@@ -76,8 +76,7 @@ func (h *Handler) HandleUserWS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	containerConn := h.hub.Get(instanceID)
-	if containerConn == nil {
+	if h.hub.Get(instanceID) == nil {
 		http.Error(w, "container not connected", http.StatusServiceUnavailable)
 		return
 	}
@@ -109,16 +108,13 @@ func (h *Handler) HandleUserWS(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
-	// user->container: read from user, write to container (container->user is handled by Hub's single reader)
-	h.bridgeTo(containerConn, userConn, instanceID, false)
+	// user->container：写容器必须经过 Hub 串行化，与 API 下行推送互斥
+	h.bridgeUserToContainer(instanceID, userConn)
 }
 
-func (h *Handler) bridgeTo(dst, src *websocket.Conn, instanceID int64, closeDstOnDone bool) {
-	if closeDstOnDone {
-		defer dst.Close()
-	}
+func (h *Handler) bridgeUserToContainer(instanceID int64, userConn *websocket.Conn) {
 	for {
-		mt, data, err := src.ReadMessage()
+		mt, data, err := userConn.ReadMessage()
 		if err != nil {
 			log.Printf("[ws] bridge read error: %v", err)
 			return
@@ -134,7 +130,7 @@ func (h *Handler) bridgeTo(dst, src *websocket.Conn, instanceID int64, closeDstO
 				_, _ = h.db.InsertMessage(instanceID, "user", msg.Payload.Content)
 			}
 		}
-		if err := dst.WriteMessage(mt, data); err != nil {
+		if err := h.hub.WriteContainerMessage(instanceID, mt, data); err != nil {
 			log.Printf("[ws] bridge write error: %v", err)
 			return
 		}

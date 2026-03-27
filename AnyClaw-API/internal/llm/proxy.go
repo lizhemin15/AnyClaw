@@ -206,16 +206,13 @@ func (p *Proxy) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		p.scheduler.Done(ep)
 		if err != nil {
 			log.Printf("[llm] upstream error (try %d): channel=%s err=%v", try+1, ep.ChannelName, err)
-			p.scheduler.RecordFailureUntil(ep, time.Now().Add(CooldownTransient))
 			continue
 		}
 		rb, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-			until := cooldownUntil(resp.StatusCode, rb)
-			log.Printf("[llm] upstream error (try %d): channel=%s status=%d cooldown_until=%v body=%s",
-				try+1, ep.ChannelName, resp.StatusCode, until.Format("2006-01-02 15:04"), truncate(string(rb), 200))
-			p.scheduler.RecordFailureUntil(ep, until)
+			log.Printf("[llm] upstream error (try %d): channel=%s status=%d body=%s",
+				try+1, ep.ChannelName, resp.StatusCode, truncate(string(rb), 200))
 			if try < len(candidates)-1 {
 				continue
 			}
@@ -361,51 +358,6 @@ func extractBearer(r *http.Request) string {
 		return strings.TrimSpace(after)
 	}
 	return ""
-}
-
-// quotaPatterns 是上游响应体中表示"配额用尽 / 余额不足"的特征字符串（全小写）。
-// 匹配到任意一项时渠道将被冷却整天，而非短暂 60 秒。
-var quotaPatterns = []string{
-	"quota",
-	"rate_limit_exceeded",
-	"appidnoautherror",   // 讯飞 AppId 无权限 / 超量
-	"tokens_per_day",
-	"daily_limit",
-	"insufficient_quota",
-	"insufficient_balance",
-	"no balance",
-	"balance insufficient",
-	"billing",
-	"11200",             // one-api 配额超限 code
-	"exceeded your current quota",
-	"you exceeded",
-	"credit",
-}
-
-// cooldownUntil 根据 HTTP 状态码和响应体返回冷却到期时间。
-// 429 或配额用尽类错误：北京时间次日 0 点；一般 5xx：60 秒后。
-func cooldownUntil(statusCode int, body []byte) time.Time {
-	if statusCode == http.StatusTooManyRequests {
-		return midnightBeijing()
-	}
-	lower := strings.ToLower(string(body))
-	for _, p := range quotaPatterns {
-		if strings.Contains(lower, p) {
-			return midnightBeijing()
-		}
-	}
-	return time.Now().Add(CooldownTransient)
-}
-
-// midnightBeijing 返回北京时间次日 0 点（配额通常在此刻刷新）。
-func midnightBeijing() time.Time {
-	loc, err := time.LoadLocation("Asia/Shanghai")
-	if err != nil {
-		loc = time.FixedZone("CST", 8*3600)
-	}
-	now := time.Now().In(loc)
-	tomorrow := now.AddDate(0, 0, 1)
-	return time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 0, 0, 0, 0, loc)
 }
 
 // truncate 截断字符串到 maxLen 个字符，用于日志输出。
