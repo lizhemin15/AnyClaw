@@ -3,6 +3,7 @@ package scheduler
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/anyclaw/anyclaw-api/internal/db"
@@ -31,7 +32,7 @@ func ParseAgentSlugsFromConfigJSON(data []byte) ([]string, error) {
 		if s == "" {
 			s = "main"
 		}
-		s = strings.ToLower(s)
+		s = NormalizeAgentID(s)
 		if _, ok := seen[s]; ok {
 			continue
 		}
@@ -50,12 +51,13 @@ func WorkspaceConfigPath(instanceID int64) string {
 }
 
 // ReadWorkspaceConfigAgentSlugs 在实例宿主机上读取工作区 config.json 中的 agents.list id（需 SSH）。
-// 若实例未绑定宿主机、非运行中、或读取失败，返回 (nil, nil) 表示跳过（不视为错误）。
+// 若实例未绑定宿主机或读取失败，返回 (nil, nil) 表示跳过（不视为错误）。
+// 实例停止时工作区文件仍可能存在，故不再要求 Status==running，以便打开编排页即可从 config.json 补全节点。
 func (s *Scheduler) ReadWorkspaceConfigAgentSlugs(inst *db.Instance) ([]string, error) {
 	if s == nil || inst == nil {
 		return nil, nil
 	}
-	if inst.HostID == "" || inst.Status != "running" {
+	if inst.HostID == "" {
 		return nil, nil
 	}
 	host, err := s.hosts.GetHost(inst.HostID)
@@ -65,11 +67,16 @@ func (s *Scheduler) ReadWorkspaceConfigAgentSlugs(inst *db.Instance) ([]string, 
 	path := WorkspaceConfigPath(inst.ID)
 	cmd := fmt.Sprintf("cat '%s'", shellEscapeSingleQuoted(path))
 	out, err := runSSH(host, cmd)
-	if err != nil || strings.TrimSpace(out) == "" {
+	if err != nil {
+		log.Printf("[collab] workspace config: instance %d cat %s: %v", inst.ID, path, err)
+		return nil, nil
+	}
+	if strings.TrimSpace(out) == "" {
 		return nil, nil
 	}
 	slugs, err := ParseAgentSlugsFromConfigJSON([]byte(out))
 	if err != nil {
+		log.Printf("[collab] workspace config: instance %d parse config.json: %v", inst.ID, err)
 		return nil, nil
 	}
 	return slugs, nil

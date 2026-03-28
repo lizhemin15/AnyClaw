@@ -26,4 +26,15 @@ func TestParseAgentSlugsFromConfigJSON(t *testing.T) {
 			t.Fatalf("got %#v want %#v", slugs, want)
 		}
 	})
+	t.Run("normalize matches server routing", func(t *testing.T) {
+		j := `{"agents":{"list":[{"id":"Foo.Bar"},{"id":"x@y"}]}}`
+		slugs, err := ParseAgentSlugsFromConfigJSON([]byte(j))
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []string{"foo-bar", "x-y"}
+		if !reflect.DeepEqual(slugs, want) {
+			t.Fatalf("got %#v want %#v", slugs, want)
+		}
+	})
 }
