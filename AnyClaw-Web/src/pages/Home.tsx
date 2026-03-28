@@ -548,7 +548,7 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
         </>
       )}
 
-      <MailboxModal open={mailboxOpen} instances={instances} onClose={() => setMailboxOpen(false)} initialTab="internal" />
+      <MailboxModal open={mailboxOpen} instances={instances} onClose={() => setMailboxOpen(false)} />
     </div>
   )
 }

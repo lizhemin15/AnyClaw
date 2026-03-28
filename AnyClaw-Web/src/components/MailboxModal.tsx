@@ -9,14 +9,10 @@ import {
   type UserInstanceMessageRow,
 } from '../api'
 
-export type MailboxTab = 'all' | 'internal' | 'cross'
-
 type Props = {
   open: boolean
   instances: Instance[]
   onClose: () => void
-  /** 打开时默认选中的标签 */
-  initialTab?: MailboxTab
 }
 
 const INTERNAL_PAGE = 80
@@ -62,8 +58,7 @@ function formatMailTime(iso: string): string {
   }
 }
 
-export default function MailboxModal({ open, instances, onClose, initialTab = 'all' }: Props) {
-  const [tab, setTab] = useState<MailboxTab>(initialTab)
+export default function MailboxModal({ open, instances, onClose }: Props) {
   const [readIds, setReadIds] = useState<Set<string>>(() => new Set())
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
 
@@ -174,18 +169,13 @@ export default function MailboxModal({ open, instances, onClose, initialTab = 'a
 
   useEffect(() => {
     if (!open) return
-    setTab(initialTab)
-  }, [open, initialTab])
+    void loadInternalPage(true)
+  }, [open, loadInternalPage])
 
   useEffect(() => {
     if (!open) return
-    if (tab === 'all' || tab === 'internal') void loadInternalPage(true)
-  }, [open, tab, loadInternalPage])
-
-  useEffect(() => {
-    if (!open) return
-    if (tab === 'all' || tab === 'cross') void loadCrossAll()
-  }, [open, tab, loadCrossAll])
+    void loadCrossAll()
+  }, [open, loadCrossAll])
 
   useEffect(() => {
     if (!open) {
@@ -247,19 +237,15 @@ export default function MailboxModal({ open, instances, onClose, initialTab = 'a
 
   const unifiedList = useMemo((): UnifiedItem[] => {
     const items: UnifiedItem[] = []
-    if (tab === 'all' || tab === 'internal') {
-      for (const row of internalMergedSorted) {
-        items.push({ kind: 'internal', row, sortKey: row.created_at || '' })
-      }
+    for (const row of internalMergedSorted) {
+      items.push({ kind: 'internal', row, sortKey: row.created_at || '' })
     }
-    if (tab === 'all' || tab === 'cross') {
-      for (const row of crossRows) {
-        items.push({ kind: 'cross', row, sortKey: row.created_at || '' })
-      }
+    for (const row of crossRows) {
+      items.push({ kind: 'cross', row, sortKey: row.created_at || '' })
     }
     items.sort((a, b) => b.sortKey.localeCompare(a.sortKey))
     return items
-  }, [tab, internalMergedSorted, crossRows])
+  }, [internalMergedSorted, crossRows])
 
   const markRead = useCallback((key: string) => {
     setReadIds((prev) => {
@@ -325,10 +311,7 @@ export default function MailboxModal({ open, instances, onClose, initialTab = 'a
     }
   }
 
-  const listLoading =
-    (tab === 'all' && (internalLoading || crossLoading)) ||
-    (tab === 'internal' && internalLoading) ||
-    (tab === 'cross' && crossLoading)
+  const listLoading = internalLoading || crossLoading
 
   const listEmpty = !listLoading && unifiedList.length === 0
 
@@ -346,8 +329,8 @@ export default function MailboxModal({ open, instances, onClose, initialTab = 'a
         className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[92vh] flex flex-col border border-slate-200/90 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex-shrink-0 px-4 sm:px-5 pt-4 pb-0 border-b border-slate-200 bg-gradient-to-b from-slate-50/90 to-white">
-          <div className="flex items-start justify-between gap-3 mb-3">
+        <header className="flex-shrink-0 px-4 sm:px-5 pt-4 pb-4 border-b border-slate-200 bg-gradient-to-b from-slate-50/90 to-white">
+          <div className="flex items-start justify-between gap-3">
             <div>
               <h2 id="mailbox-title" className="text-lg font-semibold text-slate-900 tracking-tight">
                 邮箱
@@ -363,33 +346,6 @@ export default function MailboxModal({ open, instances, onClose, initialTab = 'a
               ×
             </button>
           </div>
-          <div className="flex gap-0 border-b border-transparent -mb-px" role="tablist" aria-label="邮件分类">
-            {(
-              [
-                { id: 'all' as const, label: '全部' },
-                { id: 'internal' as const, label: '内部邮件' },
-                { id: 'cross' as const, label: '跨实例消息' },
-              ] as const
-            ).map(({ id, label }) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={tab === id}
-                onClick={() => {
-                  setTab(id)
-                  setSelectedKey(null)
-                }}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                  tab === id
-                    ? 'border-blue-600 text-blue-700 bg-white'
-                    : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
         </header>
 
         <div className="flex flex-1 min-h-0 flex-col md:flex-row">
@@ -402,8 +358,8 @@ export default function MailboxModal({ open, instances, onClose, initialTab = 'a
                 type="button"
                 disabled={internalLoading || crossLoading}
                 onClick={() => {
-                  if (tab === 'all' || tab === 'internal') void loadInternalPage(true)
-                  if (tab === 'all' || tab === 'cross') void loadCrossAll()
+                  void loadInternalPage(true)
+                  void loadCrossAll()
                 }}
                 className="text-xs px-2.5 py-1 rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
               >
@@ -514,7 +470,7 @@ export default function MailboxModal({ open, instances, onClose, initialTab = 'a
                 </ul>
               )}
             </div>
-            {internalHasMore && (tab === 'all' || tab === 'internal') && internalMergedSorted.length > 0 && (
+            {internalHasMore && internalMergedSorted.length > 0 && (
               <div className="p-2 border-t border-slate-200 bg-white">
                 <button
                   type="button"
@@ -599,7 +555,7 @@ export default function MailboxModal({ open, instances, onClose, initialTab = 'a
               </div>
             )}
 
-            {instances.length >= 2 && (tab === 'all' || tab === 'cross') && (
+            {instances.length >= 2 && (
               <form onSubmit={handleSendCross} className="flex-shrink-0 border-t border-slate-200 bg-slate-50/90 px-4 py-3 space-y-2">
                 <p className="text-xs text-slate-500">发送跨实例消息（需在编排拓扑中已连线）</p>
                 <div className="flex flex-col sm:flex-row gap-2 sm:items-center flex-wrap">
