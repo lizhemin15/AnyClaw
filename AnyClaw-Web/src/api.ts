@@ -281,6 +281,25 @@ export async function putCollabTopology(
   });
 }
 
+/** 账号下实例间编排连线（存 user_instance_topology_edges） */
+export async function getCollabInstanceTopology(instanceId: number): Promise<{
+  edges: [number, number][];
+  version: number;
+  limits?: CollabLimits;
+}> {
+  return fetchCollabJson(`/instances/${instanceId}/collab/instance-topology`);
+}
+
+export async function putCollabInstanceTopology(
+  instanceId: number,
+  edges: [number, number][]
+): Promise<{ status: string; limits?: CollabLimits }> {
+  return fetchCollabJson(`/instances/${instanceId}/collab/instance-topology`, {
+    method: 'PUT',
+    body: JSON.stringify({ edges }),
+  });
+}
+
 export interface InternalMailRow {
   id: number;
   instance_id: number;
@@ -359,7 +378,10 @@ export async function postCollabResolve(
 /** 与协作页跨标签页同步（BroadcastChannel 名称需一致） */
 export const ANYCLAW_COLLAB_BROADCAST = 'anyclaw-collab';
 
-export function broadcastCollabEvent(kind: 'internal_mail' | 'topology', instanceId: number): void {
+export function broadcastCollabEvent(
+  kind: 'internal_mail' | 'topology' | 'user_instance_topology',
+  instanceId: number
+): void {
   if (typeof BroadcastChannel === 'undefined') return;
   try {
     const bc = new BroadcastChannel(ANYCLAW_COLLAB_BROADCAST);

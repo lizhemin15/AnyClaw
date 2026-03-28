@@ -166,6 +166,8 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Put("/{id}/collab/agents", collabHandler.PutAgents)
 		r.Get("/{id}/collab/topology", collabHandler.GetTopology)
 		r.Put("/{id}/collab/topology", collabHandler.PutTopology)
+		r.Get("/{id}/collab/instance-topology", collabHandler.GetUserInstanceTopology)
+		r.Put("/{id}/collab/instance-topology", collabHandler.PutUserInstanceTopology)
 		r.Get("/{id}/collab/mails", collabHandler.ListMails)
 		r.Post("/{id}/collab/resolve", collabHandler.PostResolve)
 	})

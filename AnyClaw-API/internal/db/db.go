@@ -303,6 +303,24 @@ func (d *DB) migrate() error {
 	)`); err != nil {
 		log.Printf("[db] create internal_mails: %v", err)
 	}
+	// 账号级实例间编排连线（与 instance_topology_edges 内员工连线区分）
+	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS user_instance_topology_edges (
+		id BIGINT AUTO_INCREMENT PRIMARY KEY,
+		user_id BIGINT NOT NULL,
+		instance_id_lo BIGINT NOT NULL,
+		instance_id_hi BIGINT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE KEY uk_user_inst_edge (user_id, instance_id_lo, instance_id_hi),
+		INDEX idx_uite_user (user_id),
+		CONSTRAINT fk_uite_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+		CONSTRAINT fk_uite_lo FOREIGN KEY (instance_id_lo) REFERENCES instances(id) ON DELETE CASCADE,
+		CONSTRAINT fk_uite_hi FOREIGN KEY (instance_id_hi) REFERENCES instances(id) ON DELETE CASCADE
+	)`); err != nil {
+		log.Printf("[db] create user_instance_topology_edges: %v", err)
+	}
+	if _, err := d.Exec("ALTER TABLE users ADD COLUMN instance_topology_version BIGINT NOT NULL DEFAULT 0"); err != nil && !isDuplicateColumn(err) {
+		log.Printf("[db] alter users instance_topology_version: %v", err)
+	}
 	if _, err := d.Exec("ALTER TABLE instances ADD COLUMN agent_topology_version BIGINT NOT NULL DEFAULT 0"); err != nil && !isDuplicateColumn(err) {
 		log.Printf("[db] alter instances agent_topology_version: %v", err)
 	}
@@ -331,7 +349,7 @@ func (d *DB) CheckAndMigrate() error {
 // Reset 清空所有业务表并重新迁移，用于解决数据冲突。重置后需前往 /setup 创建管理员。
 func (d *DB) Reset() error {
 	tables := []string{
-		"instance_subscriptions", "internal_mails", "instance_topology_edges", "instance_agents",
+		"instance_subscriptions", "internal_mails", "user_instance_topology_edges", "instance_topology_edges", "instance_agents",
 		"usage_corrections", "usage_log", "activation_codes", "orders", "verification_codes", "messages", "invitations",
 		"instances", "hosts", "users", "system_config",
 	}

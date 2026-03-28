@@ -631,6 +631,112 @@ func (d *DB) ReplaceTopologyEdges(instanceID int64, pairs [][2]string) error {
 	return tx.Commit()
 }
 
+func canonicalEdgeInt64(a, b int64) (lo, hi int64) {
+	if a < b {
+		return a, b
+	}
+	return b, a
+}
+
+// ListUserInstanceTopologyEdges 账号下实例间无向边（instance_id_lo < instance_id_hi）
+func (d *DB) ListUserInstanceTopologyEdges(userID int64) ([][2]int64, error) {
+	rows, err := d.Query(
+		`SELECT instance_id_lo, instance_id_hi FROM user_instance_topology_edges WHERE user_id = ? ORDER BY instance_id_lo, instance_id_hi`,
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list [][2]int64
+	for rows.Next() {
+		var lo, hi int64
+		if err := rows.Scan(&lo, &hi); err != nil {
+			return nil, err
+		}
+		list = append(list, [2]int64{lo, hi})
+	}
+	return list, rows.Err()
+}
+
+// GetUserInstanceTopologyVersion 账号级实例拓扑版本（随实例间连线变更递增）
+func (d *DB) GetUserInstanceTopologyVersion(userID int64) (int64, error) {
+	var v int64
+	err := d.QueryRow(`SELECT COALESCE(instance_topology_version, 0) FROM users WHERE id = ?`, userID).Scan(&v)
+	if err != nil {
+		return 0, err
+	}
+	return v, nil
+}
+
+func (d *DB) bumpUserInstanceTopologyVersion(tx *sql.Tx, userID int64) error {
+	_, err := tx.Exec(`UPDATE users SET instance_topology_version = COALESCE(instance_topology_version, 0) + 1 WHERE id = ?`, userID)
+	return err
+}
+
+// ReplaceUserInstanceTopologyEdges 全量替换账号下实例间连线；两端须均为该用户拥有的实例
+func (d *DB) ReplaceUserInstanceTopologyEdges(userID int64, pairs [][2]int64) error {
+	insts, err := d.ListInstancesByUserID(userID)
+	if err != nil {
+		return err
+	}
+	owned := make(map[int64]struct{}, len(insts))
+	for _, in := range insts {
+		owned[in.ID] = struct{}{}
+	}
+
+	seen := make(map[string]struct{})
+	var uniq [][2]int64
+	for _, p := range pairs {
+		a, b := p[0], p[1]
+		if a < 1 || b < 1 {
+			return fmt.Errorf("无效的实例 id")
+		}
+		lo, hi := canonicalEdgeInt64(a, b)
+		if lo == hi {
+			return fmt.Errorf("不能将实例与自身连线：%d", lo)
+		}
+		if _, ok := owned[lo]; !ok {
+			return fmt.Errorf("实例 %d 不属于当前账号或不存在", lo)
+		}
+		if _, ok := owned[hi]; !ok {
+			return fmt.Errorf("实例 %d 不属于当前账号或不存在", hi)
+		}
+		key := fmt.Sprintf("%d\x00%d", lo, hi)
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		uniq = append(uniq, [2]int64{lo, hi})
+	}
+
+	if len(uniq) > MaxCollaborationEdgesPerInstance {
+		return fmt.Errorf("连线数量过多（最多 %d 条）", MaxCollaborationEdgesPerInstance)
+	}
+
+	tx, err := d.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.Exec(`DELETE FROM user_instance_topology_edges WHERE user_id = ?`, userID); err != nil {
+		return err
+	}
+	for _, e := range uniq {
+		if _, err := tx.Exec(
+			`INSERT INTO user_instance_topology_edges (user_id, instance_id_lo, instance_id_hi) VALUES (?, ?, ?)`,
+			userID, e[0], e[1],
+		); err != nil {
+			return err
+		}
+	}
+	if err := d.bumpUserInstanceTopologyVersion(tx, userID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // ErrInternalMailListOffsetTooLarge 邮件列表 offset 超过 ListInternalMails 允许的上限
 var ErrInternalMailListOffsetTooLarge = errors.New("邮件列表分页 offset 超过上限")
 

@@ -42,6 +42,7 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
 
   const [orchMode, setOrchMode] = useState(false)
   const [orchInlineInst, setOrchInlineInst] = useState<Instance | null>(null)
+  const [instanceListRevision, setInstanceListRevision] = useState(0)
   const [companyMailOpen, setCompanyMailOpen] = useState(false)
 
   const navigate = useNavigate()
@@ -126,7 +127,10 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
   const loadInstances = () => {
     setLoading(true)
     getInstances()
-      .then(setInstances)
+      .then((list) => {
+        setInstances(list)
+        setInstanceListRevision((n) => n + 1)
+      })
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
       .finally(() => setLoading(false))
   }
@@ -365,7 +369,7 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
       </div>
       {orchMode && instances.length > 0 && (
         <p className="text-xs text-violet-700 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2 mb-3">
-          已开启编排模式：点击下方区域依次点击两个节点连线；点击卡片切换当前要编辑的员工；点卡片内「对话 →」进入聊天。
+          已开启编排模式：拓扑图展示全部员工实例，可拖拽或点击连线；点击卡片切换邮件/标题上下文；点卡片内「对话 →」进入聊天。
         </p>
       )}
       {orchMode && orchInlineInst && (
@@ -378,9 +382,7 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
             instanceName={orchInlineInst.name}
             onClose={() => setOrchMode(false)}
             onSaved={loadInstances}
-            companyInstances={instances}
-            selectedCompanyInstanceId={orchInlineInst.id}
-            onSelectCompanyInstance={setOrchInlineInst}
+            rosterRevision={instanceListRevision}
           />
         </div>
       )}

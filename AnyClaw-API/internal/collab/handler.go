@@ -211,6 +211,59 @@ func (h *Handler) PutTopology(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"status": "ok", "limits": collaborationLimitsPayload()})
 }
 
+func (h *Handler) GetUserInstanceTopology(w http.ResponseWriter, r *http.Request) {
+	iid, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+	inst, ok := h.authOwner(r, iid)
+	if !ok {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	edges, err := h.db.ListUserInstanceTopologyEdges(inst.UserID)
+	if err != nil {
+		http.Error(w, `{"error":"db"}`, http.StatusInternalServerError)
+		return
+	}
+	pairs := make([][2]int64, 0, len(edges))
+	for _, e := range edges {
+		pairs = append(pairs, [2]int64{e[0], e[1]})
+	}
+	ver, _ := h.db.GetUserInstanceTopologyVersion(inst.UserID)
+	writeJSON(w, map[string]any{
+		"edges":   pairs,
+		"version": ver,
+		"limits":  collaborationLimitsPayload(),
+	})
+}
+
+func (h *Handler) PutUserInstanceTopology(w http.ResponseWriter, r *http.Request) {
+	iid, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+	inst, ok := h.authOwner(r, iid)
+	if !ok {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	var body struct {
+		Edges [][2]int64 `json:"edges"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	if err := h.db.ReplaceUserInstanceTopologyEdges(inst.UserID, body.Edges); err != nil {
+		writeJSONErrorWithLimits(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, map[string]any{"status": "ok", "limits": collaborationLimitsPayload()})
+}
+
 func (h *Handler) ListMails(w http.ResponseWriter, r *http.Request) {
 	iid, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
