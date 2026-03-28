@@ -113,6 +113,28 @@ export async function getEnergyConfig(): Promise<{
   return fetchApi('/energy/config');
 }
 
+export interface RuntimeVersionInfo {
+  manager: { git_commit?: string; build_time?: string; image_tag?: string };
+  server: { docker_image?: string };
+}
+
+/** 公开接口，无需登录；用于后台展示当前 manager / 配置的 server 镜像 */
+export async function getRuntimeVersion(): Promise<RuntimeVersionInfo> {
+  const res = await fetch(`${API_BASE}/api/version`);
+  const text = await res.text();
+  let data: unknown;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    throw new Error(text || res.statusText || 'Request failed');
+  }
+  if (!res.ok) {
+    const err = data as { error?: string };
+    throw new Error(err?.error || text || res.statusText);
+  }
+  return data as RuntimeVersionInfo;
+}
+
 export async function sendVerificationCode(email: string): Promise<void> {
   await fetchApi('/auth/send-code', {
     method: 'POST',

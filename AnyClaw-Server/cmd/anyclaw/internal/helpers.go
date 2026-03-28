@@ -6,17 +6,11 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/anyclaw/anyclaw-server/pkg/buildinfo"
 	"github.com/anyclaw/anyclaw-server/pkg/config"
 )
 
 const Logo = "🦞"
-
-var (
-	version   = "dev"
-	gitCommit string
-	buildTime string
-	goVersion string
-)
 
 // GetAnyClawHome returns the AnyClaw home directory.
 // Priority: $ANYCLAW_HOME > ~/.anyclaw
@@ -41,17 +35,17 @@ func LoadConfig() (*config.Config, error) {
 
 // FormatVersion returns the version string with optional git commit
 func FormatVersion() string {
-	v := version
-	if gitCommit != "" {
-		v += fmt.Sprintf(" (git: %s)", gitCommit)
+	v := buildinfo.Version
+	if buildinfo.GitCommit != "" {
+		v += fmt.Sprintf(" (git: %s)", buildinfo.GitCommit)
 	}
 	return v
 }
 
 // FormatBuildInfo returns build time and go version info
 func FormatBuildInfo() (string, string) {
-	build := buildTime
-	goVer := goVersion
+	build := buildinfo.BuildTime
+	goVer := buildinfo.GoVersion
 	if goVer == "" {
 		goVer = runtime.Version()
 	}
@@ -60,5 +54,5 @@ func FormatBuildInfo() (string, string) {
 
 // GetVersion returns the version string
 func GetVersion() string {
-	return version
+	return buildinfo.Version
 }

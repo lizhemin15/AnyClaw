@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/anyclaw/anyclaw-api/internal/adminconfig"
 	"github.com/anyclaw/anyclaw-api/internal/adminstats"
 	"github.com/anyclaw/anyclaw-api/internal/auth"
+	"github.com/anyclaw/anyclaw-api/internal/buildinfo"
 	"github.com/anyclaw/anyclaw-api/internal/collab"
 	"github.com/anyclaw/anyclaw-api/internal/config"
 	"github.com/anyclaw/anyclaw-api/internal/db"
@@ -30,6 +33,31 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
+
+func handleAPIVersion(configPath string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		cfg, err := config.Load(configPath)
+		dockerImage := ""
+		if err == nil && cfg != nil {
+			dockerImage = strings.TrimSpace(cfg.DockerImage)
+		}
+		tag := strings.TrimSpace(os.Getenv("ANYCLAW_MANAGER_IMAGE_TAG"))
+		manager := map[string]any{
+			"git_commit": buildinfo.GitCommit,
+			"build_time": buildinfo.BuildTime,
+		}
+		if tag != "" {
+			manager["image_tag"] = tag
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"manager": manager,
+			"server": map[string]any{
+				"docker_image": dockerImage,
+			},
+		})
+	}
+}
 
 func main() {
 	cfgPath := flag.String("config", "", "config file path")
@@ -72,6 +100,7 @@ func runSetupMode(cfgPath string, cfg *config.Config) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})
+	r.Get("/api/version", handleAPIVersion(cfgPath))
 	r.Get("/api/setup/status", setupHandler.Status)
 	r.Post("/api/setup/db", setupHandler.ConfigureDB)
 	r.Post("/api/setup/admin", setupHandler.CreateAdmin)
@@ -126,6 +155,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})
+	r.Get("/api/version", handleAPIVersion(configPath))
 	r.Get("/api/setup/status", func(w http.ResponseWriter, _ *http.Request) {
 		var n int
 		_ = database.QueryRow("SELECT COUNT(*) FROM users WHERE role='admin'").Scan(&n)

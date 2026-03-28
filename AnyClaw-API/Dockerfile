@@ -14,7 +14,11 @@ COPY AnyClaw-API/go.mod AnyClaw-API/go.sum ./
 RUN go mod download
 COPY AnyClaw-API/ ./
 COPY --from=web /app/dist ./internal/web/dist
-RUN go mod tidy && CGO_ENABLED=0 go build -o /anyclaw-api ./cmd/api
+ARG GIT_SHA=unknown
+ARG BUILD_TIME=unknown
+RUN go mod tidy && CGO_ENABLED=0 go build -trimpath \
+  -ldflags "-s -w -X github.com/anyclaw/anyclaw-api/internal/buildinfo.GitCommit=${GIT_SHA} -X github.com/anyclaw/anyclaw-api/internal/buildinfo.BuildTime=${BUILD_TIME}" \
+  -o /anyclaw-api ./cmd/api
 
 FROM alpine:3.19
 RUN apk add --no-cache ca-certificates tzdata

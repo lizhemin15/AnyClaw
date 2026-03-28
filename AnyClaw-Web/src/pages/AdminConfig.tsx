@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getAdminConfig, putAdminConfig, getChannelStatus, setUsageCorrection, testChannelConfig, testSMTPConfig, testVoiceAPIConfig, adminReconnectInstances, type AdminConfig, type Channel, type ChannelStatus, type SMTPConfig, type PaymentConfig, type PaymentPlan, type EnergyConfig, type ContainerConfig, type COSConfig, type VoiceAPIEndpoint } from '../api'
+import { getAdminConfig, putAdminConfig, getChannelStatus, setUsageCorrection, testChannelConfig, testSMTPConfig, testVoiceAPIConfig, adminReconnectInstances, getRuntimeVersion, type AdminConfig, type Channel, type ChannelStatus, type SMTPConfig, type PaymentConfig, type PaymentPlan, type EnergyConfig, type ContainerConfig, type COSConfig, type VoiceAPIEndpoint, type RuntimeVersionInfo } from '../api'
 import { useUnsavedConfig } from '../contexts/UnsavedConfigContext'
 
 type ChannelTestKind = 'text' | 'image'
@@ -90,6 +90,7 @@ export default function AdminConfig() {
   const [testingVoiceEndpoint, setTestingVoiceEndpoint] = useState<string | null>(null)
   const [voiceTestResult, setVoiceTestResult] = useState<{ id: string; ok: boolean; message: string; latency?: number } | null>(null)
   const [voiceApiStatus, setVoiceApiStatus] = useState<Record<string, ChannelStatus>>({})
+  const [runtimeVersion, setRuntimeVersion] = useState<RuntimeVersionInfo | null>(null)
 
   const unsavedCtx = useUnsavedConfig()
   const hasUnsaved = !!(form && config && JSON.stringify(form) !== JSON.stringify(config))
@@ -134,6 +135,12 @@ export default function AdminConfig() {
       unsavedCtx.setHasUnsaved(false)
     }
   }, [unsavedCtx, hasUnsaved, doSave])
+
+  useEffect(() => {
+    getRuntimeVersion()
+      .then(setRuntimeVersion)
+      .catch(() => setRuntimeVersion(null))
+  }, [])
 
   useEffect(() => {
     getAdminConfig()
@@ -425,6 +432,20 @@ export default function AdminConfig() {
           </button>
         </div>
       </div>
+
+      {runtimeVersion && (
+        <div className="mb-4 p-4 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-700">
+          <div className="font-medium text-slate-800 mb-2">镜像版本</div>
+          <div>
+            <span className="text-slate-500">管理端（manager）</span>{' '}
+            {runtimeVersion.manager.git_commit || '—'} · {runtimeVersion.manager.build_time || '—'}
+            {runtimeVersion.manager.image_tag ? ` · ${runtimeVersion.manager.image_tag}` : ''}
+          </div>
+          <div className="mt-1">
+            <span className="text-slate-500">实例镜像（server）</span> {runtimeVersion.server.docker_image || '—'}
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-100 text-red-700 text-sm">{error}</div>

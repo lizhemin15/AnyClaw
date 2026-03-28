@@ -109,12 +109,20 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Build timestamp
+        id: meta
+        run: echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
       - name: Build and push anyclaw-server (full)
         uses: docker/build-push-action@v6
         with:
           context: ./AnyClaw-Server
           file: ./AnyClaw-Server/docker/Dockerfile.full
           push: ${{ github.event_name != 'pull_request' }}
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+            BUILD_TIME=${{ steps.meta.outputs.BUILD_TIME }}
+            VERSION=${{ github.sha }}
           tags: |
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/anyclaw-server:latest
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/anyclaw-server:${{ github.sha }}
@@ -139,6 +147,10 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Build timestamp
+        id: meta
+        run: echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -147,6 +159,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           build-args: |
             CACHE_BUST=${{ github.sha }}
+            GIT_SHA=${{ github.sha }}
+            BUILD_TIME=${{ steps.meta.outputs.BUILD_TIME }}
           tags: |
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/anyclaw-manager:latest
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/anyclaw-manager:${{ github.sha }}

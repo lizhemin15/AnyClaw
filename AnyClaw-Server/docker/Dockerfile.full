@@ -11,7 +11,11 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source and build
+# Copy source and build (CI 通过 build-arg 注入 GIT_COMMIT / BUILD_TIME / VERSION；无 .git 时以参数为准)
+ARG VERSION=unknown
+ARG GIT_COMMIT=unknown
+ARG BUILD_TIME=unknown
+ENV VERSION=${VERSION} GIT_COMMIT=${GIT_COMMIT} BUILD_TIME=${BUILD_TIME}
 COPY . .
 RUN make build
 

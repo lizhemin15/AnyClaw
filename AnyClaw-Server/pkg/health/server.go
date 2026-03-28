@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/anyclaw/anyclaw-server/pkg/buildinfo"
 )
 
 type Server struct {
@@ -26,9 +28,12 @@ type Check struct {
 }
 
 type StatusResponse struct {
-	Status string           `json:"status"`
-	Uptime string           `json:"uptime"`
-	Checks map[string]Check `json:"checks,omitempty"`
+	Status    string           `json:"status"`
+	Uptime    string           `json:"uptime"`
+	Checks    map[string]Check `json:"checks,omitempty"`
+	Version   string           `json:"version,omitempty"`
+	GitCommit string           `json:"git_commit,omitempty"`
+	BuildTime string           `json:"build_time,omitempty"`
 }
 
 func NewServer(host string, port int) *Server {
@@ -110,8 +115,11 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 	uptime := time.Since(s.startTime)
 	resp := StatusResponse{
-		Status: "ok",
-		Uptime: uptime.String(),
+		Status:    "ok",
+		Uptime:    uptime.String(),
+		Version:   buildinfo.Version,
+		GitCommit: buildinfo.GitCommit,
+		BuildTime: buildinfo.BuildTime,
 	}
 
 	json.NewEncoder(w).Encode(resp)
@@ -129,8 +137,11 @@ func (s *Server) readyHandler(w http.ResponseWriter, r *http.Request) {
 	if !ready {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		json.NewEncoder(w).Encode(StatusResponse{
-			Status: "not ready",
-			Checks: checks,
+			Status:    "not ready",
+			Checks:    checks,
+			Version:   buildinfo.Version,
+			GitCommit: buildinfo.GitCommit,
+			BuildTime: buildinfo.BuildTime,
 		})
 		return
 	}
@@ -139,8 +150,11 @@ func (s *Server) readyHandler(w http.ResponseWriter, r *http.Request) {
 		if check.Status == "fail" {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			json.NewEncoder(w).Encode(StatusResponse{
-				Status: "not ready",
-				Checks: checks,
+				Status:    "not ready",
+				Checks:    checks,
+				Version:   buildinfo.Version,
+				GitCommit: buildinfo.GitCommit,
+				BuildTime: buildinfo.BuildTime,
 			})
 			return
 		}
@@ -149,9 +163,12 @@ func (s *Server) readyHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	uptime := time.Since(s.startTime)
 	json.NewEncoder(w).Encode(StatusResponse{
-		Status: "ready",
-		Uptime: uptime.String(),
-		Checks: checks,
+		Status:    "ready",
+		Uptime:    uptime.String(),
+		Checks:    checks,
+		Version:   buildinfo.Version,
+		GitCommit: buildinfo.GitCommit,
+		BuildTime: buildinfo.BuildTime,
 	})
 }
 
