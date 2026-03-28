@@ -227,6 +227,12 @@ export interface CollabAgent {
   display_name: string;
 }
 
+/** 与 Container GET /collab/bridge/roster 中 peer_instances 一致；JWT 端见 GET /collab/agents */
+export interface CollabPeerInstance {
+  instance_id: number;
+  name: string;
+}
+
 export interface CollabLimits {
   max_agents: number;
   max_edges: number;
@@ -252,6 +258,8 @@ export interface CollabLimits {
 
 export async function getCollabAgents(instanceId: number): Promise<{
   agents: CollabAgent[];
+  peer_instances?: CollabPeerInstance[];
+  instance_topology_version?: number;
   limits?: CollabLimits;
 }> {
   return fetchCollabJson(`/instances/${instanceId}/collab/agents`);

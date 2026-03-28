@@ -11,6 +11,7 @@ import {
   type CollabAgent,
   type CollabApiError,
   type CollabLimits,
+  type CollabPeerInstance,
   type Instance,
 } from '../api'
 import {
@@ -22,6 +23,8 @@ import {
   filterEdgesForInstanceIds,
   filterEdgesForSlugs,
   layoutAgents,
+  ensureInstanceInList,
+  mergeInstancesWithPeers,
   normalizeEdgesKey,
   normalizeEdgesKeyNum,
 } from './collabTopologyUtils'
@@ -63,6 +66,7 @@ export default function CollabTopologyPanel({
   const [err, setErr] = useState<string | null>(null)
   const [loadWarn, setLoadWarn] = useState<string | null>(null)
   const [agents, setAgents] = useState<CollabAgent[]>([])
+  const [peerInstances, setPeerInstances] = useState<CollabPeerInstance[]>([])
   const [instanceNodes, setInstanceNodes] = useState<Instance[]>([])
   const [limits, setLimits] = useState<CollabLimits | null>(null)
   const [edges, setEdges] = useState<[string, string][]>([])
@@ -100,15 +104,21 @@ export default function CollabTopologyPanel({
     setDragCur(null)
     pressRef.current = null
     setLimits(null)
+    setPeerInstances([])
 
     if (isInstanceMode) {
-      const settled = await Promise.allSettled([getInstances(), getCollabInstanceTopology(expectedId)])
+      const settled = await Promise.allSettled([
+        getInstances(),
+        getCollabInstanceTopology(expectedId),
+        getCollabAgents(expectedId),
+      ])
       if (instanceIdRef.current !== expectedId) {
         setLoading(false)
         return
       }
       const ir = settled[0]
       const tr = settled[1]
+      const ar = settled[2]
       if (ir.status === 'rejected') {
         const r = ir.reason
         const msg = r instanceof Error ? r.message : String(r)
@@ -118,13 +128,25 @@ export default function CollabTopologyPanel({
         }
         setErr(msg)
         setInstanceNodes([])
+        setPeerInstances([])
         setInstEdges([])
         setBaselineInstEdges([])
         setTopoVersion(0)
         setLoading(false)
         return
       }
-      const instList = ir.value || []
+      const peersFromRoster =
+        ar.status === 'fulfilled' ? ar.value.peer_instances ?? [] : []
+      if (ar.status === 'fulfilled') {
+        mergeLimits(undefined, ar.value.limits)
+        setPeerInstances(peersFromRoster)
+      } else {
+        setPeerInstances([])
+      }
+      const instList = ensureInstanceInList(
+        mergeInstancesWithPeers(ir.value || [], peersFromRoster),
+        expectedId
+      )
       setInstanceNodes(instList)
       if (tr.status === 'rejected') {
         const r = tr.reason
@@ -173,6 +195,7 @@ export default function CollabTopologyPanel({
       }
       setErr(msg)
       setAgents([])
+      setPeerInstances([])
       setEdges([])
       setBaselineEdges([])
       setTopoVersion(0)
@@ -183,6 +206,7 @@ export default function CollabTopologyPanel({
     const a = ar.value
     const list = a.agents || []
     setAgents(list)
+    setPeerInstances(a.peer_instances ?? [])
     mergeLimits(undefined, a.limits)
 
     if (tr.status === 'rejected') {
@@ -538,13 +562,20 @@ export default function CollabTopologyPanel({
       <p className="text-xs text-slate-500 leading-relaxed">
         {isInstanceMode ? (
           <>
-            画布上为账号下全部招募实例（<code className="bg-slate-100 px-0.5 rounded text-[11px]">GET /instances</code>
-            ）。可<strong>拖拽</strong>从一节点拉到另一节点以添加或移除连线（无向），也可依次<strong>点击</strong>两个节点。连线以实例 ID 保存。
+            画布上为账号下招募实例（<code className="bg-slate-100 px-0.5 rounded text-[11px]">GET /instances</code>
+            ）并与 <code className="bg-slate-100 px-0.5 rounded text-[11px]">GET /collab/agents</code> 的{' '}
+            <code className="bg-slate-100 px-0.5 rounded text-[11px]">peer_instances</code>（与{' '}
+            <code className="bg-slate-100 px-0.5 rounded text-[11px]">…/collab/bridge/roster</code> 同源）合并。可<strong>拖拽</strong>连线或依次<strong>点击</strong>两节点。
           </>
         ) : (
           <>
             画布上为当前实例全部协作成员（打开时由 API 按已同步的{' '}
             <code className="bg-slate-100 px-0.5 rounded text-[11px]">agents.list</code> 自动补全）。可<strong>拖拽</strong>从一节点拉到另一节点以添加或移除连线（无向）；也可依次<strong>点击</strong>两个节点。展示名可在「协作展示名」页修改。
+            {peerInstances.length > 0 && (
+              <span className="block mt-1.5 text-slate-600">
+                编排邻居实例：{peerInstances.map((p) => `${p.name || `#${p.instance_id}`} (#${p.instance_id})`).join('、')}
+              </span>
+            )}
           </>
         )}
       </p>

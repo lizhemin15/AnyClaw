@@ -113,9 +113,17 @@ func (h *Handler) GetAgents(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"db"}`, http.StatusInternalServerError)
 		return
 	}
+	peers, err := h.db.ListUserInstanceTopologyPeers(inst.UserID, iid)
+	if err != nil {
+		http.Error(w, `{"error":"db"}`, http.StatusInternalServerError)
+		return
+	}
+	instTopoVer, _ := h.db.GetUserInstanceTopologyVersion(inst.UserID)
 	writeJSON(w, map[string]any{
-		"agents": list,
-		"limits": collaborationLimitsPayload(),
+		"agents":                      list,
+		"peer_instances":            peers,
+		"instance_topology_version":   instTopoVer,
+		"limits":                      collaborationLimitsPayload(),
 	})
 }
 

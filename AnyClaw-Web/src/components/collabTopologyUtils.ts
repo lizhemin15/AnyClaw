@@ -1,3 +1,46 @@
+import type { CollabPeerInstance, Instance } from '../api'
+
+/** 将 GET /collab/agents 返回的 peer_instances 并入实例列表（补全编排拓扑中未出现在 GET /instances 的节点） */
+export function mergeInstancesWithPeers(
+  list: Instance[],
+  peers: CollabPeerInstance[] | undefined | null
+): Instance[] {
+  if (!peers?.length) return list
+  const byId = new Map<number, Instance>(list.map((i) => [i.id, i]))
+  for (const p of peers) {
+    const id = p.instance_id
+    if (typeof id !== 'number' || !Number.isFinite(id)) continue
+    if (byId.has(id)) continue
+    byId.set(id, {
+      id,
+      user_id: 0,
+      name: (p.name && String(p.name).trim()) || `#${id}`,
+      status: '',
+      energy: 0,
+      daily_consume: 0,
+      created_at: '',
+    })
+  }
+  return [...byId.values()].sort((a, b) => a.id - b.id)
+}
+
+/** 当前查看的实例若不在列表中则补一条（仅 id，名称占位） */
+export function ensureInstanceInList(list: Instance[], instanceId: number): Instance[] {
+  if (list.some((x) => x.id === instanceId)) return list
+  return [
+    ...list,
+    {
+      id: instanceId,
+      user_id: 0,
+      name: `#${instanceId}`,
+      status: '',
+      energy: 0,
+      daily_consume: 0,
+      created_at: '',
+    },
+  ].sort((a, b) => a.id - b.id)
+}
+
 export function canonPair(a: string, b: string): [string, string] {
   const x = a.trim()
   const y = b.trim()

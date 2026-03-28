@@ -9,9 +9,11 @@ import {
   getAuthConfig,
   getEnergyConfig,
   getCollabAgents,
+  type CollabPeerInstance,
   type Instance,
   type User,
 } from '../api'
+import { mergeInstancesWithPeers } from '../components/collabTopologyUtils'
 import SearchInput from '../components/SearchInput'
 import Pagination from '../components/Pagination'
 import HomeCollabOrchestrateModal from '../components/HomeCollabOrchestrateModal'
@@ -129,13 +131,28 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
 
   const loadInstances = () => {
     setLoading(true)
-    getInstances()
-      .then((list) => {
-        setInstances(list)
+    ;(async () => {
+      try {
+        const list = await getInstances()
+        let merged = list
+        if (list.length > 0) {
+          const peerBatches = await Promise.all(
+            list.map((i) =>
+              getCollabAgents(i.id)
+                .then((r) => r.peer_instances ?? [])
+                .catch((): CollabPeerInstance[] => [])
+            )
+          )
+          merged = mergeInstancesWithPeers(list, peerBatches.flat())
+        }
+        setInstances(merged)
         setInstanceListRevision((n) => n + 1)
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
-      .finally(() => setLoading(false))
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '加载失败')
+      } finally {
+        setLoading(false)
+      }
+    })()
   }
 
   useEffect(() => {
