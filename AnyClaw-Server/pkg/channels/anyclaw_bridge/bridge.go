@@ -23,6 +23,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/anyclaw/anyclaw-server/pkg/fileutil"
+
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
@@ -46,7 +48,13 @@ const (
 	readTimeout     = 60 * time.Second
 	reconnectDelay  = 2 * time.Second
 	maxReconnectCap = 60 * time.Second
+	instanceMailPollInterval = 90 * time.Second
+	instanceMailFetchAttempts = 3
 )
+
+type instanceMailWatermarkFile struct {
+	MaxID int64 `json:"max_id"`
+}
 
 type bridgeConn struct {
 	conn    *websocket.Conn
@@ -74,6 +82,7 @@ func (bc *bridgeConn) close() {
 type BridgeChannel struct {
 	*channels.BaseChannel
 	config       config.AnyClawBridgeConfig
+	workspacePath string
 	rosterSlugs  []string
 	conn         *bridgeConn
 	ctx          context.Context
@@ -81,6 +90,12 @@ type BridgeChannel struct {
 	chatID       string
 	sessionID    string
 	collabClient *tools.CollabAPIClient
+
+	instanceMailMu             sync.Mutex
+	instanceMailWatermark      int64 // persisted max id; baseline + hint
+	instanceMailBaselineDone    atomic.Bool
+	instanceMailNeedsWarmup     atomic.Bool
+	instanceMailDelivered       sync.Map // int64 msg id -> struct{} (dedup WS vs poll)
 }
 
 func agentSlugsFromAgentConfig(cfg *config.Config) []string {
@@ -107,14 +122,50 @@ func NewBridgeChannel(cfg *config.Config, messageBus *bus.MessageBus) (*BridgeCh
 
 	base := channels.NewBaseChannel(channelName, br, messageBus, nil)
 	chatID := channelName + ":" + br.InstanceID
-	return &BridgeChannel{
-		BaseChannel:  base,
-		config:       br,
-		rosterSlugs:  agentSlugsFromAgentConfig(cfg),
-		chatID:       chatID,
-		sessionID:    br.InstanceID,
-		collabClient: tools.NewCollabAPIClient(br.APIURL, br.InstanceID, br.Token),
-	}, nil
+	bc := &BridgeChannel{
+		BaseChannel:   base,
+		config:        br,
+		workspacePath: cfg.WorkspacePath(),
+		rosterSlugs:   agentSlugsFromAgentConfig(cfg),
+		chatID:        chatID,
+		sessionID:     br.InstanceID,
+		collabClient:  tools.NewCollabAPIClient(br.APIURL, br.InstanceID, br.Token),
+	}
+	bc.loadInstanceMailWatermark()
+	if bc.instanceMailWatermark > 0 {
+		bc.instanceMailBaselineDone.Store(true)
+		bc.instanceMailNeedsWarmup.Store(true)
+	}
+	return bc, nil
+}
+
+func (c *BridgeChannel) instanceMailWatermarkPath() string {
+	return filepath.Join(c.workspacePath, ".anyclaw", "instance_mail_watermark.json")
+}
+
+func (c *BridgeChannel) loadInstanceMailWatermark() {
+	p := c.instanceMailWatermarkPath()
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return
+	}
+	var f instanceMailWatermarkFile
+	if json.Unmarshal(data, &f) != nil || f.MaxID < 0 {
+		return
+	}
+	c.instanceMailWatermark = f.MaxID
+}
+
+func (c *BridgeChannel) saveInstanceMailWatermarkLocked() {
+	dir := filepath.Dir(c.instanceMailWatermarkPath())
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return
+	}
+	b, err := json.Marshal(instanceMailWatermarkFile{MaxID: c.instanceMailWatermark})
+	if err != nil {
+		return
+	}
+	_ = fileutil.WriteFileAtomic(c.instanceMailWatermarkPath(), b, 0o644)
 }
 
 func (c *BridgeChannel) syncRosterOnce() {
@@ -141,8 +192,208 @@ func (c *BridgeChannel) Start(ctx context.Context) error {
 	c.SetRunning(true)
 
 	go c.connectLoop()
+	go c.instanceMailPollLoop()
 	logger.InfoC(channelName, "AnyClaw outbound bridge started")
 	return nil
+}
+
+func (c *BridgeChannel) instanceMailPollLoop() {
+	if c.collabClient == nil {
+		return
+	}
+	time.Sleep(8 * time.Second)
+	c.pollInstanceMailOnce()
+	ticker := time.NewTicker(instanceMailPollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case <-ticker.C:
+			c.pollInstanceMailOnce()
+		}
+	}
+}
+
+func (c *BridgeChannel) pollInstanceMailOnce() {
+	if c.collabClient == nil {
+		return
+	}
+	myID, err := strconv.ParseInt(strings.TrimSpace(c.config.InstanceID), 10, 64)
+	if err != nil || myID < 1 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	defer cancel()
+	out, err := c.collabClient.GetInstanceMessageList(ctx, 100, 0, nil)
+	if err != nil {
+		logger.WarnCF(channelName, "instance mail poll: list failed",
+			map[string]any{"error": err.Error()})
+		return
+	}
+	raw, ok := out["messages"].([]any)
+	if !ok {
+		return
+	}
+	var rows []map[string]any
+	for _, m := range raw {
+		row, ok := m.(map[string]any)
+		if !ok {
+			continue
+		}
+		rows = append(rows, row)
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		idi, ok1 := tools.CollabMailIDFromNotify(rows[i])
+		idj, ok2 := tools.CollabMailIDFromNotify(rows[j])
+		if !ok1 {
+			return true
+		}
+		if !ok2 {
+			return false
+		}
+		return idi < idj
+	})
+
+	if c.instanceMailNeedsWarmup.Load() {
+		c.instanceMailMu.Lock()
+		wm := c.instanceMailWatermark
+		c.instanceMailMu.Unlock()
+		for _, row := range rows {
+			toID, ok2 := collabPeerInstanceID(row, "to_instance_id")
+			if !ok2 || toID != myID {
+				continue
+			}
+			id, ok := tools.CollabMailIDFromNotify(row)
+			if !ok || id < 1 || id > wm {
+				continue
+			}
+			c.instanceMailDelivered.Store(id, true)
+		}
+		c.instanceMailNeedsWarmup.Store(false)
+	}
+
+	if !c.instanceMailBaselineDone.Load() {
+		var maxID int64
+		if c.instanceMailWatermark > maxID {
+			maxID = c.instanceMailWatermark
+		}
+		for _, row := range rows {
+			toID, ok2 := collabPeerInstanceID(row, "to_instance_id")
+			if !ok2 || toID != myID {
+				continue
+			}
+			id, ok := tools.CollabMailIDFromNotify(row)
+			if ok && id > 0 {
+				c.instanceMailDelivered.Store(id, true)
+				if id > maxID {
+					maxID = id
+				}
+			}
+		}
+		c.instanceMailMu.Lock()
+		c.instanceMailWatermark = maxID
+		c.saveInstanceMailWatermarkLocked()
+		c.instanceMailMu.Unlock()
+		c.instanceMailBaselineDone.Store(true)
+		logger.DebugCF(channelName, "instance mail poll: baseline (mark seen, no agent turn)",
+			map[string]any{"max_id": maxID})
+		return
+	}
+
+	for _, row := range rows {
+		toID, ok2 := collabPeerInstanceID(row, "to_instance_id")
+		if !ok2 || toID != myID {
+			continue
+		}
+		msgID, ok := tools.CollabMailIDFromNotify(row)
+		if !ok || msgID < 1 {
+			continue
+		}
+		content := collabMapString(row, "content")
+		if strings.TrimSpace(content) == "" {
+			continue
+		}
+		fromID, ok1 := collabPeerInstanceID(row, "from_instance_id")
+		if !ok1 || fromID < 1 {
+			continue
+		}
+		c.deliverInstanceMailInbound(msgID, fromID, myID, content, collabMapString(row, "created_at"))
+	}
+}
+
+func (c *BridgeChannel) fetchInstanceMessageWithRetry(ctx context.Context, msgID int64, fromID int64) (map[string]any, error) {
+	var lastErr error
+	for attempt := 0; attempt < instanceMailFetchAttempts; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(time.Duration(300*(1<<attempt)) * time.Millisecond):
+			}
+		}
+		row, err := c.collabClient.GetInstanceMessageByID(ctx, msgID, fromID)
+		if err == nil {
+			return row, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
+}
+
+func (c *BridgeChannel) bumpInstanceMailWatermark(msgID int64) {
+	c.instanceMailMu.Lock()
+	defer c.instanceMailMu.Unlock()
+	if msgID > c.instanceMailWatermark {
+		c.instanceMailWatermark = msgID
+		c.saveInstanceMailWatermarkLocked()
+	}
+}
+
+func (c *BridgeChannel) publishInstanceMailInbound(msgID, fromID, toID int64, content, createdAt string) error {
+	agentSlug := routing.NormalizeAgentID(routing.DefaultAgentID)
+	sessionKey := fmt.Sprintf("agent:%s:instance_mail:%d", agentSlug, fromID)
+	chatID := fmt.Sprintf("instance_mail:%d", fromID)
+	meta := map[string]string{
+		"from_instance_id": fmt.Sprintf("%d", fromID),
+		"to_instance_id":   fmt.Sprintf("%d", toID),
+		"msg_id":           fmt.Sprintf("%d", msgID),
+	}
+	if createdAt != "" {
+		meta["created_at"] = createdAt
+	}
+	userText := fmt.Sprintf(
+		"[跨实例消息 id=%d]\nFrom instance: %d\nTo instance: %d\n\n%s",
+		msgID, fromID, toID, content,
+	)
+	in := bus.InboundMessage{
+		Channel:    "instance_mail",
+		SenderID:   fmt.Sprintf("instance:%d", fromID),
+		ChatID:     chatID,
+		Content:    userText,
+		Metadata:   meta,
+		SessionKey: sessionKey,
+		Peer:       bus.Peer{Kind: "direct", ID: chatID},
+		MessageID:  fmt.Sprintf("imsg-%d", msgID),
+	}
+	pubCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	if err := c.MessageBus().PublishInbound(pubCtx, in); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *BridgeChannel) deliverInstanceMailInbound(msgID, fromID, toID int64, content, createdAt string) {
+	if _, loaded := c.instanceMailDelivered.LoadOrStore(msgID, true); loaded {
+		return
+	}
+	if err := c.publishInstanceMailInbound(msgID, fromID, toID, content, createdAt); err != nil {
+		c.instanceMailDelivered.Delete(msgID)
+		logger.WarnCF(channelName, "publish instance_mail inbound failed", map[string]any{"error": err.Error()})
+		return
+	}
+	c.bumpInstanceMailWatermark(msgID)
 }
 
 // Stop implements Channel.
@@ -410,46 +661,29 @@ func (c *BridgeChannel) handleCollabInstanceMail(msg pico.PicoMessage) {
 		// Sender's container also receives the same WS frame; only the recipient should inject inbound.
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	if _, loaded := c.instanceMailDelivered.LoadOrStore(msgID, true); loaded {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	defer cancel()
-	row, err := c.collabClient.GetInstanceMessageByID(ctx, msgID, fromID)
+	row, err := c.fetchInstanceMessageWithRetry(ctx, msgID, fromID)
 	if err != nil {
+		c.instanceMailDelivered.Delete(msgID)
 		logger.WarnCF(channelName, "fetch instance message failed", map[string]any{"id": msgID, "error": err.Error()})
 		return
 	}
 	content := collabMapString(row, "content")
 	if strings.TrimSpace(content) == "" {
+		c.instanceMailDelivered.Delete(msgID)
 		logger.WarnCF(channelName, "instance message row incomplete", map[string]any{"id": msgID})
 		return
 	}
-	agentSlug := routing.NormalizeAgentID(routing.DefaultAgentID)
-	sessionKey := fmt.Sprintf("agent:%s:instance_mail:%d", agentSlug, fromID)
-	chatID := fmt.Sprintf("instance_mail:%d", fromID)
-	meta := map[string]string{
-		"from_instance_id": fmt.Sprintf("%d", fromID),
-		"to_instance_id":   fmt.Sprintf("%d", toID),
-		"msg_id":           fmt.Sprintf("%d", msgID),
-	}
-	if ts := collabMapString(row, "created_at"); ts != "" {
-		meta["created_at"] = ts
-	}
-	userText := fmt.Sprintf(
-		"[跨实例消息 id=%d]\nFrom instance: %d\nTo instance: %d\n\n%s",
-		msgID, fromID, toID, content,
-	)
-	in := bus.InboundMessage{
-		Channel:    "instance_mail",
-		SenderID:   fmt.Sprintf("instance:%d", fromID),
-		ChatID:     chatID,
-		Content:    userText,
-		Metadata:   meta,
-		SessionKey: sessionKey,
-		Peer:       bus.Peer{Kind: "direct", ID: chatID},
-		MessageID:  fmt.Sprintf("imsg-%d", msgID),
-	}
-	if err := c.MessageBus().PublishInbound(c.ctx, in); err != nil {
+	if err := c.publishInstanceMailInbound(msgID, fromID, toID, content, collabMapString(row, "created_at")); err != nil {
+		c.instanceMailDelivered.Delete(msgID)
 		logger.WarnCF(channelName, "publish instance_mail inbound failed", map[string]any{"error": err.Error()})
+		return
 	}
+	c.bumpInstanceMailWatermark(msgID)
 }
 
 func collabPeerInstanceID(payload map[string]any, key string) (int64, bool) {

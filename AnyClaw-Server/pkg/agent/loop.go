@@ -610,11 +610,17 @@ func (al *AgentLoop) ProcessHeartbeat(
 	if agent == nil {
 		return "", fmt.Errorf("no default agent for heartbeat")
 	}
+	userMsg := content
+	if al.cfg.Channels.AnyClawBridge.IsEnabled() {
+		userMsg = `[跨实例收件] 若 collab_get_roster 的 peer_instances 非空：请先 collab_list_instance_messages（limit 20）检查是否有未处理的跨实例消息；若有，向用户简要汇报或代为回复（collab_send_instance_message）。无新消息且 HEARTBEAT.md 无其它事项则 HEARTBEAT_OK。
+
+` + content
+	}
 	return al.runAgentLoop(ctx, agent, processOptions{
 		SessionKey:      "heartbeat",
 		Channel:         channel,
 		ChatID:          chatID,
-		UserMessage:     content,
+		UserMessage:     userMsg,
 		DefaultResponse: defaultResponse,
 		EnableSummary:   false,
 		SendResponse:    false,

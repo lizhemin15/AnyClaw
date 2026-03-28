@@ -3,15 +3,48 @@ package tools
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 )
+
+const collabHTTPMaxAttempts = 3
+
+func collabRetryBackoff(attempt int) time.Duration {
+	// 200ms, 400ms
+	return time.Duration(200*(1<<attempt)) * time.Millisecond
+}
+
+func isRetryableCollabHTTPStatus(code int) bool {
+	return code == 429 || code >= 500
+}
+
+func isRetryableCollabNetErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		return true
+	}
+	s := strings.ToLower(err.Error())
+	return strings.Contains(s, "timeout") ||
+		strings.Contains(s, "connection reset") ||
+		strings.Contains(s, "connection refused") ||
+		strings.Contains(s, "eof") ||
+		strings.Contains(s, "broken pipe") ||
+		strings.Contains(s, "tls: handshake") ||
+		strings.Contains(s, "no such host")
+}
 
 func collabJSONInt64(v any) (int64, bool) {
 	switch x := v.(type) {
@@ -112,24 +145,95 @@ type CollabTopologyResponse struct {
 	Limits                  *CollabLimits        `json:"limits,omitempty"`
 }
 
-func (c *CollabAPIClient) getOKBody(ctx context.Context, rel string) ([]byte, error) {
+func (c *CollabAPIClient) getOKBodyOnce(ctx context.Context, rel string) ([]byte, int, error) {
 	req, err := c.req(ctx, http.MethodGet, rel, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, resp.StatusCode, err
 	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("api %s: %s", resp.Status, string(bytes.TrimSpace(b)))
+	return b, resp.StatusCode, nil
+}
+
+func (c *CollabAPIClient) getOKBody(ctx context.Context, rel string) ([]byte, error) {
+	var lastErr error
+	for attempt := 0; attempt < collabHTTPMaxAttempts; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(collabRetryBackoff(attempt - 1)):
+			}
+		}
+		b, code, err := c.getOKBodyOnce(ctx, rel)
+		if err != nil {
+			lastErr = err
+			if isRetryableCollabNetErr(err) && attempt < collabHTTPMaxAttempts-1 {
+				continue
+			}
+			return nil, err
+		}
+		if isRetryableCollabHTTPStatus(code) && attempt < collabHTTPMaxAttempts-1 {
+			lastErr = fmt.Errorf("api HTTP %d", code)
+			continue
+		}
+		if code < 200 || code >= 300 {
+			return nil, fmt.Errorf("api HTTP %d: %s", code, string(bytes.TrimSpace(b)))
+		}
+		return b, nil
 	}
-	return b, nil
+	return nil, lastErr
+}
+
+func (c *CollabAPIClient) postJSONWithRetry(ctx context.Context, rel string, body []byte) ([]byte, error) {
+	var lastErr error
+	for attempt := 0; attempt < collabHTTPMaxAttempts; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(collabRetryBackoff(attempt - 1)):
+			}
+		}
+		req, err := c.req(ctx, http.MethodPost, rel, bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		resp, err := c.HTTP.Do(req)
+		if err != nil {
+			lastErr = err
+			if isRetryableCollabNetErr(err) && attempt < collabHTTPMaxAttempts-1 {
+				continue
+			}
+			return nil, err
+		}
+		b, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			lastErr = readErr
+			if isRetryableCollabNetErr(readErr) && attempt < collabHTTPMaxAttempts-1 {
+				continue
+			}
+			return nil, readErr
+		}
+		code := resp.StatusCode
+		if isRetryableCollabHTTPStatus(code) && attempt < collabHTTPMaxAttempts-1 {
+			lastErr = fmt.Errorf("api HTTP %d", code)
+			continue
+		}
+		if code < 200 || code >= 300 {
+			return nil, fmt.Errorf("api HTTP %d: %s", code, string(bytes.TrimSpace(b)))
+		}
+		return b, nil
+	}
+	return nil, lastErr
 }
 
 // GetRoster 拉取本实例协作员工与上限（容器 token）。
@@ -154,18 +258,9 @@ func (c *CollabAPIClient) SyncRosterSlugs(ctx context.Context, slugs []string) (
 		return 0, err
 	}
 	rel := "/instances/" + url.PathEscape(c.InstanceID) + "/collab/bridge/roster/sync"
-	req, err := c.req(ctx, http.MethodPost, rel, bytes.NewReader(raw))
+	b, err := c.postJSONWithRetry(ctx, rel, raw)
 	if err != nil {
 		return 0, err
-	}
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-	b, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return 0, fmt.Errorf("api %s: %s", resp.Status, string(bytes.TrimSpace(b)))
 	}
 	var out struct {
 		Added int `json:"added"`
@@ -301,18 +396,9 @@ func (c *CollabAPIClient) PostInstanceMessage(ctx context.Context, toInstanceID 
 		return nil, err
 	}
 	rel := "/instances/" + url.PathEscape(c.InstanceID) + "/collab/bridge/instance-mail"
-	req, err := c.req(ctx, http.MethodPost, rel, bytes.NewReader(raw))
+	b, err := c.postJSONWithRetry(ctx, rel, raw)
 	if err != nil {
 		return nil, err
-	}
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	b, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("api %s: %s", resp.Status, string(bytes.TrimSpace(b)))
 	}
 	var out map[string]any
 	if err := json.Unmarshal(b, &out); err != nil {
@@ -339,18 +425,9 @@ func (c *CollabAPIClient) PostInternalMail(ctx context.Context, fromSlug, toSlug
 		return nil, err
 	}
 	rel := "/instances/" + url.PathEscape(c.InstanceID) + "/collab/bridge/mail"
-	req, err := c.req(ctx, http.MethodPost, rel, bytes.NewReader(raw))
+	b, err := c.postJSONWithRetry(ctx, rel, raw)
 	if err != nil {
 		return nil, err
-	}
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	b, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("api %s: %s", resp.Status, string(bytes.TrimSpace(b)))
 	}
 	var out map[string]any
 	if err := json.Unmarshal(b, &out); err != nil {
@@ -366,18 +443,9 @@ func (c *CollabAPIClient) PostResolve(ctx context.Context, name string) (map[str
 		return nil, err
 	}
 	rel := "/instances/" + url.PathEscape(c.InstanceID) + "/collab/bridge/resolve"
-	req, err := c.req(ctx, http.MethodPost, rel, bytes.NewReader(raw))
+	b, err := c.postJSONWithRetry(ctx, rel, raw)
 	if err != nil {
 		return nil, err
-	}
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	b, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("api %s: %s", resp.Status, string(bytes.TrimSpace(b)))
 	}
 	var out map[string]any
 	if err := json.Unmarshal(b, &out); err != nil {

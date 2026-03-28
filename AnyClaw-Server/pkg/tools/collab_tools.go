@@ -464,7 +464,7 @@ func (t *CollabListInstanceMessagesTool) Name() string {
 }
 
 func (t *CollabListInstanceMessagesTool) Description() string {
-	return "List cross-instance messages for this instance (paginated, newest-first semantics from API). Optional peer instance id filter. Response includes messages, total, limits."
+	return "List cross-instance messages for this instance (paginated, newest-first semantics from API). Optional peer instance id filter. Response includes messages, total, limits. Call periodically when peer_instances exist (e.g. after idle time or if push may have been missed) to avoid missing inbound mail."
 }
 
 func (t *CollabListInstanceMessagesTool) Parameters() map[string]any {
