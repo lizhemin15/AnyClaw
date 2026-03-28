@@ -66,7 +66,10 @@ export default function InstanceCrossInstanceMailPanel({
     if (instanceIdRef.current !== expected) return
     setInstances(instList)
     setNeighborIds(neighborInstanceIds(topo.edges || [], expected))
-    if (topo.limits) setLimits((prev) => ({ ...prev, ...topo.limits }))
+    if (topo.limits) {
+      const lim = topo.limits
+      setLimits((prev) => (prev ? { ...prev, ...lim } : lim))
+    }
   }, [instanceId])
 
   const loadMessages = useCallback(

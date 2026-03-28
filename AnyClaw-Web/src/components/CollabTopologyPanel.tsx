@@ -88,8 +88,8 @@ export default function CollabTopologyPanel({
   instanceIdRef.current = instanceId
 
   const mergeLimits = useCallback((a?: CollabLimits, b?: CollabLimits) => {
-    if (b) setLimits(b as CollabLimits)
-    else if (a) setLimits(a as CollabLimits)
+    if (b) setLimits(b)
+    else if (a) setLimits(a)
   }, [])
 
   const load = useCallback(async () => {
