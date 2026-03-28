@@ -3,6 +3,7 @@ package tools
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -410,12 +411,11 @@ func (c *CollabAPIClient) PostInstanceMessage(ctx context.Context, toInstanceID 
 // PostInternalMail 发送内部邮件（邻居关系由 API 校验）
 func (c *CollabAPIClient) PostInternalMail(ctx context.Context, fromSlug, toSlug, subject, body, threadID string, inReplyTo *int64) (map[string]any, error) {
 	payload := map[string]any{
-		"from_slug":  fromSlug,
-		"to_slug":    toSlug,
-		"subject":    subject,
-		"body":       body,
-		"thread_id":  threadID,
-		"in_reply_to": nil,
+		"from_slug": fromSlug,
+		"to_slug":   toSlug,
+		"subject":   subject,
+		"body":      body,
+		"thread_id": threadID,
 	}
 	if inReplyTo != nil {
 		payload["in_reply_to"] = *inReplyTo

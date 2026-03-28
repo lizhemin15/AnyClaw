@@ -7,11 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
-	"image/jpeg"
-	"mime/multipart"
-	_ "image/png"
 	_ "image/gif"
+	"image/jpeg"
+	_ "image/png"
 	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
@@ -23,32 +23,30 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/anyclaw/anyclaw-server/pkg/fileutil"
-
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
 	"github.com/anyclaw/anyclaw-server/pkg/bus"
 	"github.com/anyclaw/anyclaw-server/pkg/channels"
+	"github.com/anyclaw/anyclaw-server/pkg/channels/pico"
 	"github.com/anyclaw/anyclaw-server/pkg/config"
+	"github.com/anyclaw/anyclaw-server/pkg/fileutil"
 	"github.com/anyclaw/anyclaw-server/pkg/identity"
 	"github.com/anyclaw/anyclaw-server/pkg/logger"
 	"github.com/anyclaw/anyclaw-server/pkg/media"
 	"github.com/anyclaw/anyclaw-server/pkg/routing"
 	"github.com/anyclaw/anyclaw-server/pkg/tools"
 	"github.com/anyclaw/anyclaw-server/pkg/utils"
-
-	"github.com/anyclaw/anyclaw-server/pkg/channels/pico"
 )
 
 const (
-	channelName    = "anyclaw_bridge"
-	connectPath    = "/containers/connect"
-	pingInterval    = 30 * time.Second
-	readTimeout     = 60 * time.Second
-	reconnectDelay  = 2 * time.Second
-	maxReconnectCap = 60 * time.Second
-	instanceMailPollInterval = 90 * time.Second
+	channelName               = "anyclaw_bridge"
+	connectPath               = "/containers/connect"
+	pingInterval              = 30 * time.Second
+	readTimeout               = 60 * time.Second
+	reconnectDelay            = 2 * time.Second
+	maxReconnectCap           = 60 * time.Second
+	instanceMailPollInterval  = 90 * time.Second
 	instanceMailFetchAttempts = 3
 )
 

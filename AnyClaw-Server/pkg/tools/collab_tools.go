@@ -72,6 +72,9 @@ func (t *InternalMailSendTool) Execute(ctx context.Context, args map[string]any)
 		case float64:
 			n := int64(x)
 			inReply = &n
+		case int:
+			n := int64(x)
+			inReply = &n
 		case int64:
 			inReply = &x
 		case json.Number:
@@ -274,6 +277,11 @@ func collabArgNonNegInt(args map[string]any, key string, defaultVal int) int {
 			return defaultVal
 		}
 		return n
+	case int:
+		if x < 0 {
+			return defaultVal
+		}
+		return x
 	case int64:
 		if int(x) < 0 {
 			return defaultVal
@@ -498,6 +506,11 @@ func (t *CollabListInstanceMessagesTool) Execute(ctx context.Context, args map[s
 	if v, ok := args["peer"]; ok && v != nil {
 		switch x := v.(type) {
 		case float64:
+			n := int64(x)
+			if n > 0 {
+				peer = &n
+			}
+		case int:
 			n := int64(x)
 			if n > 0 {
 				peer = &n
