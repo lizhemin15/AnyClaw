@@ -196,6 +196,9 @@ func registerSharedTools(
 			agent.Tools.Register(tools.NewCollabGetRosterTool(cCollab))
 			agent.Tools.Register(tools.NewCollabGetTopologyTool(cCollab))
 			agent.Tools.Register(tools.NewCollabListInternalMailsTool(cCollab))
+			agent.Tools.Register(tools.NewCollabFindPeerInstanceTool(cCollab))
+			agent.Tools.Register(tools.NewCollabSendInstanceMessageTool(cCollab))
+			agent.Tools.Register(tools.NewCollabListInstanceMessagesTool(cCollab))
 		}
 
 		// Send file tool (outbound media via MediaStore -store injected later by SetMediaStore)

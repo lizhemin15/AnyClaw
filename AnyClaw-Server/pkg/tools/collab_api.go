@@ -201,6 +201,63 @@ func (c *CollabAPIClient) GetInternalMailList(ctx context.Context, threadID stri
 	return out, nil
 }
 
+// GetInstanceMessageList 分页拉取跨实例消息（容器 token；与网页端 GET collab/instance-mail 同形）。
+func (c *CollabAPIClient) GetInstanceMessageList(ctx context.Context, limit, offset int, peer *int64) (map[string]any, error) {
+	q := url.Values{}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	if peer != nil && *peer > 0 {
+		q.Set("peer", strconv.FormatInt(*peer, 10))
+	}
+	relPath := "/instances/" + url.PathEscape(c.InstanceID) + "/collab/bridge/instance-mail"
+	if enc := q.Encode(); enc != "" {
+		relPath += "?" + enc
+	}
+	b, err := c.getOKBody(ctx, relPath)
+	if err != nil {
+		return nil, err
+	}
+	var out map[string]any
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, fmt.Errorf("decode instance messages: %w", err)
+	}
+	return out, nil
+}
+
+// PostInstanceMessage 向编排拓扑中已连线的另一实例发送跨实例消息（容器 token）。
+func (c *CollabAPIClient) PostInstanceMessage(ctx context.Context, toInstanceID int64, content string) (map[string]any, error) {
+	raw, err := json.Marshal(map[string]any{
+		"to_instance_id": toInstanceID,
+		"content":        content,
+	})
+	if err != nil {
+		return nil, err
+	}
+	rel := "/instances/" + url.PathEscape(c.InstanceID) + "/collab/bridge/instance-mail"
+	req, err := c.req(ctx, http.MethodPost, rel, bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("api %s: %s", resp.Status, string(bytes.TrimSpace(b)))
+	}
+	var out map[string]any
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return out, nil
+}
+
 // PostInternalMail 发送内部邮件（邻居关系由 API 校验）
 func (c *CollabAPIClient) PostInternalMail(ctx context.Context, fromSlug, toSlug, subject, body, threadID string, inReplyTo *int64) (map[string]any, error) {
 	payload := map[string]any{

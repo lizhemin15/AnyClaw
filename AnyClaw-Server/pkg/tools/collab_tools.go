@@ -156,7 +156,7 @@ func (t *CollabGetRosterTool) Name() string {
 }
 
 func (t *CollabGetRosterTool) Description() string {
-	return "Fetch this instance's collaboration roster: same-instance agents (agent_slug, display_name), peer_instances (other instances connected in account orchestration topology, with instance_id and name), instance_topology_version, and server limits (max_agents, max_edges, mail caps, etc.). Use before internal_mail_send when you need current colleagues or limits."
+	return "Fetch roster: agents (agent_slug, display_name), peer_instances (topology-linked other instances: instance_id, name), limits. For cross-instance contact use peer_instances with collab_find_peer_instance / collab_send_instance_message; for same-instance mail use collab_resolve_peer + internal_mail_send."
 }
 
 func (t *CollabGetRosterTool) Parameters() map[string]any {
@@ -197,7 +197,7 @@ func (t *CollabGetTopologyTool) Name() string {
 }
 
 func (t *CollabGetTopologyTool) Description() string {
-	return "Fetch same-instance agent neighbor edges [[slug_lo,slug_hi],...], agent topology version, peer_instances (cross-instance orchestration links: instance_id, name), instance_topology_version, and limits. internal_mail_send neighbors are only along edges; peer_instances are linked instances for cross-instance collaboration awareness."
+	return "Fetch same-instance agent edges [[slug_lo,slug_hi],...], peer_instances (account instance-to-instance links), topology versions, limits. internal_mail_send only between slug neighbors on edges; cross-instance messaging uses peer_instances + collab_send_instance_message."
 }
 
 func (t *CollabGetTopologyTool) Parameters() map[string]any {
@@ -298,6 +298,222 @@ func (t *CollabListInternalMailsTool) Execute(ctx context.Context, args map[stri
 	limit := collabArgNonNegInt(args, "limit", 0)
 	offset := collabArgNonNegInt(args, "offset", 0)
 	out, err := t.client.GetInternalMailList(ctx, thread, limit, offset)
+	if err != nil {
+		return ErrorResult(err.Error())
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return ErrorResult(err.Error())
+	}
+	return &ToolResult{ForLLM: string(b)}
+}
+
+// CollabFindPeerInstanceTool 在编排拓扑的 peer_instances 中按名称查找对方实例（用于「联系某某」）。
+type CollabFindPeerInstanceTool struct {
+	client *CollabAPIClient
+}
+
+func NewCollabFindPeerInstanceTool(client *CollabAPIClient) *CollabFindPeerInstanceTool {
+	return &CollabFindPeerInstanceTool{client: client}
+}
+
+func (t *CollabFindPeerInstanceTool) Name() string {
+	return "collab_find_peer_instance"
+}
+
+func (t *CollabFindPeerInstanceTool) Description() string {
+	return "Find a linked peer instance by display name among peer_instances from the account orchestration topology. Returns ordered matches (exact name first, then substring). Use before collab_send_instance_message when the user gives a colleague name instead of instance id."
+}
+
+func (t *CollabFindPeerInstanceTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name": map[string]any{
+				"type":        "string",
+				"description": "Colleague / instance display name (as shown in the roster)",
+			},
+		},
+		"required": []string{"name"},
+	}
+}
+
+func (t *CollabFindPeerInstanceTool) Execute(ctx context.Context, args map[string]any) *ToolResult {
+	if t.client == nil {
+		return ErrorResult("collab API not configured")
+	}
+	name, _ := args["name"].(string)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ErrorResult("name is required")
+	}
+	roster, err := t.client.GetRoster(ctx)
+	if err != nil {
+		return ErrorResult(err.Error())
+	}
+	nl := strings.ToLower(name)
+	var exact, partial []map[string]any
+	for _, p := range roster.PeerInstances {
+		pn := strings.TrimSpace(p.Name)
+		if pn == "" {
+			continue
+		}
+		pl := strings.ToLower(pn)
+		row := map[string]any{"instance_id": p.InstanceID, "name": p.Name}
+		if pl == nl {
+			row["match"] = "exact"
+			exact = append(exact, row)
+		} else if nl != "" && strings.Contains(pl, nl) {
+			row["match"] = "partial"
+			partial = append(partial, row)
+		}
+	}
+	matches := append(exact, partial...)
+	out := map[string]any{
+		"matches":         matches,
+		"peer_instances":  roster.PeerInstances,
+		"not_found":       len(matches) == 0,
+		"ambiguous":       len(matches) > 1,
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return ErrorResult(err.Error())
+	}
+	return &ToolResult{ForLLM: string(b)}
+}
+
+// CollabSendInstanceMessageTool 跨实例发消息（须已在账号编排拓扑中连线）。
+type CollabSendInstanceMessageTool struct {
+	client *CollabAPIClient
+}
+
+func NewCollabSendInstanceMessageTool(client *CollabAPIClient) *CollabSendInstanceMessageTool {
+	return &CollabSendInstanceMessageTool{client: client}
+}
+
+func (t *CollabSendInstanceMessageTool) Name() string {
+	return "collab_send_instance_message"
+}
+
+func (t *CollabSendInstanceMessageTool) Description() string {
+	return "Send a message to another instance (another lobster) that is linked in the account orchestration topology. API enforces the edge; body size cap is in collab_get_roster.limits (max_instance_message_body_kb). Use collab_get_roster or collab_find_peer_instance to obtain to_instance_id."
+}
+
+func (t *CollabSendInstanceMessageTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"to_instance_id": map[string]any{
+				"type":        "number",
+				"description": "Target instance id (from peer_instances)",
+			},
+			"content": map[string]any{
+				"type":        "string",
+				"description": "Message body to deliver to the peer instance",
+			},
+		},
+		"required": []string{"to_instance_id", "content"},
+	}
+}
+
+func (t *CollabSendInstanceMessageTool) Execute(ctx context.Context, args map[string]any) *ToolResult {
+	if t.client == nil {
+		return ErrorResult("collab API not configured")
+	}
+	var toID int64
+	switch v := args["to_instance_id"].(type) {
+	case float64:
+		toID = int64(v)
+	case int:
+		toID = int64(v)
+	case int64:
+		toID = v
+	case json.Number:
+		n, err := v.Int64()
+		if err != nil {
+			return ErrorResult("invalid to_instance_id")
+		}
+		toID = n
+	default:
+		return ErrorResult("to_instance_id is required")
+	}
+	content, _ := args["content"].(string)
+	content = strings.TrimSpace(content)
+	if toID < 1 || content == "" {
+		return ErrorResult("to_instance_id and non-empty content are required")
+	}
+	out, err := t.client.PostInstanceMessage(ctx, toID, content)
+	if err != nil {
+		return ErrorResult(err.Error())
+	}
+	b, _ := json.Marshal(out)
+	return &ToolResult{ForLLM: string(b)}
+}
+
+// CollabListInstanceMessagesTool 分页查询跨实例往来消息。
+type CollabListInstanceMessagesTool struct {
+	client *CollabAPIClient
+}
+
+func NewCollabListInstanceMessagesTool(client *CollabAPIClient) *CollabListInstanceMessagesTool {
+	return &CollabListInstanceMessagesTool{client: client}
+}
+
+func (t *CollabListInstanceMessagesTool) Name() string {
+	return "collab_list_instance_messages"
+}
+
+func (t *CollabListInstanceMessagesTool) Description() string {
+	return "List cross-instance messages for this instance (paginated, newest-first semantics from API). Optional peer instance id filter. Response includes messages, total, limits."
+}
+
+func (t *CollabListInstanceMessagesTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"peer": map[string]any{
+				"type":        "number",
+				"description": "Optional: only messages with this peer instance id",
+			},
+			"limit": map[string]any{
+				"type":        "number",
+				"description": "Page size; omit or 0 for API default",
+			},
+			"offset": map[string]any{
+				"type":        "number",
+				"description": "Offset (default 0)",
+			},
+		},
+		"required": []string{},
+	}
+}
+
+func (t *CollabListInstanceMessagesTool) Execute(ctx context.Context, args map[string]any) *ToolResult {
+	if t.client == nil {
+		return ErrorResult("collab API not configured")
+	}
+	limit := collabArgNonNegInt(args, "limit", 0)
+	offset := collabArgNonNegInt(args, "offset", 0)
+	var peer *int64
+	if v, ok := args["peer"]; ok && v != nil {
+		switch x := v.(type) {
+		case float64:
+			n := int64(x)
+			if n > 0 {
+				peer = &n
+			}
+		case int64:
+			if x > 0 {
+				peer = &x
+			}
+		case json.Number:
+			n, err := x.Int64()
+			if err == nil && n > 0 {
+				peer = &n
+			}
+		}
+	}
+	out, err := t.client.GetInstanceMessageList(ctx, limit, offset, peer)
 	if err != nil {
 		return ErrorResult(err.Error())
 	}

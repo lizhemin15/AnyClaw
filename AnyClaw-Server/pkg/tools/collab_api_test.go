@@ -134,3 +134,44 @@ func TestCollabAPIClient_GetInternalMail(t *testing.T) {
 		t.Fatalf("limits: %#v", out["limits"])
 	}
 }
+
+func TestCollabAPIClient_InstanceMessagesBridge(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/instances/1/collab/bridge/instance-mail", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("token") != "tok" {
+			t.Error("expected token query")
+		}
+		switch r.Method {
+		case http.MethodGet:
+			fmt.Fprint(w, `{"messages":[],"total":0,"limits":{"max_instance_message_list_limit":500}}`)
+		case http.MethodPost:
+			if r.Header.Get("Content-Type") != "application/json" {
+				t.Errorf("expected JSON body: %q", r.Header.Get("Content-Type"))
+			}
+			fmt.Fprint(w, `{"ok":true,"id":9,"limits":{"max_instance_message_body_kb":256}}`)
+		default:
+			http.Error(w, "method", http.StatusMethodNotAllowed)
+		}
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	c := NewCollabAPIClient(srv.URL, "1", "tok")
+	ctx := context.Background()
+
+	list, err := c.GetInstanceMessageList(ctx, 20, 0, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tot, _ := list["total"].(float64); tot != 0 {
+		t.Fatalf("total: %#v", list["total"])
+	}
+
+	post, err := c.PostInstanceMessage(ctx, 2, "hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := post["ok"].(bool); !ok {
+		t.Fatalf("post: %#v", post)
+	}
+}

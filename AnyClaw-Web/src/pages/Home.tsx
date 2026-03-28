@@ -64,7 +64,7 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
   useEffect(() => {
     const st = location.state as {
       orchestrateInstanceId?: number
-      orchestrateCollabTab?: 'topo' | 'mails' | 'inst_mail'
+      orchestrateCollabTab?: 'topo' | 'mails'
     } | null
     const sid = st?.orchestrateInstanceId
     if (sid == null || typeof sid !== 'number') return
@@ -389,7 +389,7 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
       </div>
       {orchMode && instances.length > 0 && (
         <p className="text-xs text-violet-700 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2 mb-3">
-          已开启编排模式：拓扑图展示全部员工实例，可拖拽或点击连线；点击卡片切换邮件/标题上下文；点卡片内「对话 →」进入聊天。
+          已开启编排模式：拓扑图展示全部员工实例，可拖拽或点击连线；点击卡片切换当前实例；点卡片内「对话 →」进入聊天。
         </p>
       )}
       {orchMode && orchInlineInst && (

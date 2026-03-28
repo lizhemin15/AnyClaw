@@ -8,7 +8,6 @@ import {
   type InternalMailRow,
 } from '../api'
 import CollabTopologyPanel from './CollabTopologyPanel'
-import InstanceCrossInstanceMailPanel from './InstanceCrossInstanceMailPanel'
 
 export type HomeCollabOrchestrateModalProps = {
   open: boolean
@@ -17,7 +16,7 @@ export type HomeCollabOrchestrateModalProps = {
   onClose: () => void
   onSaved?: () => void
   /** 打开时默认子标签（如从对话页直达邮件） */
-  initialCollabTab?: 'topo' | 'mails' | 'inst_mail'
+  initialCollabTab?: 'topo' | 'mails'
   /** modal 为弹层；inline 为页面内嵌，仅拓扑（邮件请使用首页「邮箱」） */
   variant?: 'modal' | 'inline'
   /** 协作名单变更后传入以刷新拓扑节点（与 InstanceCollab 保存员工一致） */
@@ -34,7 +33,7 @@ export default function HomeCollabOrchestrateModal({
   variant = 'modal',
   rosterRevision = 0,
 }: HomeCollabOrchestrateModalProps) {
-  const [collabTab, setCollabTab] = useState<'topo' | 'mails' | 'inst_mail'>(initialCollabTab)
+  const [collabTab, setCollabTab] = useState<'topo' | 'mails'>(initialCollabTab)
   const [limits, setLimits] = useState<CollabLimits | null>(null)
   const [mails, setMails] = useState<InternalMailRow[]>([])
   const [mailLoading, setMailLoading] = useState(false)
@@ -53,7 +52,6 @@ export default function HomeCollabOrchestrateModal({
       return
     }
     if (initialCollabTab === 'mails') setCollabTab('mails')
-    else if (initialCollabTab === 'inst_mail') setCollabTab('inst_mail')
     else setCollabTab('topo')
   }, [open, instanceId, initialCollabTab, variant])
 
@@ -245,15 +243,6 @@ export default function HomeCollabOrchestrateModal({
               >
                 邮件
               </button>
-              <button
-                type="button"
-                onClick={() => setCollabTab('inst_mail')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  collabTab === 'inst_mail' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                跨实例
-              </button>
             </div>
           )}
           <p id={orchDescId} className="text-xs text-slate-500 mt-2">
@@ -261,10 +250,8 @@ export default function HomeCollabOrchestrateModal({
               <>拓扑图展示账号下全部招募实例，可连线编排（名单与连线由 API 同步）。</>
             ) : collabTab === 'topo' ? (
               <>编排标签下可拖拽或点击连线；员工列表来自 API。按 Esc 关闭。</>
-            ) : collabTab === 'mails' ? (
-              <>员工之间往来的内部邮件，按时间倒序，最新在最上。按 Esc 关闭。</>
             ) : (
-              <>与编排拓扑中已连线的其他实例互发消息。按 Esc 关闭。</>
+              <>员工之间往来的内部邮件，按时间倒序，最新在最上。按 Esc 关闭。</>
             )}
           </p>
         </div>
@@ -282,13 +269,12 @@ export default function HomeCollabOrchestrateModal({
                   onSaved?.()
                 }}
               />
-              <InstanceCrossInstanceMailPanel instanceId={instanceId} />
             </div>
           ) : (
             <>
               <div
-                className={collabTab === 'mails' || collabTab === 'inst_mail' ? 'hidden' : ''}
-                aria-hidden={collabTab === 'mails' || collabTab === 'inst_mail'}
+                className={collabTab === 'mails' ? 'hidden' : ''}
+                aria-hidden={collabTab === 'mails'}
               >
                 <CollabTopologyPanel
                   key={`${instanceId}-${rosterRevision}`}
@@ -302,7 +288,6 @@ export default function HomeCollabOrchestrateModal({
                   }}
                 />
               </div>
-              {collabTab === 'inst_mail' && <InstanceCrossInstanceMailPanel instanceId={instanceId} />}
               {collabTab === 'mails' && (
                 <div className="space-y-3">
                   {mailErr && (

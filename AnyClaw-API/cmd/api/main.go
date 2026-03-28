@@ -182,6 +182,8 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 	r.Post("/instances/{id}/collab/bridge/resolve", collabHandler.ContainerPostResolve)
 	r.Get("/instances/{id}/collab/bridge/mail/{mailId}", collabHandler.ContainerGetMail)
 	r.Post("/instances/{id}/collab/bridge/mail", collabHandler.ContainerPostMail)
+	r.Get("/instances/{id}/collab/bridge/instance-mail", collabHandler.ContainerListInstanceMail)
+	r.Post("/instances/{id}/collab/bridge/instance-mail", collabHandler.ContainerPostInstanceMail)
 
 	r.Get("/energy/config", energyHandler.GetPublicConfig)
 	r.Route("/energy", func(r chi.Router) {
