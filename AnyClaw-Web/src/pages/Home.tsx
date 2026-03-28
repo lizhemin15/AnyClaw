@@ -18,6 +18,7 @@ import SearchInput from '../components/SearchInput'
 import Pagination from '../components/Pagination'
 import HomeCollabOrchestrateModal from '../components/HomeCollabOrchestrateModal'
 import CompanyMailsModal from '../components/CompanyMailsModal'
+import InstanceMailPanel from '../components/InstanceMailPanel'
 
 const PAGE_SIZE = 8
 
@@ -46,6 +47,7 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
   const [orchInlineInst, setOrchInlineInst] = useState<Instance | null>(null)
   const [instanceListRevision, setInstanceListRevision] = useState(0)
   const [companyMailOpen, setCompanyMailOpen] = useState(false)
+  const [instanceMailOpen, setInstanceMailOpen] = useState(false)
 
   const navigate = useNavigate()
   const location = useLocation()
@@ -378,6 +380,14 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
               >
                 邮箱
               </button>
+              <button
+                type="button"
+                onClick={() => setInstanceMailOpen(true)}
+                className="px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+                title="查看实例之间的跨实例消息往来"
+              >
+                跨实例信箱
+              </button>
             </>
           )}
         </div>
@@ -549,6 +559,7 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
       )}
 
       <CompanyMailsModal open={companyMailOpen} instances={instances} onClose={() => setCompanyMailOpen(false)} />
+      <InstanceMailPanel open={instanceMailOpen} instances={instances} onClose={() => setInstanceMailOpen(false)} />
     </div>
   )
 }
