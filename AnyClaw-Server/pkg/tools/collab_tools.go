@@ -156,7 +156,7 @@ func (t *CollabGetRosterTool) Name() string {
 }
 
 func (t *CollabGetRosterTool) Description() string {
-	return "Fetch roster: agents (agent_slug, display_name), peer_instances (topology-linked other instances: instance_id, name), limits. For cross-instance contact use peer_instances with collab_find_peer_instance / collab_send_instance_message; for same-instance mail use collab_resolve_peer + internal_mail_send."
+	return "Fetch roster: agents (agent_slug, display_name), peer_instances (linked other instances: instance_id, name), limits. Cross-instance contactability is determined only by peer_instances (not by topology edges). Use collab_find_peer_instance / collab_send_instance_message; same-instance mail uses collab_resolve_peer + internal_mail_send."
 }
 
 func (t *CollabGetRosterTool) Parameters() map[string]any {
@@ -197,7 +197,7 @@ func (t *CollabGetTopologyTool) Name() string {
 }
 
 func (t *CollabGetTopologyTool) Description() string {
-	return "Fetch same-instance agent edges [[slug_lo,slug_hi],...], peer_instances (account instance-to-instance links), topology versions, limits. internal_mail_send only between slug neighbors on edges; cross-instance messaging uses peer_instances + collab_send_instance_message."
+	return "Returns same-instance agent edges [[slug_lo,slug_hi],...] (for internal_mail neighbor checks only), plus peer_instances (account instance-to-instance links for cross-instance messaging), versions, limits. IMPORTANT: empty edges does NOT mean no cross-instance peers—judge cross-instance reachability only by peer_instances. internal_mail_send uses edges; collab_send_instance_message uses peer_instances."
 }
 
 func (t *CollabGetTopologyTool) Parameters() map[string]any {
@@ -396,7 +396,7 @@ func (t *CollabSendInstanceMessageTool) Name() string {
 }
 
 func (t *CollabSendInstanceMessageTool) Description() string {
-	return "Send a message to another instance (another lobster) that is linked in the account orchestration topology. API enforces the edge; body size cap is in collab_get_roster.limits (max_instance_message_body_kb). Use collab_get_roster or collab_find_peer_instance to obtain to_instance_id."
+	return "Send a message to another instance (another lobster) linked in peer_instances (account instance-to-instance topology). API enforces that link—not the same-instance edges array. Body size cap: collab_get_roster.limits (max_instance_message_body_kb). Resolve to_instance_id via collab_get_roster or collab_find_peer_instance."
 }
 
 func (t *CollabSendInstanceMessageTool) Parameters() map[string]any {
