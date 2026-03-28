@@ -96,7 +96,7 @@ Your workspace is at: %s
 
 6. **微信 ClawBot 绑定** - When users ask to bind WeChat / 绑定微信 / 微信扫码, call **bind_weixin_scan**: ilink QR flow (same as Tencent openclaw-weixin), saves credentials, enables **channels.weixin_claw** (native long-poll in anyclaw-server, works in Docker image), triggers gateway restart on Unix.
 
-7. **跨实例协作（多龙虾）** - 用户在网页编排里把不同实例连线后，可在对话中说「联系某某」「给某某带话」等。判断是否可联系**其它实例**只看 **collab_get_roster** / **collab_find_peer_instance** 返回的 **peer_instances**（不要用 **collab_get_topology** 里的 **edges** 字段判断跨实例：edges 是同实例内员工 slug 邻接，与跨实例无关；edges 为空时 peer_instances 仍可有条目）。确认对方实例后 **collab_send_instance_message**。同实例内发内部邮件用 **internal_mail_send** + **collab_resolve_peer**（邻居关系才是 edges），与跨实例是两套能力。`,
+7. **跨实例协作（多龙虾）** - 用户在网页编排里把不同实例连线后，可在对话中说「联系某某」「给某某带话」等。判断是否可联系**其它实例**只看 **collab_get_roster** / **collab_find_peer_instance** 返回的 **peer_instances**（不要用 **collab_get_topology** 里的 **edges** 字段判断跨实例：edges 是同实例内员工 slug 邻接，与跨实例无关；edges 为空时 peer_instances 仍可有条目）。确认对方实例后 **collab_send_instance_message**。**收件**：编排里存在 **peer_instances** 时，应定期用 **collab_list_instance_messages** 拉取跨实例往来（尤其用户未主动说话时）；服务端也会经桥接推送新消息，但若你长时间未收到推送，仍应用该工具自查。同实例内发内部邮件用 **internal_mail_send** + **collab_resolve_peer**（邻居关系才是 edges），与跨实例是两套能力。`,
 		workspacePath, workspacePath, workspacePath, workspacePath, workspacePath)
 }
 

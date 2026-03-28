@@ -653,6 +653,11 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		return al.processInternalMailMessage(ctx, msg)
 	}
 
+	// Cross-instance message (WS collab.instance_mail from API); recipient container only
+	if msg.Channel == "instance_mail" {
+		return al.processInstanceMailMessage(ctx, msg)
+	}
+
 	route, agent, routeErr := al.resolveMessageRoute(msg)
 
 	// Commands are checked before requiring a successful route.
@@ -737,6 +742,42 @@ func (al *AgentLoop) processInternalMailMessage(ctx context.Context, msg bus.Inb
 		ChatID:          msg.ChatID,
 		UserMessage:     msg.Content,
 		DefaultResponse: "Internal mail processed. Use internal_mail_send to reply or forward (neighbor only).",
+		EnableSummary:   false,
+		SendResponse:    false,
+	})
+}
+
+func (al *AgentLoop) processInstanceMailMessage(ctx context.Context, msg bus.InboundMessage) (string, error) {
+	agent := al.registry.GetDefaultAgent()
+	if agent == nil {
+		return "", fmt.Errorf("instance_mail: no default agent")
+	}
+	sessionKey := strings.TrimSpace(msg.SessionKey)
+	if sessionKey == "" {
+		from := strings.TrimSpace(msg.Metadata["from_instance_id"])
+		if from == "" {
+			return "", fmt.Errorf("instance_mail: missing from_instance_id")
+		}
+		sessionKey = fmt.Sprintf("agent:%s:instance_mail:%s", routing.NormalizeAgentID(routing.DefaultAgentID), from)
+	}
+	logger.InfoCF("agent", "Processing cross-instance message",
+		map[string]any{
+			"session_key": sessionKey,
+			"msg_id":      msg.Metadata["msg_id"],
+		})
+
+	if tool, ok := agent.Tools.Get("message"); ok {
+		if resetter, ok := tool.(interface{ ResetSentInRound() }); ok {
+			resetter.ResetSentInRound()
+		}
+	}
+
+	return al.runAgentLoop(ctx, agent, processOptions{
+		SessionKey:      sessionKey,
+		Channel:         "instance_mail",
+		ChatID:          msg.ChatID,
+		UserMessage:     msg.Content,
+		DefaultResponse: "跨实例消息已处理。回复对方请使用 collab_send_instance_message 或 collab_find_peer_instance。",
 		EnableSummary:   false,
 		SendResponse:    false,
 	})

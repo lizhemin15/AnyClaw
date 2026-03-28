@@ -175,3 +175,22 @@ func TestCollabAPIClient_InstanceMessagesBridge(t *testing.T) {
 		t.Fatalf("post: %#v", post)
 	}
 }
+
+func TestCollabAPIClient_GetInstanceMessageByID(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/instances/1/collab/bridge/instance-mail", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"messages":[{"id":7,"user_id":1,"from_instance_id":2,"to_instance_id":1,"content":"hello peer","created_at":"2026-01-01 00:00:00"}],"total":1}`)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	c := NewCollabAPIClient(srv.URL, "1", "tok")
+	ctx := context.Background()
+	row, err := c.GetInstanceMessageByID(ctx, 7, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row["content"] != "hello peer" {
+		t.Fatalf("content: %#v", row["content"])
+	}
+}

@@ -13,6 +13,22 @@ import (
 	"time"
 )
 
+func collabJSONInt64(v any) (int64, bool) {
+	switch x := v.(type) {
+	case float64:
+		return int64(x), true
+	case int64:
+		return x, true
+	case int:
+		return int64(x), true
+	case json.Number:
+		n, err := x.Int64()
+		return n, err == nil
+	default:
+		return 0, false
+	}
+}
+
 // CollabAPIClient 调用 AnyClaw-API 协作接口（容器 token）
 type CollabAPIClient struct {
 	BaseURL    string
@@ -226,6 +242,53 @@ func (c *CollabAPIClient) GetInstanceMessageList(ctx context.Context, limit, off
 		return nil, fmt.Errorf("decode instance messages: %w", err)
 	}
 	return out, nil
+}
+
+// GetInstanceMessageByID returns one row from the instance-mail list API by message id.
+// When peerID > 0, the list is filtered to that peer first (smaller result); falls back to unfiltered list.
+func (c *CollabAPIClient) GetInstanceMessageByID(ctx context.Context, msgID int64, peerID int64) (map[string]any, error) {
+	if msgID < 1 {
+		return nil, fmt.Errorf("invalid message id")
+	}
+	try := func(peer *int64) (map[string]any, bool, error) {
+		out, err := c.GetInstanceMessageList(ctx, 500, 0, peer)
+		if err != nil {
+			return nil, false, err
+		}
+		raw, ok := out["messages"].([]any)
+		if !ok {
+			return nil, false, fmt.Errorf("instance messages: missing messages array")
+		}
+		for _, m := range raw {
+			row, ok := m.(map[string]any)
+			if !ok {
+				continue
+			}
+			id, ok := collabJSONInt64(row["id"])
+			if ok && id == msgID {
+				return row, true, nil
+			}
+		}
+		return nil, false, nil
+	}
+	var peer *int64
+	if peerID > 0 {
+		p := peerID
+		peer = &p
+	}
+	if row, found, err := try(peer); err != nil {
+		return nil, err
+	} else if found {
+		return row, nil
+	}
+	if peer != nil {
+		if row, found, err := try(nil); err != nil {
+			return nil, err
+		} else if found {
+			return row, nil
+		}
+	}
+	return nil, fmt.Errorf("instance message id %d not found", msgID)
 }
 
 // PostInstanceMessage 向编排拓扑中已连线的另一实例发送跨实例消息（容器 token）。

@@ -4,10 +4,11 @@ package constants
 // internalChannels defines channels that are used for internal communication
 // and should not be exposed to external users or recorded as last active channel.
 var internalChannels = map[string]struct{}{
-	"cli":           {},
-	"system":        {},
-	"subagent":      {},
-	"internal_mail": {},
+	"cli":            {},
+	"system":         {},
+	"subagent":       {},
+	"internal_mail":  {},
+	"instance_mail": {},
 }
 
 // IsInternalChannel returns true if the channel is an internal channel.

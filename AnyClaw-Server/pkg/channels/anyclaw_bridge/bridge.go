@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -314,6 +315,8 @@ func (c *BridgeChannel) handleMessage(bc *bridgeConn, msg pico.PicoMessage) {
 		c.handleCollabTopologyUpdated(msg)
 	case "collab.internal_mail":
 		c.handleCollabInternalMail(msg)
+	case "collab.instance_mail":
+		c.handleCollabInstanceMail(msg)
 	default:
 		logger.DebugCF(channelName, "Unknown message type", map[string]any{"type": msg.Type})
 	}
@@ -380,6 +383,92 @@ func (c *BridgeChannel) handleCollabInternalMail(msg pico.PicoMessage) {
 	}
 	if err := c.MessageBus().PublishInbound(c.ctx, in); err != nil {
 		logger.WarnCF(channelName, "publish internal_mail inbound failed", map[string]any{"error": err.Error()})
+	}
+}
+
+// handleCollabInstanceMail handles API push for cross-instance messages (recipient container only).
+func (c *BridgeChannel) handleCollabInstanceMail(msg pico.PicoMessage) {
+	if c.collabClient == nil || msg.Payload == nil {
+		return
+	}
+	msgID, ok := tools.CollabMailIDFromNotify(msg.Payload)
+	if !ok || msgID < 1 {
+		logger.WarnCF(channelName, "collab.instance_mail missing id", nil)
+		return
+	}
+	fromID, ok1 := collabPeerInstanceID(msg.Payload, "from_instance_id")
+	toID, ok2 := collabPeerInstanceID(msg.Payload, "to_instance_id")
+	if !ok1 || !ok2 || fromID < 1 || toID < 1 {
+		logger.WarnCF(channelName, "collab.instance_mail missing from/to instance", nil)
+		return
+	}
+	myID, err := strconv.ParseInt(strings.TrimSpace(c.config.InstanceID), 10, 64)
+	if err != nil || myID < 1 {
+		return
+	}
+	if myID != toID {
+		// Sender's container also receives the same WS frame; only the recipient should inject inbound.
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	row, err := c.collabClient.GetInstanceMessageByID(ctx, msgID, fromID)
+	if err != nil {
+		logger.WarnCF(channelName, "fetch instance message failed", map[string]any{"id": msgID, "error": err.Error()})
+		return
+	}
+	content := collabMapString(row, "content")
+	if strings.TrimSpace(content) == "" {
+		logger.WarnCF(channelName, "instance message row incomplete", map[string]any{"id": msgID})
+		return
+	}
+	agentSlug := routing.NormalizeAgentID(routing.DefaultAgentID)
+	sessionKey := fmt.Sprintf("agent:%s:instance_mail:%d", agentSlug, fromID)
+	chatID := fmt.Sprintf("instance_mail:%d", fromID)
+	meta := map[string]string{
+		"from_instance_id": fmt.Sprintf("%d", fromID),
+		"to_instance_id":   fmt.Sprintf("%d", toID),
+		"msg_id":           fmt.Sprintf("%d", msgID),
+	}
+	if ts := collabMapString(row, "created_at"); ts != "" {
+		meta["created_at"] = ts
+	}
+	userText := fmt.Sprintf(
+		"[跨实例消息 id=%d]\nFrom instance: %d\nTo instance: %d\n\n%s",
+		msgID, fromID, toID, content,
+	)
+	in := bus.InboundMessage{
+		Channel:    "instance_mail",
+		SenderID:   fmt.Sprintf("instance:%d", fromID),
+		ChatID:     chatID,
+		Content:    userText,
+		Metadata:   meta,
+		SessionKey: sessionKey,
+		Peer:       bus.Peer{Kind: "direct", ID: chatID},
+		MessageID:  fmt.Sprintf("imsg-%d", msgID),
+	}
+	if err := c.MessageBus().PublishInbound(c.ctx, in); err != nil {
+		logger.WarnCF(channelName, "publish instance_mail inbound failed", map[string]any{"error": err.Error()})
+	}
+}
+
+func collabPeerInstanceID(payload map[string]any, key string) (int64, bool) {
+	v, ok := payload[key]
+	if !ok || v == nil {
+		return 0, false
+	}
+	switch x := v.(type) {
+	case float64:
+		return int64(x), true
+	case int64:
+		return x, true
+	case int:
+		return int64(x), true
+	case json.Number:
+		n, err := x.Int64()
+		return n, err == nil
+	default:
+		return 0, false
 	}
 }
 
