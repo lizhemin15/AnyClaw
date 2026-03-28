@@ -125,8 +125,8 @@ export default function Layout({ user, onLogout, children }: LayoutProps) {
         {user?.role === 'admin' && (
           <>
             <SafeLink to="/admin/config" className={`flex-1 flex flex-col items-center py-2 px-1 active:bg-slate-50 ${isConfig ? 'text-slate-800 font-medium' : 'text-slate-500'}`}>
-              <span className="text-base">🤖</span>
-              <span className="text-[10px] mt-0.5">AI</span>
+              <span className="text-base">⚙️</span>
+              <span className="text-[10px] mt-0.5">配置</span>
             </SafeLink>
             <SafeLink to="/admin/stats" className={`flex-1 flex flex-col items-center py-2 px-1 active:bg-slate-50 ${isStats ? 'text-slate-800 font-medium' : 'text-slate-500'}`}>
               <span className="text-base">📈</span>

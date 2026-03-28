@@ -12,6 +12,29 @@ function genModelId() {
   return 'm-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
 }
 
+/** 将后端 UTC 构建时间转为北京时间展示：YYYY-MM-DD HH:mm:ss（北京时间） */
+function formatBuildTimeBeijing(raw: string | undefined): string {
+  if (!raw?.trim()) return '—'
+  const s = raw.trim()
+  const hasTz = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)
+  const isoLike = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(s)
+  const normalized = hasTz ? s : isoLike ? s.replace(' ', 'T') + 'Z' : s
+  const d = new Date(normalized)
+  if (Number.isNaN(d.getTime())) return raw
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(d)
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? ''
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}（北京时间）`
+}
+
 // ASR（语音识别）支持 Whisper，Groq 与 ChatAnywhere 均可用
 const ASR_PROVIDERS: { id: string; name: string; endpoint: string }[] = [
   { id: 'chatanywhere', name: 'ChatAnywhere', endpoint: 'https://api.chatanywhere.org/v1' },
@@ -438,7 +461,7 @@ export default function AdminConfig() {
           <div className="font-medium text-slate-800 mb-2">镜像版本</div>
           <div>
             <span className="text-slate-500">管理端（manager）</span>{' '}
-            {runtimeVersion.manager.git_commit || '—'} · {runtimeVersion.manager.build_time || '—'}
+            {runtimeVersion.manager.git_commit || '—'} · {formatBuildTimeBeijing(runtimeVersion.manager.build_time)}
             {runtimeVersion.manager.image_tag ? ` · ${runtimeVersion.manager.image_tag}` : ''}
           </div>
           <div className="mt-1">
