@@ -394,6 +394,23 @@ func (d *DB) SyncCollabAgentsFromStoredSlugs(instanceID, userID int64, extraSlug
 	if err != nil {
 		return 0, err
 	}
+	if len(ia) == 0 {
+		var nm sql.NullString
+		if err := d.QueryRow(`SELECT name FROM instances WHERE id = ?`, instanceID).Scan(&nm); err != nil {
+			return 0, err
+		}
+		name := ""
+		if nm.Valid {
+			name = nm.String
+		}
+		if err := d.SeedDefaultCollabAgentsForNewInstance(instanceID, userID, name); err != nil {
+			return 0, err
+		}
+		ia, err = d.ListInstanceAgents(instanceID)
+		if err != nil {
+			return 0, err
+		}
+	}
 	seen := make(map[string]struct{})
 	for _, s := range jsonNorm {
 		seen[s] = struct{}{}

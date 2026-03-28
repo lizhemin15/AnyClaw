@@ -1,6 +1,17 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { getInstances, createInstance, deleteInstance, subscribeInstance, updateInstanceName, getAuthConfig, getEnergyConfig, type Instance, type User } from '../api'
+import {
+  getInstances,
+  createInstance,
+  deleteInstance,
+  subscribeInstance,
+  updateInstanceName,
+  getAuthConfig,
+  getEnergyConfig,
+  getCollabAgents,
+  type Instance,
+  type User,
+} from '../api'
 import SearchInput from '../components/SearchInput'
 import Pagination from '../components/Pagination'
 import HomeCollabOrchestrateModal from '../components/HomeCollabOrchestrateModal'
@@ -72,6 +83,12 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
       return filtered[0] ?? instances[0]
     })
   }, [orchMode, instances, filtered])
+
+  /** 编排模式开启时：对每个实例请求协作名单以触发 API 同步（工作区 agents.list、协作表补全） */
+  useEffect(() => {
+    if (!orchMode || instances.length === 0) return
+    void Promise.allSettled(instances.map((i) => getCollabAgents(i.id)))
+  }, [orchMode, instances])
 
   useEffect(() => {
     setPage(1)
@@ -361,6 +378,9 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
             instanceName={orchInlineInst.name}
             onClose={() => setOrchMode(false)}
             onSaved={loadInstances}
+            companyInstances={instances}
+            selectedCompanyInstanceId={orchInlineInst.id}
+            onSelectCompanyInstance={setOrchInlineInst}
           />
         </div>
       )}

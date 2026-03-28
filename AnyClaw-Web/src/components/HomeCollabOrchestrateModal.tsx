@@ -5,9 +5,11 @@ import {
   getCollabMails,
   type CollabApiError,
   type CollabLimits,
+  type Instance,
   type InternalMailRow,
 } from '../api'
 import CollabTopologyPanel from './CollabTopologyPanel'
+import CompanyInstanceNodesPanel from './CompanyInstanceNodesPanel'
 
 export type HomeCollabOrchestrateModalProps = {
   open: boolean
@@ -21,6 +23,10 @@ export type HomeCollabOrchestrateModalProps = {
   variant?: 'modal' | 'inline'
   /** 协作名单变更后传入以刷新拓扑节点（与 InstanceCollab 保存员工一致） */
   rosterRevision?: number
+  /** 首页编排：账号下全部实例（已招募员工），用于公司节点画布 */
+  companyInstances?: Instance[]
+  selectedCompanyInstanceId?: number | null
+  onSelectCompanyInstance?: (inst: Instance) => void
 }
 
 export default function HomeCollabOrchestrateModal({
@@ -32,6 +38,9 @@ export default function HomeCollabOrchestrateModal({
   initialCollabTab = 'topo',
   variant = 'modal',
   rosterRevision = 0,
+  companyInstances,
+  selectedCompanyInstanceId = null,
+  onSelectCompanyInstance,
 }: HomeCollabOrchestrateModalProps) {
   const [collabTab, setCollabTab] = useState<'topo' | 'mails'>(initialCollabTab)
   const [limits, setLimits] = useState<CollabLimits | null>(null)
@@ -246,7 +255,7 @@ export default function HomeCollabOrchestrateModal({
           )}
           <p id={orchDescId} className="text-xs text-slate-500 mt-2">
             {variant === 'inline' ? (
-              <>拓扑画布见下方；协作成员节点由 API 自动拉取（与容器 agents.list 同步）。展示名请在「协作展示名」页修改。内部邮件汇总请点首页「邮箱」。</>
+              <>上方为公司员工；下方为当前实例内协作拓扑（名单由 API 自动同步）。</>
             ) : collabTab === 'topo' ? (
               <>编排标签下可拖拽或点击连线；员工列表来自 API。按 Esc 关闭。</>
             ) : (
@@ -255,17 +264,26 @@ export default function HomeCollabOrchestrateModal({
           </p>
         </div>
 
-        <div className="px-5 py-4 flex-1 overflow-y-auto min-h-0">
+        <div className="px-5 py-4 flex-1 overflow-y-auto min-h-0 space-y-4">
           {variant === 'inline' ? (
-            <CollabTopologyPanel
-              key={`${instanceId}-${rosterRevision}`}
-              instanceId={instanceId}
-              rosterRevision={rosterRevision}
-              onDirtyChange={setTopoDirty}
-              onTopologySaved={() => {
-                onSaved?.()
-              }}
-            />
+            <>
+              {companyInstances && companyInstances.length > 0 && onSelectCompanyInstance ? (
+                <CompanyInstanceNodesPanel
+                  instances={companyInstances}
+                  selectedId={selectedCompanyInstanceId}
+                  onSelect={onSelectCompanyInstance}
+                />
+              ) : null}
+              <CollabTopologyPanel
+                key={`${instanceId}-${rosterRevision}`}
+                instanceId={instanceId}
+                rosterRevision={rosterRevision}
+                onDirtyChange={setTopoDirty}
+                onTopologySaved={() => {
+                  onSaved?.()
+                }}
+              />
+            </>
           ) : (
             <>
               <div className={collabTab === 'mails' ? 'hidden' : ''} aria-hidden={collabTab === 'mails'}>
