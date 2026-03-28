@@ -4,7 +4,6 @@ import {
   broadcastCollabEvent,
   getCollabAgents,
   getCollabInstanceMails,
-  getCollabInstanceTopology,
   getInstances,
   postCollabInstanceMail,
   type CollabApiError,
@@ -15,19 +14,6 @@ import {
 } from '../api'
 import { collabInstanceId } from './collabTopologyUtils'
 
-function neighborInstanceIds(edges: [unknown, unknown][], selfId: number): number[] {
-  const sid = collabInstanceId(selfId) ?? selfId
-  const s = new Set<number>()
-  for (const [x, y] of edges || []) {
-    const a = collabInstanceId(x)
-    const b = collabInstanceId(y)
-    if (a == null || b == null) continue
-    if (a === sid) s.add(b)
-    else if (b === sid) s.add(a)
-  }
-  return [...s].sort((x, y) => x - y)
-}
-
 function neighborIdsFromPeers(peers: CollabPeerInstance[] | undefined, selfId: number): number[] {
   const sid = collabInstanceId(selfId) ?? selfId
   const s = new Set<number>()
@@ -36,10 +22,6 @@ function neighborIdsFromPeers(peers: CollabPeerInstance[] | undefined, selfId: n
     if (id != null && id !== sid) s.add(id)
   }
   return [...s].sort((x, y) => x - y)
-}
-
-function mergeSortedUniqueIds(a: number[], b: number[]): number[] {
-  return [...new Set([...a, ...b])].sort((x, y) => x - y)
 }
 
 export type InstanceCrossInstanceMailPanelProps = {
@@ -83,19 +65,22 @@ export default function InstanceCrossInstanceMailPanel({
 
   const loadMeta = useCallback(async () => {
     const expected = instanceId
-    const [instList, topo, roster] = await Promise.all([
-      getInstances(),
-      getCollabInstanceTopology(expected),
-      getCollabAgents(expected).catch(() => null),
-    ])
-    if (instanceIdRef.current !== expected) return
-    setInstances(instList)
-    const fromEdges = neighborInstanceIds(topo.edges || [], expected)
-    const fromPeers = roster?.peer_instances ? neighborIdsFromPeers(roster.peer_instances, expected) : []
-    setNeighborIds(mergeSortedUniqueIds(fromEdges, fromPeers))
-    if (topo.limits) {
-      const lim = topo.limits
-      setLimits((prev) => (prev ? { ...prev, ...lim } : lim))
+    try {
+      const [instList, roster] = await Promise.all([getInstances(), getCollabAgents(expected)])
+      if (instanceIdRef.current !== expected) return
+      setInstances(instList)
+      setNeighborIds(neighborIdsFromPeers(roster.peer_instances, expected))
+      setErr(null)
+      if (roster.limits) {
+        const lim = roster.limits
+        setLimits((prev) => (prev ? { ...prev, ...lim } : lim))
+      }
+    } catch (e) {
+      if (instanceIdRef.current !== expected) return
+      const lim = (e as CollabApiError).collabLimits
+      if (lim) setLimits(lim)
+      setErr(e instanceof Error ? e.message : String(e))
+      setNeighborIds([])
     }
   }, [instanceId])
 
@@ -186,7 +171,7 @@ export default function InstanceCrossInstanceMailPanel({
       return
     }
     if (!neighborIds.includes(tid)) {
-      setErr('仅可向编排拓扑中已连线的实例发送')
+      setErr('仅可向协作邻居实例发送')
       return
     }
     setSending(true)
@@ -221,7 +206,7 @@ export default function InstanceCrossInstanceMailPanel({
       <div>
         <h3 className="text-sm font-medium text-slate-800">跨实例消息</h3>
         <p className="text-xs text-slate-500 mt-1">
-          仅可与账号编排拓扑中已连线的实例通信；正文上限约 {maxBodyKb} KB。
+          与账号编排拓扑中的协作邻居互发消息；正文上限约 {maxBodyKb} KB。
         </p>
       </div>
 
@@ -240,7 +225,7 @@ export default function InstanceCrossInstanceMailPanel({
               setToId(v === '' ? '' : parseInt(v, 10))
             }}
           >
-            <option value="">选择已连线实例…</option>
+            <option value="">选择协作邻居实例…</option>
             {neighborIds.map((id) => (
               <option key={id} value={id}>
                 {nameById.get(id) ?? `#${id}`} (#{id})
