@@ -9,18 +9,23 @@ import {
   type UserInstanceMessageRow,
 } from '../api'
 
-export type MailboxTab = 'internal' | 'cross'
+export type MailboxTab = 'all' | 'internal' | 'cross'
 
 type Props = {
   open: boolean
   instances: Instance[]
   onClose: () => void
-  /** 打开时默认选中的标签（如从编排跳转「邮件」时用 internal） */
+  /** 打开时默认选中的标签 */
   initialTab?: MailboxTab
 }
 
 const INTERNAL_PAGE = 80
 const CROSS_PAGE = 120
+const READ_STORAGE = 'anyclaw-mailbox-read-v1'
+
+type UnifiedItem =
+  | { kind: 'internal'; row: InternalMailRow; sortKey: string }
+  | { kind: 'cross'; row: UserInstanceMessageRow; sortKey: string }
 
 function mergeDedupe(rows: UserInstanceMessageRow[][]): UserInstanceMessageRow[] {
   const byId = new Map<number, UserInstanceMessageRow>()
@@ -32,10 +37,36 @@ function mergeDedupe(rows: UserInstanceMessageRow[][]): UserInstanceMessageRow[]
   return [...byId.values()].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
 }
 
-export default function MailboxModal({ open, instances, onClose, initialTab = 'internal' }: Props) {
-  const [tab, setTab] = useState<MailboxTab>(initialTab)
+function itemKey(u: UnifiedItem): string {
+  return u.kind === 'internal' ? `i:${u.row.instance_id}:${u.row.id}` : `c:${u.row.id}`
+}
 
-  /* —— 内部邮件 —— */
+function previewText(s: string, max = 72): string {
+  const line = s.replace(/\s+/g, ' ').trim()
+  if (!line) return ''
+  return line.length > max ? `${line.slice(0, max)}…` : line
+}
+
+function formatMailTime(iso: string): string {
+  try {
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return iso
+    return d.toLocaleString('zh-CN', {
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return iso
+  }
+}
+
+export default function MailboxModal({ open, instances, onClose, initialTab = 'all' }: Props) {
+  const [tab, setTab] = useState<MailboxTab>(initialTab)
+  const [readIds, setReadIds] = useState<Set<string>>(() => new Set())
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+
   const [internalRows, setInternalRows] = useState<InternalMailRow[]>([])
   const [internalLoading, setInternalLoading] = useState(false)
   const [internalLoadingMore, setInternalLoadingMore] = useState(false)
@@ -44,11 +75,9 @@ export default function MailboxModal({ open, instances, onClose, initialTab = 'i
   const internalOffsetRef = useRef<Record<number, number>>({})
   const internalExhaustedRef = useRef<Set<number>>(new Set())
 
-  /* —— 跨实例 —— */
   const [crossRows, setCrossRows] = useState<UserInstanceMessageRow[]>([])
   const [crossLoading, setCrossLoading] = useState(false)
   const [crossErr, setCrossErr] = useState<string | null>(null)
-  const [peerFilter, setPeerFilter] = useState<number | null>(null)
   const [sendFrom, setSendFrom] = useState<number | null>(null)
   const [sendTo, setSendTo] = useState<number | null>(null)
   const [sendBody, setSendBody] = useState('')
@@ -149,19 +178,32 @@ export default function MailboxModal({ open, instances, onClose, initialTab = 'i
   }, [open, initialTab])
 
   useEffect(() => {
-    if (!open || tab !== 'internal') return
-    void loadInternalPage(true)
+    if (!open) return
+    if (tab === 'all' || tab === 'internal') void loadInternalPage(true)
   }, [open, tab, loadInternalPage])
 
   useEffect(() => {
-    if (!open || tab !== 'cross') return
-    void loadCrossAll()
+    if (!open) return
+    if (tab === 'all' || tab === 'cross') void loadCrossAll()
   }, [open, tab, loadCrossAll])
 
   useEffect(() => {
     if (!open) {
-      setPeerFilter(null)
       setSendBody('')
+      setSelectedKey(null)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    try {
+      const raw = localStorage.getItem(READ_STORAGE)
+      if (raw) {
+        const arr = JSON.parse(raw) as unknown
+        if (Array.isArray(arr)) setReadIds(new Set(arr.filter((x): x is string => typeof x === 'string')))
+      }
+    } catch {
+      /* ignore */
     }
   }, [open])
 
@@ -203,6 +245,51 @@ export default function MailboxModal({ open, instances, onClose, initialTab = 'i
     return list
   }, [internalRows])
 
+  const unifiedList = useMemo((): UnifiedItem[] => {
+    const items: UnifiedItem[] = []
+    if (tab === 'all' || tab === 'internal') {
+      for (const row of internalMergedSorted) {
+        items.push({ kind: 'internal', row, sortKey: row.created_at || '' })
+      }
+    }
+    if (tab === 'all' || tab === 'cross') {
+      for (const row of crossRows) {
+        items.push({ kind: 'cross', row, sortKey: row.created_at || '' })
+      }
+    }
+    items.sort((a, b) => b.sortKey.localeCompare(a.sortKey))
+    return items
+  }, [tab, internalMergedSorted, crossRows])
+
+  const markRead = useCallback((key: string) => {
+    setReadIds((prev) => {
+      if (prev.has(key)) return prev
+      const next = new Set(prev)
+      next.add(key)
+      try {
+        localStorage.setItem(READ_STORAGE, JSON.stringify([...next]))
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+  }, [])
+
+  const selectItem = useCallback(
+    (u: UnifiedItem) => {
+      const k = itemKey(u)
+      setSelectedKey(k)
+      markRead(k)
+    },
+    [markRead]
+  )
+
+  useEffect(() => {
+    if (!selectedKey) return
+    const still = unifiedList.some((u) => itemKey(u) === selectedKey)
+    if (!still) setSelectedKey(null)
+  }, [unifiedList, selectedKey])
+
   const loadMoreInternal = async () => {
     if (internalLoadingMore || internalLoading || !internalHasMore) return
     setInternalLoadingMore(true)
@@ -213,28 +300,10 @@ export default function MailboxModal({ open, instances, onClose, initialTab = 'i
     }
   }
 
-  const peerActivity = useMemo(() => {
-    const m = new Map<number, string>()
-    for (const row of crossRows) {
-      for (const pid of [row.from_instance_id, row.to_instance_id]) {
-        const t = row.created_at || ''
-        const prev = m.get(pid)
-        if (!prev || t > prev) m.set(pid, t)
-      }
-    }
-    return m
-  }, [crossRows])
-
-  const peerIdsSorted = useMemo(() => {
-    const ids = [...peerActivity.keys()]
-    ids.sort((a, b) => (peerActivity.get(b) || '').localeCompare(peerActivity.get(a) || ''))
-    return ids
-  }, [peerActivity])
-
-  const crossFiltered = useMemo(() => {
-    if (peerFilter == null) return crossRows
-    return crossRows.filter((m) => m.from_instance_id === peerFilter || m.to_instance_id === peerFilter)
-  }, [crossRows, peerFilter])
+  const selectedItem = useMemo(() => {
+    if (!selectedKey) return null
+    return unifiedList.find((u) => itemKey(u) === selectedKey) ?? null
+  }, [unifiedList, selectedKey])
 
   const handleSendCross = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -256,194 +325,290 @@ export default function MailboxModal({ open, instances, onClose, initialTab = 'i
     }
   }
 
+  const listLoading =
+    (tab === 'all' && (internalLoading || crossLoading)) ||
+    (tab === 'internal' && internalLoading) ||
+    (tab === 'cross' && crossLoading)
+
+  const listEmpty = !listLoading && unifiedList.length === 0
+
   if (!open) return null
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
+      className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-black/50"
       role="dialog"
       aria-modal="true"
       aria-labelledby="mailbox-title"
       onClick={() => onClose()}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col border border-slate-200"
+        className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[92vh] flex flex-col border border-slate-200/90 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 pt-4 pb-2 border-b border-slate-100">
-          <h2 id="mailbox-title" className="text-lg font-semibold text-slate-800">
-            信箱
-          </h2>
-          <p className="text-xs text-slate-500 mt-2">内部邮件与跨实例消息统一管理。按 Esc 关闭。</p>
-          <div className="flex gap-1 mt-3" role="tablist" aria-label="信箱类型">
+        <header className="flex-shrink-0 px-4 sm:px-5 pt-4 pb-0 border-b border-slate-200 bg-gradient-to-b from-slate-50/90 to-white">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <h2 id="mailbox-title" className="text-lg font-semibold text-slate-900 tracking-tight">
+                邮箱
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">内部邮件与跨实例消息 · Esc 关闭</p>
+            </div>
             <button
               type="button"
-              role="tab"
-              aria-selected={tab === 'internal'}
-              onClick={() => setTab('internal')}
-              className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
-                tab === 'internal'
-                  ? 'border-violet-500 bg-violet-50 text-violet-900 font-medium'
-                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
+              onClick={() => onClose()}
+              className="text-slate-400 hover:text-slate-700 p-1 rounded-md hover:bg-slate-100 text-xl leading-none"
+              aria-label="关闭"
             >
-              内部邮件
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === 'cross'}
-              onClick={() => setTab('cross')}
-              className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
-                tab === 'cross'
-                  ? 'border-indigo-500 bg-indigo-50 text-indigo-900 font-medium'
-                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              跨实例消息
+              ×
             </button>
           </div>
-        </div>
+          <div className="flex gap-0 border-b border-transparent -mb-px" role="tablist" aria-label="邮件分类">
+            {(
+              [
+                { id: 'all' as const, label: '全部' },
+                { id: 'internal' as const, label: '内部邮件' },
+                { id: 'cross' as const, label: '跨实例消息' },
+              ] as const
+            ).map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={tab === id}
+                onClick={() => {
+                  setTab(id)
+                  setSelectedKey(null)
+                }}
+                className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  tab === id
+                    ? 'border-blue-600 text-blue-700 bg-white'
+                    : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </header>
 
-        {tab === 'internal' && (
-          <div className="px-5 py-4 flex-1 overflow-y-auto min-h-0">
-            {internalErr && (
-              <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 mb-3">{internalErr}</div>
-            )}
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-              <p className="text-xs text-slate-500">同实例内员工往来 · 共 {instances.length} 名员工（实例）</p>
+        <div className="flex flex-1 min-h-0 flex-col md:flex-row">
+          <aside className="w-full md:w-[min(100%,380px)] md:flex-shrink-0 flex flex-col border-b md:border-b-0 md:border-r border-slate-200 bg-slate-50/50 min-h-[200px] md:min-h-0 md:max-w-[42%]">
+            <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-200/80 bg-white/80">
+              <span className="text-xs text-slate-500">
+                {listLoading ? '加载中…' : `共 ${unifiedList.length} 封`}
+              </span>
               <button
                 type="button"
-                disabled={internalLoading}
-                onClick={() => void loadInternalPage(true)}
-                className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                disabled={internalLoading || crossLoading}
+                onClick={() => {
+                  if (tab === 'all' || tab === 'internal') void loadInternalPage(true)
+                  if (tab === 'all' || tab === 'cross') void loadCrossAll()
+                }}
+                className="text-xs px-2.5 py-1 rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
               >
-                {internalLoading ? '刷新中…' : '刷新'}
+                刷新
               </button>
             </div>
-            {internalLoading && internalMergedSorted.length === 0 ? (
-              <p className="text-slate-500 text-sm py-12 text-center">加载邮件…</p>
-            ) : internalMergedSorted.length === 0 ? (
-              <p className="text-slate-400 text-sm py-8 text-center">暂无内部邮件</p>
-            ) : (
-              <div className="space-y-3">
-                {internalMergedSorted.map((m) => (
-                  <div key={`${m.instance_id}-${m.id}`} className="border border-slate-200 rounded-xl p-3 bg-slate-50/40 space-y-1.5">
-                    <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-slate-500">
-                      <span className="font-medium text-violet-700">{idToName.get(m.instance_id) ?? `#${m.instance_id}`}</span>
-                      <span className="font-mono">#{m.id}</span>
-                      <span>{m.created_at}</span>
-                      <span>
-                        {m.from_slug} → {m.to_slug}
-                      </span>
-                      {m.thread_id ? (
-                        <code className="text-[10px] bg-slate-200/80 px-1 rounded max-w-[200px] truncate" title={m.thread_id}>
-                          {m.thread_id}
-                        </code>
-                      ) : null}
-                      {m.in_reply_to != null && <span>↩ {m.in_reply_to}</span>}
-                    </div>
-                    <div className="font-medium text-slate-800 text-sm">{m.subject || '—'}</div>
-                    <div className="text-xs text-slate-600 whitespace-pre-wrap break-words">{m.body}</div>
-                  </div>
-                ))}
+            {(internalErr || crossErr) && (
+              <div className="mx-3 mt-2 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs text-rose-800">
+                {[internalErr, crossErr].filter(Boolean).join(' ')}
               </div>
             )}
-            {internalHasMore && internalMergedSorted.length > 0 && (
-              <button
-                type="button"
-                disabled={internalLoadingMore}
-                onClick={() => void loadMoreInternal()}
-                className="w-full mt-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                {internalLoadingMore ? '加载中…' : '加载更多'}
-              </button>
-            )}
-          </div>
-        )}
-
-        {tab === 'cross' && (
-          <>
-            <div className="flex flex-1 min-h-0 flex-col sm:flex-row">
-              <div className="sm:w-44 flex-shrink-0 border-b sm:border-b-0 sm:border-r border-slate-100 p-3 overflow-y-auto max-h-32 sm:max-h-none">
+            <div className="flex-1 overflow-y-auto min-h-0">
+              {listLoading && unifiedList.length === 0 ? (
+                <p className="text-slate-500 text-sm py-16 text-center">加载邮件…</p>
+              ) : listEmpty ? (
+                <p className="text-slate-400 text-sm py-16 text-center">暂无邮件</p>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {unifiedList.map((u) => {
+                    const k = itemKey(u)
+                    const isSel = selectedKey === k
+                    const isRead = readIds.has(k)
+                    if (u.kind === 'internal') {
+                      const m = u.row
+                      const inst = idToName.get(m.instance_id) ?? `#${m.instance_id}`
+                      const subj = m.subject?.trim() || '（无主题）'
+                      const prev = previewText(m.body || '')
+                      return (
+                        <li key={k}>
+                          <button
+                            type="button"
+                            onClick={() => selectItem(u)}
+                            className={`w-full text-left px-3 py-2.5 flex gap-2 hover:bg-slate-100/80 transition-colors ${
+                              isSel ? 'bg-blue-50/90 border-l-[3px] border-l-blue-600 pl-[9px]' : 'border-l-[3px] border-l-transparent pl-[9px]'
+                            }`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-baseline justify-between gap-2">
+                                <span
+                                  className={`text-sm truncate ${isRead ? 'text-slate-700' : 'text-slate-900 font-semibold'}`}
+                                >
+                                  {subj}
+                                </span>
+                                <span className="text-[11px] text-slate-400 flex-shrink-0 tabular-nums">
+                                  {formatMailTime(m.created_at)}
+                                </span>
+                              </div>
+                              <div className="text-xs text-slate-500 mt-0.5 truncate">
+                                <span className="inline-flex items-center gap-1">
+                                  <span className="text-[10px] uppercase tracking-wide text-violet-600 font-medium">内部</span>
+                                  <span>{m.from_slug}</span>
+                                  <span className="text-slate-300">→</span>
+                                  <span>{m.to_slug}</span>
+                                  <span className="text-slate-300">·</span>
+                                  <span className="truncate">{inst}</span>
+                                </span>
+                              </div>
+                              {prev ? (
+                                <p className={`text-xs mt-1 line-clamp-2 ${isRead ? 'text-slate-500' : 'text-slate-600'}`}>
+                                  {prev}
+                                </p>
+                              ) : null}
+                            </div>
+                          </button>
+                        </li>
+                      )
+                    }
+                    const m = u.row
+                    const fromName = idToName.get(m.from_instance_id) ?? `#${m.from_instance_id}`
+                    const toName = idToName.get(m.to_instance_id) ?? `#${m.to_instance_id}`
+                    const prev = previewText(m.content || '')
+                    return (
+                      <li key={k}>
+                        <button
+                          type="button"
+                          onClick={() => selectItem(u)}
+                          className={`w-full text-left px-3 py-2.5 flex gap-2 hover:bg-slate-100/80 transition-colors ${
+                            isSel ? 'bg-blue-50/90 border-l-[3px] border-l-blue-600 pl-[9px]' : 'border-l-[3px] border-l-transparent pl-[9px]'
+                          }`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <span
+                                className={`text-sm truncate ${isRead ? 'text-slate-700' : 'text-slate-900 font-semibold'}`}
+                              >
+                                {fromName} → {toName}
+                              </span>
+                              <span className="text-[11px] text-slate-400 flex-shrink-0 tabular-nums">
+                                {formatMailTime(m.created_at)}
+                              </span>
+                            </div>
+                            <div className="text-xs text-slate-500 mt-0.5 truncate">
+                              <span className="inline-flex items-center gap-1">
+                                <span className="text-[10px] uppercase tracking-wide text-indigo-600 font-medium">跨实例</span>
+                                <span className="truncate">{fromName}</span>
+                                <span className="text-slate-300">→</span>
+                                <span className="truncate">{toName}</span>
+                              </span>
+                            </div>
+                            {prev ? (
+                              <p className={`text-xs mt-1 line-clamp-2 ${isRead ? 'text-slate-500' : 'text-slate-600'}`}>{prev}</p>
+                            ) : null}
+                          </div>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+            {internalHasMore && (tab === 'all' || tab === 'internal') && internalMergedSorted.length > 0 && (
+              <div className="p-2 border-t border-slate-200 bg-white">
                 <button
                   type="button"
-                  onClick={() => setPeerFilter(null)}
-                  className={`w-full text-left px-2 py-1.5 rounded-lg text-sm mb-1 ${
-                    peerFilter == null ? 'bg-indigo-50 text-indigo-900 font-medium' : 'text-slate-600 hover:bg-slate-50'
-                  }`}
+                  disabled={internalLoadingMore}
+                  onClick={() => void loadMoreInternal()}
+                  className="w-full py-2 rounded-lg border border-slate-200 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
-                  全部
+                  {internalLoadingMore ? '加载中…' : '加载更多内部邮件'}
                 </button>
-                {peerIdsSorted.map((pid) => (
-                  <button
-                    key={pid}
-                    type="button"
-                    onClick={() => setPeerFilter(pid)}
-                    className={`w-full text-left px-2 py-1.5 rounded-lg text-sm mb-1 truncate ${
-                      peerFilter === pid ? 'bg-indigo-50 text-indigo-900 font-medium' : 'text-slate-600 hover:bg-slate-50'
-                    }`}
-                    title={idToName.get(pid) ?? `#${pid}`}
-                  >
-                    {idToName.get(pid) ?? `#${pid}`}
-                  </button>
-                ))}
               </div>
-              <div className="flex-1 px-5 py-4 overflow-y-auto min-h-0">
-                {crossErr && (
-                  <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 mb-3">{crossErr}</div>
-                )}
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                  <p className="text-xs text-slate-500">
-                    账号下实例之间 · {peerFilter == null ? `共 ${crossFiltered.length} 条` : `与「${idToName.get(peerFilter) ?? peerFilter}」相关 ${crossFiltered.length} 条`}
-                  </p>
-                  <button
-                    type="button"
-                    disabled={crossLoading}
-                    onClick={() => void loadCrossAll()}
-                    className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    {crossLoading ? '刷新中…' : '刷新'}
-                  </button>
-                </div>
-                {crossLoading && crossFiltered.length === 0 ? (
-                  <p className="text-slate-500 text-sm py-12 text-center">加载中…</p>
-                ) : crossFiltered.length === 0 ? (
-                  <p className="text-slate-400 text-sm py-8 text-center">暂无跨实例消息</p>
-                ) : (
-                  <div className="space-y-3">
-                    {crossFiltered.map((m) => {
-                      const fromName = idToName.get(m.from_instance_id) ?? `#${m.from_instance_id}`
-                      const toName = idToName.get(m.to_instance_id) ?? `#${m.to_instance_id}`
-                      return (
-                        <div key={m.id} className="border border-slate-200 rounded-xl p-3 bg-slate-50/40 space-y-1.5">
-                          <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-slate-500">
-                            <span className="font-mono">#{m.id}</span>
-                            <span>{m.created_at}</span>
-                          </div>
-                          <div className="text-sm text-slate-800">
-                            <span className="font-medium text-indigo-800">{fromName}</span>
-                            <span className="text-slate-400 mx-1">→</span>
-                            <span className="font-medium text-indigo-800">{toName}</span>
-                          </div>
-                          <div className="text-xs text-slate-600 whitespace-pre-wrap break-words">{m.content}</div>
-                        </div>
-                      )
-                    })}
+            )}
+          </aside>
+
+          <section className="flex-1 flex flex-col min-w-0 min-h-[240px] md:min-h-0 bg-white">
+            {!selectedItem ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-slate-400 text-sm px-6 py-12">
+                <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-3 text-2xl">✉</div>
+                <p>从左侧列表选择一封邮件查看详情</p>
+              </div>
+            ) : selectedItem.kind === 'internal' ? (
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div className="flex-shrink-0 px-5 py-4 border-b border-slate-100 bg-white">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mb-2">
+                    <span className="px-2 py-0.5 rounded bg-violet-100 text-violet-800 font-medium">内部邮件</span>
+                    <span>{formatMailTime(selectedItem.row.created_at)}</span>
+                    <span className="font-mono text-[11px]">#{selectedItem.row.id}</span>
                   </div>
-                )}
+                  <h3 className="text-lg font-semibold text-slate-900 leading-snug">
+                    {selectedItem.row.subject?.trim() || '（无主题）'}
+                  </h3>
+                  <div className="mt-3 space-y-1 text-sm">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      <span className="text-slate-500 w-12 flex-shrink-0">发件</span>
+                      <span className="text-slate-900">{selectedItem.row.from_slug}</span>
+                      <span className="text-slate-400">（{idToName.get(selectedItem.row.instance_id) ?? `#${selectedItem.row.instance_id}`}）</span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      <span className="text-slate-500 w-12 flex-shrink-0">收件</span>
+                      <span className="text-slate-900">{selectedItem.row.to_slug}</span>
+                    </div>
+                    {selectedItem.row.thread_id ? (
+                      <div className="flex flex-wrap gap-x-2 text-xs text-slate-500 pt-1">
+                        <span>会话</span>
+                        <code className="bg-slate-100 px-1.5 py-0.5 rounded break-all">{selectedItem.row.thread_id}</code>
+                      </div>
+                    ) : null}
+                    {selectedItem.row.in_reply_to != null ? (
+                      <div className="text-xs text-slate-500">回复 #{selectedItem.row.in_reply_to}</div>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto px-5 py-4 text-sm text-slate-800 whitespace-pre-wrap break-words leading-relaxed">
+                  {selectedItem.row.body || '—'}
+                </div>
               </div>
-            </div>
-            {instances.length >= 2 && (
-              <form onSubmit={handleSendCross} className="px-5 py-3 border-t border-slate-100 bg-slate-50/80 space-y-2">
+            ) : (
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div className="flex-shrink-0 px-5 py-4 border-b border-slate-100">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mb-2">
+                    <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-medium">跨实例</span>
+                    <span>{formatMailTime(selectedItem.row.created_at)}</span>
+                    <span className="font-mono text-[11px]">#{selectedItem.row.id}</span>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      <span className="text-slate-500 w-12 flex-shrink-0">发件</span>
+                      <span className="font-medium text-slate-900">
+                        {idToName.get(selectedItem.row.from_instance_id) ?? `#${selectedItem.row.from_instance_id}`}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      <span className="text-slate-500 w-12 flex-shrink-0">收件</span>
+                      <span className="font-medium text-slate-900">
+                        {idToName.get(selectedItem.row.to_instance_id) ?? `#${selectedItem.row.to_instance_id}`}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto px-5 py-4 text-sm text-slate-800 whitespace-pre-wrap break-words leading-relaxed">
+                  {selectedItem.row.content || '—'}
+                </div>
+              </div>
+            )}
+
+            {instances.length >= 2 && (tab === 'all' || tab === 'cross') && (
+              <form onSubmit={handleSendCross} className="flex-shrink-0 border-t border-slate-200 bg-slate-50/90 px-4 py-3 space-y-2">
                 <p className="text-xs text-slate-500">发送跨实例消息（需在编排拓扑中已连线）</p>
-                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                  <label className="text-xs text-slate-600 flex items-center gap-1">
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-center flex-wrap">
+                  <label className="text-xs text-slate-600 flex items-center gap-1.5">
                     从
                     <select
                       value={sendFrom ?? ''}
                       onChange={(e) => setSendFrom(Number(e.target.value) || null)}
-                      className="border border-slate-200 rounded-lg px-2 py-1 text-sm max-w-[140px]"
+                      className="border border-slate-200 rounded-lg px-2 py-1 text-sm max-w-[160px] bg-white"
                     >
                       {instances.map((i) => (
                         <option key={i.id} value={i.id}>
@@ -452,12 +617,12 @@ export default function MailboxModal({ open, instances, onClose, initialTab = 'i
                       ))}
                     </select>
                   </label>
-                  <label className="text-xs text-slate-600 flex items-center gap-1">
+                  <label className="text-xs text-slate-600 flex items-center gap-1.5">
                     发往
                     <select
                       value={sendTo ?? ''}
                       onChange={(e) => setSendTo(Number(e.target.value) || null)}
-                      className="border border-slate-200 rounded-lg px-2 py-1 text-sm max-w-[140px]"
+                      className="border border-slate-200 rounded-lg px-2 py-1 text-sm max-w-[160px] bg-white"
                     >
                       {instances.map((i) => (
                         <option key={i.id} value={i.id} disabled={i.id === sendFrom}>
@@ -472,27 +637,27 @@ export default function MailboxModal({ open, instances, onClose, initialTab = 'i
                   onChange={(e) => setSendBody(e.target.value)}
                   placeholder="正文"
                   rows={2}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
                 />
                 <div className="flex justify-end">
                   <button
                     type="submit"
                     disabled={sending || !sendBody.trim() || sendFrom == null || sendTo == null || sendFrom === sendTo}
-                    className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg disabled:opacity-50"
+                    className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
                   >
                     {sending ? '发送中…' : '发送'}
                   </button>
                 </div>
               </form>
             )}
-          </>
-        )}
+          </section>
+        </div>
 
-        <div className="px-5 py-3 border-t border-slate-100 flex justify-end bg-white rounded-b-2xl">
+        <footer className="flex-shrink-0 px-4 py-2.5 border-t border-slate-100 flex justify-end bg-slate-50/50 md:hidden">
           <button type="button" onClick={() => onClose()} className="px-4 py-2 text-sm bg-slate-800 text-white rounded-lg">
             关闭
           </button>
-        </div>
+        </footer>
       </div>
     </div>
   )
