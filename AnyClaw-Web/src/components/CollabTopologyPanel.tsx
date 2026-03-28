@@ -544,9 +544,12 @@ export default function CollabTopologyPanel({
     }
   }
 
-  const nodeCountOk = isInstanceMode ? instanceNodes.length > 1 : agents.length > 1
+  const nodeCountOk = isInstanceMode
+    ? instanceNodes.length > 1
+    : agents.length > 1 || peerInstances.length > 0
   const canSave = topologyReady && nodeCountOk && dirty && !saving && !loading
-  const edgeCount = isInstanceMode ? instEdges.length : edges.length
+  /** agent 模式：同实例 slug 连线 + 账号编排 peer_instances；实例模式边已在 load 时与 peer 合并 */
+  const edgeCount = isInstanceMode ? instEdges.length : edges.length + peerInstances.length
   const loadFailedEmpty = err && (isInstanceMode ? instanceNodes.length === 0 : agents.length === 0)
   const noNodes = isInstanceMode ? instanceNodes.length === 0 : agents.length === 0
 
@@ -616,7 +619,7 @@ export default function CollabTopologyPanel({
         <p className="text-slate-500 text-sm py-8 text-center">{isInstanceMode ? '暂无实例' : '暂无协作成员数据'}</p>
       ) : (
         <>
-          {!isInstanceMode && agents.length === 1 && (
+          {!isInstanceMode && agents.length === 1 && peerInstances.length === 0 && (
             <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
               当前仅一名协作成员。多智能体时请先让容器启动并完成与 API 的协作同步；若实例已绑定宿主机，打开本页时会从工作区 `config.json` 的 `agents.list` 自动补全。也可在「协作展示名」页手动添加员工并保存后再连线。
             </p>
