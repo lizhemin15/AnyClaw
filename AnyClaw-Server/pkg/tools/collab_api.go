@@ -73,17 +73,27 @@ type CollabRosterAgent struct {
 	DisplayName string `json:"display_name"`
 }
 
+// CollabPeerInstance 账号编排拓扑中与当前实例直连的其它实例（跨实例协作）
+type CollabPeerInstance struct {
+	InstanceID int64  `json:"instance_id"`
+	Name       string `json:"name"`
+}
+
 // CollabRosterResponse GET .../collab/bridge/roster
 type CollabRosterResponse struct {
-	Agents []CollabRosterAgent `json:"agents"`
-	Limits *CollabLimits       `json:"limits,omitempty"`
+	Agents                  []CollabRosterAgent  `json:"agents"`
+	PeerInstances           []CollabPeerInstance `json:"peer_instances"`
+	InstanceTopologyVersion int64                `json:"instance_topology_version"`
+	Limits                  *CollabLimits        `json:"limits,omitempty"`
 }
 
 // CollabTopologyResponse GET .../collab/bridge/topology
 type CollabTopologyResponse struct {
-	Edges   [][2]string `json:"edges"`
-	Version int64       `json:"version"`
-	Limits  *CollabLimits `json:"limits,omitempty"`
+	Edges                   [][2]string          `json:"edges"`
+	Version                 int64                `json:"version"`
+	PeerInstances           []CollabPeerInstance `json:"peer_instances"`
+	InstanceTopologyVersion int64                `json:"instance_topology_version"`
+	Limits                  *CollabLimits        `json:"limits,omitempty"`
 }
 
 func (c *CollabAPIClient) getOKBody(ctx context.Context, rel string) ([]byte, error) {

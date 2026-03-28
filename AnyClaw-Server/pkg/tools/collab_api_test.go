@@ -15,10 +15,10 @@ func TestCollabAPIClient_GetRoster_GetTopology(t *testing.T) {
 		if r.URL.Query().Get("token") != "tok" || r.Header.Get("Authorization") != "Bearer tok" {
 			t.Error("expected token query and Bearer header")
 		}
-		fmt.Fprint(w, `{"agents":[{"id":1,"instance_id":1,"user_id":10,"agent_slug":"main","display_name":"主理"}],"limits":{"max_agents":64,"max_edges":4096,"max_thread_id_runes":64,"max_internal_mail_subject_runes":512,"max_internal_mail_body_kb":256,"max_agent_slug_runes":128,"max_agent_display_name_runes":255,"max_internal_mail_list_limit":500,"max_internal_mail_list_offset":500000}}`)
+		fmt.Fprint(w, `{"agents":[{"id":1,"instance_id":1,"user_id":10,"agent_slug":"main","display_name":"主理"}],"peer_instances":[{"instance_id":2,"name":"B"}],"instance_topology_version":7,"limits":{"max_agents":64,"max_edges":4096,"max_thread_id_runes":64,"max_internal_mail_subject_runes":512,"max_internal_mail_body_kb":256,"max_agent_slug_runes":128,"max_agent_display_name_runes":255,"max_internal_mail_list_limit":500,"max_internal_mail_list_offset":500000}}`)
 	})
 	mux.HandleFunc("/instances/1/collab/bridge/topology", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"edges":[["a","b"]],"version":3,"limits":{"max_agents":64,"max_edges":4096,"max_thread_id_runes":64,"max_internal_mail_subject_runes":512,"max_internal_mail_body_kb":256,"max_agent_slug_runes":128,"max_agent_display_name_runes":255,"max_internal_mail_list_limit":500,"max_internal_mail_list_offset":500000}}`)
+		fmt.Fprint(w, `{"edges":[["a","b"]],"version":3,"peer_instances":[{"instance_id":2,"name":"B"}],"instance_topology_version":7,"limits":{"max_agents":64,"max_edges":4096,"max_thread_id_runes":64,"max_internal_mail_subject_runes":512,"max_internal_mail_body_kb":256,"max_agent_slug_runes":128,"max_agent_display_name_runes":255,"max_internal_mail_list_limit":500,"max_internal_mail_list_offset":500000}}`)
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
@@ -33,6 +33,9 @@ func TestCollabAPIClient_GetRoster_GetTopology(t *testing.T) {
 	if len(roster.Agents) != 1 || roster.Agents[0].AgentSlug != "main" {
 		t.Fatalf("roster agents: %+v", roster.Agents)
 	}
+	if len(roster.PeerInstances) != 1 || roster.PeerInstances[0].InstanceID != 2 || roster.PeerInstances[0].Name != "B" || roster.InstanceTopologyVersion != 7 {
+		t.Fatalf("roster peers/version: %+v ver=%d", roster.PeerInstances, roster.InstanceTopologyVersion)
+	}
 	if roster.Limits == nil || roster.Limits.MaxAgents != 64 || roster.Limits.MaxEdges != 4096 || roster.Limits.MaxThreadIDRunes != 64 ||
 		roster.Limits.MaxInternalMailSubjectRunes != 512 || roster.Limits.MaxInternalMailBodyKB != 256 ||
 		roster.Limits.MaxAgentSlugRunes != 128 || roster.Limits.MaxAgentDisplayNameRunes != 255 ||
@@ -46,6 +49,9 @@ func TestCollabAPIClient_GetRoster_GetTopology(t *testing.T) {
 	}
 	if len(topo.Edges) != 1 || topo.Edges[0][0] != "a" || topo.Edges[0][1] != "b" || topo.Version != 3 {
 		t.Fatalf("topology: edges=%v version=%d", topo.Edges, topo.Version)
+	}
+	if len(topo.PeerInstances) != 1 || topo.PeerInstances[0].InstanceID != 2 || topo.InstanceTopologyVersion != 7 {
+		t.Fatalf("topology peers: %+v ver=%d", topo.PeerInstances, topo.InstanceTopologyVersion)
 	}
 	if topo.Limits == nil || topo.Limits.MaxEdges != 4096 || topo.Limits.MaxThreadIDRunes != 64 ||
 		topo.Limits.MaxInternalMailSubjectRunes != 512 || topo.Limits.MaxInternalMailBodyKB != 256 ||

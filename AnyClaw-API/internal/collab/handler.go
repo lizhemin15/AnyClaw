@@ -260,9 +260,22 @@ func (h *Handler) PutUserInstanceTopology(w http.ResponseWriter, r *http.Request
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
 		return
 	}
+	oldEdges, err := h.db.ListUserInstanceTopologyEdges(inst.UserID)
+	if err != nil {
+		http.Error(w, `{"error":"db"}`, http.StatusInternalServerError)
+		return
+	}
 	if err := h.db.ReplaceUserInstanceTopologyEdges(inst.UserID, body.Edges); err != nil {
 		writeJSONErrorWithLimits(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	newEdges, err := h.db.ListUserInstanceTopologyEdges(inst.UserID)
+	if err != nil {
+		log.Printf("[collab] list instance topology after replace user %d: %v", inst.UserID, err)
+	} else {
+		for _, aid := range mergeInstanceIDsFromTopologyEdges(oldEdges, newEdges) {
+			h.pushTopologyUpdated(aid)
+		}
 	}
 	writeJSON(w, map[string]any{"status": "ok", "limits": collaborationLimitsPayload()})
 }
@@ -467,7 +480,7 @@ func (h *Handler) ContainerListMails(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ContainerGetRoster(w http.ResponseWriter, r *http.Request) {
-	_, iid, ok := h.authInstance(w, r)
+	inst, iid, ok := h.authInstance(w, r)
 	if !ok {
 		return
 	}
@@ -476,9 +489,17 @@ func (h *Handler) ContainerGetRoster(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"db"}`, http.StatusInternalServerError)
 		return
 	}
+	peers, err := h.db.ListUserInstanceTopologyPeers(inst.UserID, iid)
+	if err != nil {
+		http.Error(w, `{"error":"db"}`, http.StatusInternalServerError)
+		return
+	}
+	instTopoVer, _ := h.db.GetUserInstanceTopologyVersion(inst.UserID)
 	writeJSON(w, map[string]any{
-		"agents": list,
-		"limits": collaborationLimitsPayload(),
+		"agents":                       list,
+		"peer_instances":               peers,
+		"instance_topology_version":    instTopoVer,
+		"limits":                       collaborationLimitsPayload(),
 	})
 }
 
@@ -519,7 +540,7 @@ func (h *Handler) ContainerSyncRoster(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ContainerGetTopology(w http.ResponseWriter, r *http.Request) {
-	_, iid, ok := h.authInstance(w, r)
+	inst, iid, ok := h.authInstance(w, r)
 	if !ok {
 		return
 	}
@@ -533,10 +554,18 @@ func (h *Handler) ContainerGetTopology(w http.ResponseWriter, r *http.Request) {
 		pairs = append(pairs, [2]string{e.AgentSlugLo, e.AgentSlugHi})
 	}
 	ver, _ := h.db.GetAgentTopologyVersion(iid)
+	peers, err := h.db.ListUserInstanceTopologyPeers(inst.UserID, iid)
+	if err != nil {
+		http.Error(w, `{"error":"db"}`, http.StatusInternalServerError)
+		return
+	}
+	instTopoVer, _ := h.db.GetUserInstanceTopologyVersion(inst.UserID)
 	writeJSON(w, map[string]any{
-		"edges":   pairs,
-		"version": ver,
-		"limits":  collaborationLimitsPayload(),
+		"edges":                     pairs,
+		"version":                   ver,
+		"peer_instances":            peers,
+		"instance_topology_version": instTopoVer,
+		"limits":                    collaborationLimitsPayload(),
 	})
 }
 
@@ -643,14 +672,39 @@ func (h *Handler) pushTopologyUpdated(instanceID int64) {
 	if err != nil {
 		return
 	}
+	payload := map[string]any{"version": ver}
+	if inst, err := h.db.GetInstanceByID(instanceID); err == nil && inst != nil {
+		if uver, err := h.db.GetUserInstanceTopologyVersion(inst.UserID); err == nil {
+			payload["instance_topology_version"] = uver
+		}
+	}
 	msg := map[string]any{
 		"type":    "collab.topology_updated",
-		"payload": map[string]any{"version": ver},
+		"payload": payload,
 	}
 	if err := h.hub.WriteContainerJSON(instanceID, msg); err != nil {
 		log.Printf("[collab] push topology to instance %d: %v", instanceID, err)
 	}
 	h.hub.WriteAttachedUserJSON(instanceID, msg)
+}
+
+// mergeInstanceIDsFromTopologyEdges 合并新旧实例间拓扑边中出现的全部实例 id（用于推送协作网络变更）
+func mergeInstanceIDsFromTopologyEdges(oldEdges, newEdges [][2]int64) []int64 {
+	seen := make(map[int64]struct{})
+	for _, e := range oldEdges {
+		seen[e[0]] = struct{}{}
+		seen[e[1]] = struct{}{}
+	}
+	for _, e := range newEdges {
+		seen[e[0]] = struct{}{}
+		seen[e[1]] = struct{}{}
+	}
+	out := make([]int64, 0, len(seen))
+	for id := range seen {
+		out = append(out, id)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
 }
 
 func (h *Handler) pushInternalMail(instanceID, mailID int64, threadID, fromSlug, toSlug string, ver int64) {

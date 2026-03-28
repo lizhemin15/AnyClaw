@@ -638,6 +638,37 @@ func canonicalEdgeInt64(a, b int64) (lo, hi int64) {
 	return b, a
 }
 
+// PeerInstanceBrief 账号编排拓扑中与当前实例直连的其它实例（供容器协作网络展示）
+type PeerInstanceBrief struct {
+	InstanceID int64  `json:"instance_id"`
+	Name       string `json:"name"`
+}
+
+// ListUserInstanceTopologyPeers 返回 user_instance_topology_edges 中与 instanceID 相邻的实例及名称
+func (d *DB) ListUserInstanceTopologyPeers(userID, instanceID int64) ([]PeerInstanceBrief, error) {
+	rows, err := d.Query(
+		`SELECT i.id, i.name
+		FROM user_instance_topology_edges e
+		JOIN instances i ON i.id = CASE WHEN e.instance_id_lo = ? THEN e.instance_id_hi ELSE e.instance_id_lo END
+		WHERE e.user_id = ? AND (e.instance_id_lo = ? OR e.instance_id_hi = ?)
+		ORDER BY i.id`,
+		instanceID, userID, instanceID, instanceID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []PeerInstanceBrief
+	for rows.Next() {
+		var r PeerInstanceBrief
+		if err := rows.Scan(&r.InstanceID, &r.Name); err != nil {
+			return nil, err
+		}
+		list = append(list, r)
+	}
+	return list, rows.Err()
+}
+
 // ListUserInstanceTopologyEdges 账号下实例间无向边（instance_id_lo < instance_id_hi）
 func (d *DB) ListUserInstanceTopologyEdges(userID int64) ([][2]int64, error) {
 	rows, err := d.Query(

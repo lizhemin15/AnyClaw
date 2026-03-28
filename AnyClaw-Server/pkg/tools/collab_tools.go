@@ -156,7 +156,7 @@ func (t *CollabGetRosterTool) Name() string {
 }
 
 func (t *CollabGetRosterTool) Description() string {
-	return "Fetch this instance's collaboration roster (agent_slug, display_name) and server limits: max_agents, max_edges, max_thread_id_runes, max_internal_mail_subject_runes, max_internal_mail_body_kb (UTF-8 body byte cap). Use before internal_mail_send when you need current colleagues or limits."
+	return "Fetch this instance's collaboration roster: same-instance agents (agent_slug, display_name), peer_instances (other instances connected in account orchestration topology, with instance_id and name), instance_topology_version, and server limits (max_agents, max_edges, mail caps, etc.). Use before internal_mail_send when you need current colleagues or limits."
 }
 
 func (t *CollabGetRosterTool) Parameters() map[string]any {
@@ -197,7 +197,7 @@ func (t *CollabGetTopologyTool) Name() string {
 }
 
 func (t *CollabGetTopologyTool) Description() string {
-	return "Fetch undirected neighbor edges [[slug_lo,slug_hi],...], topology version, and the same limits object as collab_get_roster (agents/topology/mail caps). Use to see who can receive internal_mail_send (must be direct neighbors)."
+	return "Fetch same-instance agent neighbor edges [[slug_lo,slug_hi],...], agent topology version, peer_instances (cross-instance orchestration links: instance_id, name), instance_topology_version, and limits. internal_mail_send neighbors are only along edges; peer_instances are linked instances for cross-instance collaboration awareness."
 }
 
 func (t *CollabGetTopologyTool) Parameters() map[string]any {
