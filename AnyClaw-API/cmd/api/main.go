@@ -169,6 +169,8 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Get("/{id}/collab/instance-topology", collabHandler.GetUserInstanceTopology)
 		r.Put("/{id}/collab/instance-topology", collabHandler.PutUserInstanceTopology)
 		r.Get("/{id}/collab/mails", collabHandler.ListMails)
+		r.Get("/{id}/collab/instance-mail", collabHandler.GetInstanceInstanceMail)
+		r.Post("/{id}/collab/instance-mail", collabHandler.PostInstanceInstanceMail)
 		r.Post("/{id}/collab/resolve", collabHandler.PostResolve)
 	})
 	// 容器上传媒体到 COS（使用 instance token 鉴权，不走 JWT）

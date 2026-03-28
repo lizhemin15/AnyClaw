@@ -587,6 +587,9 @@ export default function Chat() {
           case 'collab.internal_mail':
             broadcastCollabEvent('internal_mail', instanceId)
             break
+          case 'collab.instance_mail':
+            broadcastCollabEvent('instance_mail', instanceId)
+            break
           case 'collab.topology_updated':
             broadcastCollabEvent('topology', instanceId)
             break

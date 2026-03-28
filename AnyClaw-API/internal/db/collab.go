@@ -1071,3 +1071,126 @@ func (d *DB) VerifySlugsBelongToInstance(instanceID int64, slugs ...string) erro
 	}
 	return nil
 }
+
+// --- 跨实例消息（user_instance_messages + user_instance_topology_edges）---
+
+const (
+	// MaxUserInstanceMessageBodyBytes 跨实例消息正文最大字节数（UTF-8）
+	MaxUserInstanceMessageBodyBytes = 256 * 1024
+	// MaxUserInstanceMessageListLimit 列表单次最大条数
+	MaxUserInstanceMessageListLimit = 500
+	// MaxUserInstanceMessageListOffset 列表 offset 上限
+	MaxUserInstanceMessageListOffset = 500_000
+)
+
+// ErrUserInstanceMessageListOffsetTooLarge 跨实例消息列表 offset 超限
+var ErrUserInstanceMessageListOffsetTooLarge = errors.New("跨实例消息列表分页 offset 超过上限")
+
+// UserInstanceMessageRow 跨实例消息行
+type UserInstanceMessageRow struct {
+	ID             int64  `json:"id"`
+	UserID         int64  `json:"user_id"`
+	FromInstanceID int64  `json:"from_instance_id"`
+	ToInstanceID   int64  `json:"to_instance_id"`
+	Content        string `json:"content"`
+	CreatedAt      string `json:"created_at"`
+}
+
+// UserInstancesTopologyConnected 检查账号下两实例是否在编排拓扑中连线（无向）
+func (d *DB) UserInstancesTopologyConnected(userID, instanceIDA, instanceIDB int64) (bool, error) {
+	if instanceIDA < 1 || instanceIDB < 1 {
+		return false, fmt.Errorf("无效的实例 id")
+	}
+	lo, hi := canonicalEdgeInt64(instanceIDA, instanceIDB)
+	var n int
+	err := d.QueryRow(
+		`SELECT COUNT(*) FROM user_instance_topology_edges WHERE user_id = ? AND instance_id_lo = ? AND instance_id_hi = ?`,
+		userID, lo, hi,
+	).Scan(&n)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+func validateUserInstanceMessageContent(content string) error {
+	t := strings.TrimSpace(content)
+	if t == "" {
+		return fmt.Errorf("内容不能为空")
+	}
+	if len(content) > MaxUserInstanceMessageBodyBytes {
+		return fmt.Errorf("正文过长（最多 %d KB）", MaxUserInstanceMessageBodyBytes/1024)
+	}
+	return nil
+}
+
+// InsertUserInstanceMessage 写入跨实例消息；调用方须已校验双方实例归属与拓扑连线
+func (d *DB) InsertUserInstanceMessage(userID, fromInstanceID, toInstanceID int64, content string) (int64, error) {
+	if err := validateUserInstanceMessageContent(content); err != nil {
+		return 0, err
+	}
+	if fromInstanceID == toInstanceID {
+		return 0, fmt.Errorf("不能向自身实例发送跨实例消息")
+	}
+	res, err := d.Exec(
+		`INSERT INTO user_instance_messages (user_id, from_instance_id, to_instance_id, content) VALUES (?, ?, ?, ?)`,
+		userID, fromInstanceID, toInstanceID, content,
+	)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+func userInstanceMessageListWhere(userID, instanceID int64, peerID *int64) (where string, args []any) {
+	if peerID != nil && *peerID > 0 {
+		p := *peerID
+		return `user_id = ? AND ((from_instance_id = ? AND to_instance_id = ?) OR (from_instance_id = ? AND to_instance_id = ?))`,
+			[]any{userID, instanceID, p, p, instanceID}
+	}
+	return `user_id = ? AND (from_instance_id = ? OR to_instance_id = ?)`, []any{userID, instanceID, instanceID}
+}
+
+// CountUserInstanceMessages 当前实例参与的消息总数（可选仅与 peer 实例之间的会话）
+func (d *DB) CountUserInstanceMessages(userID, instanceID int64, peerID *int64) (int64, error) {
+	where, args := userInstanceMessageListWhere(userID, instanceID, peerID)
+	var n int64
+	err := d.QueryRow(`SELECT COUNT(*) FROM user_instance_messages WHERE `+where, args...).Scan(&n)
+	return n, err
+}
+
+// ListUserInstanceMessages 分页列举跨实例消息，按时间倒序
+func (d *DB) ListUserInstanceMessages(userID, instanceID int64, peerID *int64, limit, offset int) ([]UserInstanceMessageRow, error) {
+	if offset > MaxUserInstanceMessageListOffset {
+		return nil, fmt.Errorf("%w（最多 %d）", ErrUserInstanceMessageListOffsetTooLarge, MaxUserInstanceMessageListOffset)
+	}
+	if limit > MaxUserInstanceMessageListLimit {
+		limit = MaxUserInstanceMessageListLimit
+	}
+	if limit < 1 {
+		limit = 50
+	}
+	where, args := userInstanceMessageListWhere(userID, instanceID, peerID)
+	q := `SELECT id, user_id, from_instance_id, to_instance_id, content,
+		DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') FROM user_instance_messages WHERE ` + where +
+		` ORDER BY id DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
+	rows, err := d.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []UserInstanceMessageRow
+	for rows.Next() {
+		var r UserInstanceMessageRow
+		if err := rows.Scan(&r.ID, &r.UserID, &r.FromInstanceID, &r.ToInstanceID, &r.Content, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, r)
+	}
+	return list, rows.Err()
+}

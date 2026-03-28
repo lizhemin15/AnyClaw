@@ -244,6 +244,10 @@ export interface CollabLimits {
   max_internal_mail_list_limit?: number;
   /** 内部邮件列表 offset 上限 */
   max_internal_mail_list_offset?: number;
+  /** 跨实例消息正文最大 KB */
+  max_instance_message_body_kb?: number;
+  max_instance_message_list_limit?: number;
+  max_instance_message_list_offset?: number;
 }
 
 export async function getCollabAgents(instanceId: number): Promise<{
@@ -359,6 +363,35 @@ export async function getCollabMails(
   return fetchCollabJson(path);
 }
 
+export interface UserInstanceMessageRow {
+  id: number;
+  user_id: number;
+  from_instance_id: number;
+  to_instance_id: number;
+  content: string;
+  created_at: string;
+}
+
+export async function getCollabInstanceMails(
+  instanceId: number,
+  opts?: { peer?: number; limit?: number; offset?: number }
+): Promise<{ messages: UserInstanceMessageRow[]; total: number; limits?: CollabLimits }> {
+  let path = `/instances/${instanceId}/collab/instance-mail?limit=${opts?.limit ?? 100}`;
+  if (opts?.offset != null && opts.offset > 0) path += `&offset=${opts.offset}`;
+  if (opts?.peer != null && opts.peer > 0) path += `&peer=${opts.peer}`;
+  return fetchCollabJson(path);
+}
+
+export async function postCollabInstanceMail(
+  instanceId: number,
+  body: { to_instance_id: number; content: string }
+): Promise<{ ok: boolean; id: number; limits?: CollabLimits }> {
+  return fetchCollabJson(`/instances/${instanceId}/collab/instance-mail`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
 export async function postCollabResolve(
   instanceId: number,
   name: string
@@ -379,7 +412,7 @@ export async function postCollabResolve(
 export const ANYCLAW_COLLAB_BROADCAST = 'anyclaw-collab';
 
 export function broadcastCollabEvent(
-  kind: 'internal_mail' | 'topology' | 'user_instance_topology',
+  kind: 'internal_mail' | 'topology' | 'user_instance_topology' | 'instance_mail',
   instanceId: number
 ): void {
   if (typeof BroadcastChannel === 'undefined') return;

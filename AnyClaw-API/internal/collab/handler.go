@@ -38,6 +38,9 @@ func collaborationLimitsPayload() map[string]int {
 		"max_agent_display_name_runes":     db.MaxInstanceAgentDisplayRunes,
 		"max_internal_mail_list_limit":     db.MaxInternalMailListLimit,
 		"max_internal_mail_list_offset":    db.MaxInternalMailListOffset,
+		"max_instance_message_body_kb":     db.MaxUserInstanceMessageBodyBytes / 1024,
+		"max_instance_message_list_limit":  db.MaxUserInstanceMessageListLimit,
+		"max_instance_message_list_offset": db.MaxUserInstanceMessageListOffset,
 	}
 }
 
@@ -275,6 +278,117 @@ func (h *Handler) ListMails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.serveListInternalMails(w, iid, r)
+}
+
+// GetInstanceInstanceMail GET /instances/{id}/collab/instance-mail — 跨实例消息列表（当前实例为任一端）
+func (h *Handler) GetInstanceInstanceMail(w http.ResponseWriter, r *http.Request) {
+	iid, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+	inst, ok := h.authOwner(r, iid)
+	if !ok {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	var peerID *int64
+	if ps := strings.TrimSpace(r.URL.Query().Get("peer")); ps != "" {
+		p, err := strconv.ParseInt(ps, 10, 64)
+		if err != nil || p < 1 {
+			writeJSONErrorWithLimits(w, http.StatusBadRequest, "peer 无效")
+			return
+		}
+		peerID = &p
+	}
+	list, err := h.db.ListUserInstanceMessages(inst.UserID, iid, peerID, limit, offset)
+	if err != nil {
+		if errors.Is(err, db.ErrUserInstanceMessageListOffsetTooLarge) {
+			writeJSONErrorWithLimits(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		http.Error(w, `{"error":"db"}`, http.StatusInternalServerError)
+		return
+	}
+	total, err := h.db.CountUserInstanceMessages(inst.UserID, iid, peerID)
+	if err != nil {
+		http.Error(w, `{"error":"db"}`, http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]any{
+		"messages": list,
+		"total":    total,
+		"limits":   collaborationLimitsPayload(),
+	})
+}
+
+// PostInstanceInstanceMail POST /instances/{id}/collab/instance-mail — 从当前实例发往已连线的另一实例
+func (h *Handler) PostInstanceInstanceMail(w http.ResponseWriter, r *http.Request) {
+	iid, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+	inst, ok := h.authOwner(r, iid)
+	if !ok {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	var body struct {
+		ToInstanceID int64  `json:"to_instance_id"`
+		Content      string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	if body.ToInstanceID < 1 {
+		writeJSONErrorWithLimits(w, http.StatusBadRequest, "to_instance_id 无效")
+		return
+	}
+	toInst, err := h.db.GetInstanceByID(body.ToInstanceID)
+	if err != nil || toInst == nil || toInst.UserID != inst.UserID {
+		writeJSONErrorWithLimits(w, http.StatusBadRequest, "目标实例不存在或不属于当前账号")
+		return
+	}
+	connected, err := h.db.UserInstancesTopologyConnected(inst.UserID, iid, body.ToInstanceID)
+	if err != nil {
+		http.Error(w, `{"error":"db"}`, http.StatusInternalServerError)
+		return
+	}
+	if !connected {
+		writeJSONErrorWithLimits(w, http.StatusBadRequest, "实例间未在编排拓扑中连线，无法发送跨实例消息")
+		return
+	}
+	msgID, err := h.db.InsertUserInstanceMessage(inst.UserID, iid, body.ToInstanceID, body.Content)
+	if err != nil {
+		writeJSONErrorWithLimits(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	h.pushUserInstanceMessage(iid, body.ToInstanceID, msgID)
+	writeJSON(w, map[string]any{
+		"ok": true, "id": msgID,
+		"limits": collaborationLimitsPayload(),
+	})
+}
+
+func (h *Handler) pushUserInstanceMessage(fromInstanceID, toInstanceID, messageID int64) {
+	msg := map[string]any{
+		"type": "collab.instance_mail",
+		"payload": map[string]any{
+			"id":               messageID,
+			"from_instance_id": fromInstanceID,
+			"to_instance_id":   toInstanceID,
+		},
+	}
+	for _, iid := range []int64{fromInstanceID, toInstanceID} {
+		if err := h.hub.WriteContainerJSON(iid, msg); err != nil {
+			log.Printf("[collab] push instance mail to container %d: %v", iid, err)
+		}
+		h.hub.WriteAttachedUserJSON(iid, msg)
+	}
 }
 
 // serveListInternalMails 与 JWT ListMails、容器 bridge 共用（query: thread_id, limit, offset）。

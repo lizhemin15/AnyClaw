@@ -60,7 +60,10 @@ export default function Home({ user, onRefresh, showGuide = false, onDismissGuid
   }, [filtered, page])
 
   useEffect(() => {
-    const st = location.state as { orchestrateInstanceId?: number; orchestrateCollabTab?: 'topo' | 'mails' } | null
+    const st = location.state as {
+      orchestrateInstanceId?: number
+      orchestrateCollabTab?: 'topo' | 'mails' | 'inst_mail'
+    } | null
     const sid = st?.orchestrateInstanceId
     if (sid == null || typeof sid !== 'number') return
     if (loading) return

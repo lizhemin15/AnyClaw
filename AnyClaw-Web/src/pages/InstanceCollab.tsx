@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { SafeLink } from '../components/SafeLink'
 import CollabTopologyPanel from '../components/CollabTopologyPanel'
+import InstanceCrossInstanceMailPanel from '../components/InstanceCrossInstanceMailPanel'
 import {
   broadcastCollabEvent,
   getInstance,
@@ -291,7 +292,10 @@ export default function InstanceCollab() {
       )}
 
       {!loading && (
-        <CollabTopologyPanel instanceId={instanceId} rosterRevision={rosterRevision} />
+        <div className="space-y-6">
+          <CollabTopologyPanel instanceId={instanceId} rosterRevision={rosterRevision} />
+          <InstanceCrossInstanceMailPanel instanceId={instanceId} />
+        </div>
       )}
     </div>
   )
