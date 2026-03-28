@@ -387,16 +387,18 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 					}
 
 					if !alreadySent {
+						outCh, outCID := al.resolveOutboundRouting(msg.Channel, msg.ChatID)
 						al.bus.PublishOutbound(ctx, bus.OutboundMessage{
-							Channel: msg.Channel,
-							ChatID:  msg.ChatID,
+							Channel: outCh,
+							ChatID:  outCID,
 							Content: response,
 						})
 						logger.InfoCF("agent", "Published outbound response",
 							map[string]any{
-								"channel":     msg.Channel,
-								"chat_id":     msg.ChatID,
+								"channel":     outCh,
+								"chat_id":     outCID,
 								"content_len": len(response),
+								"src_channel": msg.Channel,
 							})
 					} else {
 						logger.DebugCF(
@@ -576,6 +578,30 @@ func (al *AgentLoop) RecordLastChatID(chatID string) error {
 		return nil
 	}
 	return al.state.SetLastChatID(chatID)
+}
+
+// resolveOutboundRouting maps internal-only channels (instance_mail, internal_mail) to the
+// last user-visible channel from state so outbound messages are not dropped by
+// channels.Manager.dispatchLoop (which skips IsInternalChannel).
+func (al *AgentLoop) resolveOutboundRouting(channel, chatID string) (string, string) {
+	if !constants.IsInternalChannel(channel) {
+		return channel, chatID
+	}
+	if al.state == nil {
+		return channel, chatID
+	}
+	lc := strings.TrimSpace(al.state.GetLastChannel())
+	if lc == "" {
+		return channel, chatID
+	}
+	parts := strings.SplitN(lc, ":", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return channel, chatID
+	}
+	if constants.IsInternalChannel(parts[0]) {
+		return channel, chatID
+	}
+	return parts[0], parts[1]
 }
 
 func (al *AgentLoop) ProcessDirect(
@@ -935,8 +961,10 @@ func (al *AgentLoop) runAgentLoop(
 		al.mediaStore.TransferRefsToScope(opts.Media, "session:"+opts.SessionKey)
 	}
 
+	outCh, outCID := al.resolveOutboundRouting(opts.Channel, opts.ChatID)
+
 	// 3. Run LLM iteration loop
-	finalContent, iteration, err := al.runLLMIteration(ctx, agent, messages, opts)
+	finalContent, iteration, err := al.runLLMIteration(ctx, agent, messages, opts, outCh, outCID)
 	if err != nil {
 		return "", err
 	}
@@ -961,8 +989,8 @@ func (al *AgentLoop) runAgentLoop(
 	// 7. Optional: send response via bus
 	if opts.SendResponse {
 		al.bus.PublishOutbound(ctx, bus.OutboundMessage{
-			Channel: opts.Channel,
-			ChatID:  opts.ChatID,
+			Channel: outCh,
+			ChatID:  outCID,
 			Content: finalContent,
 		})
 	}
@@ -1037,11 +1065,13 @@ func (al *AgentLoop) handleReasoning(
 }
 
 // runLLMIteration executes the LLM call loop with tool handling.
+// outCh/outCID are the user-visible routing targets (see resolveOutboundRouting).
 func (al *AgentLoop) runLLMIteration(
 	ctx context.Context,
 	agent *AgentInstance,
 	messages []providers.Message,
 	opts processOptions,
+	outCh, outCID string,
 ) (string, int, error) {
 	iteration := 0
 	var finalContent string
@@ -1180,10 +1210,10 @@ func (al *AgentLoop) runLLMIteration(
 					},
 				)
 
-				if retry == 0 && !constants.IsInternalChannel(opts.Channel) {
+				if retry == 0 && !constants.IsInternalChannel(outCh) {
 					al.bus.PublishOutbound(ctx, bus.OutboundMessage{
-						Channel: opts.Channel,
-						ChatID:  opts.ChatID,
+						Channel: outCh,
+						ChatID:  outCID,
 						Content: "Context window exceeded. Compressing history and retrying...",
 					})
 				}
@@ -1213,8 +1243,8 @@ func (al *AgentLoop) runLLMIteration(
 		go al.handleReasoning(
 			ctx,
 			response.Reasoning,
-			opts.Channel,
-			al.targetReasoningChannelID(opts.Channel),
+			outCh,
+			al.targetReasoningChannelID(outCh),
 		)
 
 		logger.DebugCF("agent", "LLM response",
@@ -1224,8 +1254,8 @@ func (al *AgentLoop) runLLMIteration(
 				"content_chars":  len(response.Content),
 				"tool_calls":     len(response.ToolCalls),
 				"reasoning":      response.Reasoning,
-				"target_channel": al.targetReasoningChannelID(opts.Channel),
-				"channel":        opts.Channel,
+				"target_channel": al.targetReasoningChannelID(outCh),
+				"channel":        outCh,
 			})
 		// Check if no tool calls - then check reasoning content if any
 		if len(response.ToolCalls) == 0 {
@@ -1339,8 +1369,8 @@ func (al *AgentLoop) runLLMIteration(
 							parts = append(parts, part)
 						}
 						_ = al.bus.PublishOutboundMedia(outCtx, bus.OutboundMediaMessage{
-							Channel: opts.Channel,
-							ChatID:  opts.ChatID,
+							Channel: outCh,
+							ChatID:  outCID,
 							Parts:   parts,
 						})
 					}
@@ -1348,8 +1378,8 @@ func (al *AgentLoop) runLLMIteration(
 					// mirroring the synchronous tool execution path.
 					if !result.Silent && result.ForUser != "" {
 						_ = al.bus.PublishOutbound(outCtx, bus.OutboundMessage{
-							Channel: opts.Channel,
-							ChatID:  opts.ChatID,
+							Channel: outCh,
+							ChatID:  outCID,
 							Content: result.ForUser,
 						})
 					}
@@ -1367,7 +1397,7 @@ func (al *AgentLoop) runLLMIteration(
 						map[string]any{
 							"tool":        tc.Name,
 							"content_len": len(content),
-							"channel":     opts.Channel,
+							"channel":     outCh,
 						})
 
 					pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1384,8 +1414,8 @@ func (al *AgentLoop) runLLMIteration(
 					ctx,
 					tc.Name,
 					tc.Arguments,
-					opts.Channel,
-					opts.ChatID,
+					outCh,
+					outCID,
 					asyncCallback,
 				)
 				agentResults[idx].result = toolResult
@@ -1415,16 +1445,16 @@ func (al *AgentLoop) runLLMIteration(
 					parts = append(parts, part)
 				}
 				al.bus.PublishOutboundMedia(ctx, bus.OutboundMediaMessage{
-					Channel: opts.Channel,
-					ChatID:  opts.ChatID,
+					Channel: outCh,
+					ChatID:  outCID,
 					Parts:   parts,
 				})
 			}
 
 			if !r.result.Silent && r.result.ForUser != "" {
 				al.bus.PublishOutbound(ctx, bus.OutboundMessage{
-					Channel: opts.Channel,
-					ChatID:  opts.ChatID,
+					Channel: outCh,
+					ChatID:  outCID,
 					Content: r.result.ForUser,
 				})
 				logger.DebugCF("agent", "Sent tool result to user",
