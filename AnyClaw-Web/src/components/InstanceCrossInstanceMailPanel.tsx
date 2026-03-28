@@ -2,23 +2,44 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ANYCLAW_COLLAB_BROADCAST,
   broadcastCollabEvent,
+  getCollabAgents,
   getCollabInstanceMails,
   getCollabInstanceTopology,
   getInstances,
   postCollabInstanceMail,
   type CollabApiError,
   type CollabLimits,
+  type CollabPeerInstance,
   type Instance,
   type UserInstanceMessageRow,
 } from '../api'
+import { collabInstanceId } from './collabTopologyUtils'
 
-function neighborInstanceIds(edges: [number, number][], selfId: number): number[] {
+function neighborInstanceIds(edges: [unknown, unknown][], selfId: number): number[] {
+  const sid = collabInstanceId(selfId) ?? selfId
   const s = new Set<number>()
-  for (const [a, b] of edges) {
-    if (a === selfId) s.add(b)
-    else if (b === selfId) s.add(a)
+  for (const [x, y] of edges || []) {
+    const a = collabInstanceId(x)
+    const b = collabInstanceId(y)
+    if (a == null || b == null) continue
+    if (a === sid) s.add(b)
+    else if (b === sid) s.add(a)
   }
   return [...s].sort((x, y) => x - y)
+}
+
+function neighborIdsFromPeers(peers: CollabPeerInstance[] | undefined, selfId: number): number[] {
+  const sid = collabInstanceId(selfId) ?? selfId
+  const s = new Set<number>()
+  for (const p of peers || []) {
+    const id = collabInstanceId(p.instance_id)
+    if (id != null && id !== sid) s.add(id)
+  }
+  return [...s].sort((x, y) => x - y)
+}
+
+function mergeSortedUniqueIds(a: number[], b: number[]): number[] {
+  return [...new Set([...a, ...b])].sort((x, y) => x - y)
 }
 
 export type InstanceCrossInstanceMailPanelProps = {
@@ -62,10 +83,16 @@ export default function InstanceCrossInstanceMailPanel({
 
   const loadMeta = useCallback(async () => {
     const expected = instanceId
-    const [instList, topo] = await Promise.all([getInstances(), getCollabInstanceTopology(expected)])
+    const [instList, topo, roster] = await Promise.all([
+      getInstances(),
+      getCollabInstanceTopology(expected),
+      getCollabAgents(expected).catch(() => null),
+    ])
     if (instanceIdRef.current !== expected) return
     setInstances(instList)
-    setNeighborIds(neighborInstanceIds(topo.edges || [], expected))
+    const fromEdges = neighborInstanceIds(topo.edges || [], expected)
+    const fromPeers = roster?.peer_instances ? neighborIdsFromPeers(roster.peer_instances, expected) : []
+    setNeighborIds(mergeSortedUniqueIds(fromEdges, fromPeers))
     if (topo.limits) {
       const lim = topo.limits
       setLimits((prev) => (prev ? { ...prev, ...lim } : lim))

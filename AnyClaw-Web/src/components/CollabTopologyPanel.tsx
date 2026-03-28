@@ -24,6 +24,8 @@ import {
   filterEdgesForSlugs,
   layoutAgents,
   ensureInstanceInList,
+  instanceIdSetFromNodes,
+  mergeInstanceTopologyEdgesWithPeers,
   mergeInstancesWithPeers,
   normalizeEdgesKey,
   normalizeEdgesKeyNum,
@@ -165,12 +167,13 @@ export default function CollabTopologyPanel({
       }
       const t = tr.value
       mergeLimits(undefined, t.limits)
-      const idSet = new Set(instList.map((x) => x.id))
-      const raw = (t.edges || []) as [number, number][]
+      const idSet = instanceIdSetFromNodes(instList)
+      const raw = (t.edges || []) as [unknown, unknown][]
       const mapped = filterEdgesForInstanceIds(raw, idSet)
+      const merged = mergeInstanceTopologyEdgesWithPeers(expectedId, mapped, peersFromRoster)
       setTopoVersion(typeof t.version === 'number' ? t.version : 0)
-      setBaselineInstEdges(mapped)
-      setInstEdges(mapped)
+      setBaselineInstEdges(merged)
+      setInstEdges(merged)
       setTopologyReady(true)
       setLoading(false)
       return
@@ -241,7 +244,7 @@ export default function CollabTopologyPanel({
   }, [load, rosterRevision])
 
   const slugSet = useMemo(() => new Set(agents.map((a) => a.agent_slug.trim())), [agents])
-  const instanceIdSet = useMemo(() => new Set(instanceNodes.map((x) => x.id)), [instanceNodes])
+  const instanceIdSet = useMemo(() => instanceIdSetFromNodes(instanceNodes), [instanceNodes])
 
   const dirty = useMemo(() => {
     if (!topologyReady) return false

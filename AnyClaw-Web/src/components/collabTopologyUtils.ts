@@ -1,15 +1,62 @@
 import type { CollabPeerInstance, Instance } from '../api'
 
+/** JSON 解析后实例 id 可能为 number 或 string，统一为 number 以便 Set/边过滤一致 */
+export function collabInstanceId(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isFinite(v)) return v
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = parseInt(v, 10)
+    if (Number.isFinite(n)) return n
+  }
+  return null
+}
+
+/** 将 GET /collab/agents 的 peer_instances 转为与当前实例的无向边，并与 instance-topology 边合并去重（peer 即协作邻居） */
+export function mergeInstanceTopologyEdgesWithPeers(
+  selfId: number,
+  edges: [unknown, unknown][],
+  peers: CollabPeerInstance[] | undefined | null
+): [number, number][] {
+  const sid = collabInstanceId(selfId) ?? selfId
+  const keys = new Set<string>()
+  const out: [number, number][] = []
+  const pushPair = (lo: number, hi: number) => {
+    if (lo === hi) return
+    const [a, b] = canonPairNum(lo, hi)
+    const k = edgeKeyNum(a, b)
+    if (keys.has(k)) return
+    keys.add(k)
+    out.push([a, b])
+  }
+  for (const row of edges || []) {
+    const x = collabInstanceId(row[0])
+    const y = collabInstanceId(row[1])
+    if (x != null && y != null) pushPair(x, y)
+  }
+  if (peers?.length) {
+    for (const p of peers) {
+      const pid = collabInstanceId(p.instance_id)
+      if (pid == null || pid === sid) continue
+      pushPair(sid, pid)
+    }
+  }
+  out.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  return out
+}
+
 /** 将 GET /collab/agents 返回的 peer_instances 并入实例列表（补全编排拓扑中未出现在 GET /instances 的节点） */
 export function mergeInstancesWithPeers(
   list: Instance[],
   peers: CollabPeerInstance[] | undefined | null
 ): Instance[] {
   if (!peers?.length) return list
-  const byId = new Map<number, Instance>(list.map((i) => [i.id, i]))
+  const byId = new Map<number, Instance>()
+  for (const i of list) {
+    const id = collabInstanceId(i.id)
+    if (id != null) byId.set(id, { ...i, id })
+  }
   for (const p of peers) {
-    const id = p.instance_id
-    if (typeof id !== 'number' || !Number.isFinite(id)) continue
+    const id = collabInstanceId(p.instance_id)
+    if (id == null) continue
     if (byId.has(id)) continue
     byId.set(id, {
       id,
@@ -24,9 +71,20 @@ export function mergeInstancesWithPeers(
   return [...byId.values()].sort((a, b) => a.id - b.id)
 }
 
+/** 画布节点 id 与边端点比较时统一为 number（避免 JSON 中 string id 导致过滤掉全部边） */
+export function instanceIdSetFromNodes(nodes: Instance[]): Set<number> {
+  const s = new Set<number>()
+  for (const n of nodes) {
+    const id = collabInstanceId(n.id)
+    if (id != null) s.add(id)
+  }
+  return s
+}
+
 /** 当前查看的实例若不在列表中则补一条（仅 id，名称占位） */
 export function ensureInstanceInList(list: Instance[], instanceId: number): Instance[] {
-  if (list.some((x) => x.id === instanceId)) return list
+  const want = collabInstanceId(instanceId) ?? instanceId
+  if (list.some((x) => collabInstanceId(x.id) === want)) return list
   return [
     ...list,
     {
@@ -78,10 +136,18 @@ export function normalizeEdgesKeyNum(list: [number, number][]): string {
 }
 
 export function filterEdgesForInstanceIds(
-  edges: [number, number][],
+  edges: [unknown, unknown][],
   ids: Set<number>
 ): [number, number][] {
-  return edges.map(([x, y]) => canonPairNum(x, y)).filter(([lo, hi]) => ids.has(lo) && ids.has(hi))
+  const idOk = (n: number) => ids.has(n)
+  return (edges || [])
+    .map(([x, y]) => {
+      const lo = collabInstanceId(x)
+      const hi = collabInstanceId(y)
+      if (lo == null || hi == null) return null
+      return canonPairNum(lo, hi)
+    })
+    .filter((pair): pair is [number, number] => pair != null && pair[0] !== pair[1] && idOk(pair[0]) && idOk(pair[1]))
 }
 
 /** 节点中心坐标（viewBox 0–100） */
