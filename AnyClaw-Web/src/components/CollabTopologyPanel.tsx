@@ -86,6 +86,7 @@ export default function CollabTopologyPanel({
   const pressRef = useRef<{ slug: string; x: number; y: number } | null>(null)
 
   const panelRef = useRef<HTMLDivElement>(null)
+  const svgRef = useRef<SVGSVGElement>(null)
   const instanceIdRef = useRef(instanceId)
   instanceIdRef.current = instanceId
 
@@ -340,14 +341,15 @@ export default function CollabTopologyPanel({
   )
 
   const clientToSvg = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
-    const el = panelRef.current
-    if (!el) return null
-    const r = el.getBoundingClientRect()
-    if (r.width <= 0 || r.height <= 0) return null
-    return {
-      x: ((clientX - r.left) / r.width) * 100,
-      y: ((clientY - r.top) / r.height) * 100,
-    }
+    const svg = svgRef.current
+    if (!svg) return null
+    const pt = svg.createSVGPoint()
+    pt.x = clientX
+    pt.y = clientY
+    const ctm = svg.getScreenCTM()
+    if (!ctm) return null
+    const loc = pt.matrixTransform(ctm.inverse())
+    return { x: loc.x, y: loc.y }
   }, [])
 
   const toggleEdge = useCallback(
@@ -657,9 +659,15 @@ export default function CollabTopologyPanel({
 
           <div
             ref={panelRef}
-            className="relative w-full aspect-square max-h-[min(80vh,28rem)] mx-auto select-none touch-none rounded-xl border border-slate-200/80 bg-slate-50/50"
+            className="relative mx-auto w-full min-h-0 min-w-0 max-w-[min(100%,min(80vh,28rem))] aspect-square max-h-[min(80vh,28rem)] overflow-hidden select-none touch-none rounded-xl border border-slate-200/80 bg-slate-50/50"
           >
-            <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full" aria-hidden>
+            <svg
+              ref={svgRef}
+              viewBox="0 0 100 100"
+              preserveAspectRatio="xMidYMid meet"
+              className="absolute inset-0 block h-full w-full"
+              aria-hidden
+            >
               {topologyReady &&
                 (isInstanceMode
                   ? displayInstEdges.map(([lo, hi]) => {
