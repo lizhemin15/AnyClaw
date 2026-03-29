@@ -69,7 +69,8 @@ export type CollabTopologyPanelProps = {
 function findSlugUnderPoint(clientX: number, clientY: number): string | null {
   const stack = document.elementsFromPoint(clientX, clientY)
   for (const el of stack) {
-    if (!(el instanceof HTMLElement)) continue
+    // 节点为 SVG（circle/g），不是 HTMLElement；必须按 Element 遍历才能命中 data-collab-node-slug
+    if (!(el instanceof Element)) continue
     const s = el.closest('[data-collab-node-slug]')?.getAttribute('data-collab-node-slug')
     if (s) return s
   }
@@ -675,12 +676,21 @@ export default function CollabTopologyPanel({
     if (!tr || nodeCount < 2) return
     e.preventDefault()
     e.stopPropagation()
+    const captureTarget = e.currentTarget
+    try {
+      ;(captureTarget as Element).setPointerCapture(e.pointerId)
+    } catch {
+      /* noop */
+    }
     pressRef.current = { slug, x: e.clientX, y: e.clientY }
     dragMovedRef.current = false
+    const lastClientRef = { x: e.clientX, y: e.clientY }
 
     const onMove = (ev: PointerEvent) => {
       const p = pressRef.current
       if (!p) return
+      lastClientRef.x = ev.clientX
+      lastClientRef.y = ev.clientY
       const dx = ev.clientX - p.x
       const dy = ev.clientY - p.y
       if (!dragMovedRef.current && dx * dx + dy * dy >= DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
@@ -698,6 +708,12 @@ export default function CollabTopologyPanel({
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onUp)
 
+      try {
+        ;(captureTarget as Element).releasePointerCapture(ev.pointerId)
+      } catch {
+        /* noop */
+      }
+
       const p = pressRef.current
       pressRef.current = null
       const moved = dragMovedRef.current
@@ -709,7 +725,14 @@ export default function CollabTopologyPanel({
         interactionRef.current
       if (!p || !ok || n < 2) return
 
-      const targetSlug = findSlugUnderPoint(ev.clientX, ev.clientY)
+      // 部分移动浏览器在 pointerup 上 clientX/Y 为 0；用最后一次有效坐标做命中
+      let hx = ev.clientX
+      let hy = ev.clientY
+      if (ev.pointerType === 'touch' && hx === 0 && hy === 0) {
+        hx = lastClientRef.x
+        hy = lastClientRef.y
+      }
+      const targetSlug = findSlugUnderPoint(hx, hy)
       if (moved) {
         if (targetSlug && targetSlug !== p.slug) te(p.slug, targetSlug)
         return
