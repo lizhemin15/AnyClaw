@@ -107,8 +107,8 @@ export default function CollabTopologyPanel({
   const dragMovedRef = useRef(false)
   const pressRef = useRef<{ slug: string; x: number; y: number } | null>(null)
 
-  const panelRef = useRef<HTMLDivElement>(null)
-  const fullscreenWrapRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const fullscreenWrapRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const [topologyFullscreen, setTopologyFullscreen] = useState(false)
   const panDraggingRef = useRef(false)
@@ -340,7 +340,10 @@ export default function CollabTopologyPanel({
     try {
       await req()
       try {
-        await screen.orientation?.lock?.('landscape')
+        const o = screen.orientation as ScreenOrientation & {
+          lock?: (type: string) => Promise<void>
+        }
+        await o.lock?.('landscape')
       } catch {
         /* 部分环境不支持或需已全屏 */
       }
