@@ -150,13 +150,19 @@ export function filterEdgesForInstanceIds(
     .filter((pair): pair is [number, number] => pair != null && pair[0] !== pair[1] && idOk(pair[0]) && idOk(pair[1]))
 }
 
+export type LayoutAgentsOptions = {
+  /** 圆半径（viewBox 0–100），默认 36；窄屏可增大以拉开节点间距 */
+  radius?: number
+}
+
 /** 节点中心坐标（viewBox 0–100） */
-export function layoutAgents(n: number): { x: number; y: number }[] {
+export function layoutAgents(n: number, opts?: LayoutAgentsOptions): { x: number; y: number }[] {
+  const r = opts?.radius ?? 36
   if (n <= 0) return []
   if (n === 1) return [{ x: 50, y: 50 }]
   return Array.from({ length: n }, (_, i) => {
     const angle = (2 * Math.PI * i) / n - Math.PI / 2
-    return { x: 50 + 36 * Math.cos(angle), y: 50 + 36 * Math.sin(angle) }
+    return { x: 50 + r * Math.cos(angle), y: 50 + r * Math.sin(angle) }
   })
 }
 

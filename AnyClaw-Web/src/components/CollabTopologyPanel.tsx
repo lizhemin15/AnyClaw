@@ -95,6 +95,15 @@ export default function CollabTopologyPanel({
     else if (a) setLimits(a)
   }, [])
 
+  const [isNarrowViewport, setIsNarrowViewport] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)')
+    const apply = () => setIsNarrowViewport(mq.matches)
+    apply()
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
+
   const load = useCallback(async () => {
     const expectedId = instanceId
     setLoading(true)
@@ -305,8 +314,17 @@ export default function CollabTopologyPanel({
   }, [instanceId, load, isInstanceMode])
 
   const maxEdges = limits?.max_edges ?? 4096
-  const pos = useMemo(() => layoutAgents(agents.length), [agents.length])
-  const posInst = useMemo(() => layoutAgents(instanceNodes.length), [instanceNodes.length])
+  const layoutRadius = isNarrowViewport ? 42 : 36
+  const edgeStrokeW = isNarrowViewport ? 2.75 : 1.5
+  const dragStrokeW = isNarrowViewport ? 2.25 : 1.25
+  const pos = useMemo(
+    () => layoutAgents(agents.length, { radius: layoutRadius }),
+    [agents.length, layoutRadius]
+  )
+  const posInst = useMemo(
+    () => layoutAgents(instanceNodes.length, { radius: layoutRadius }),
+    [instanceNodes.length, layoutRadius]
+  )
   const slugToIndex = useMemo(() => {
     const m = new Map<string, number>()
     agents.forEach((a, i) => m.set(a.agent_slug.trim(), i))
@@ -684,7 +702,7 @@ export default function CollabTopologyPanel({
                           x2={q.x}
                           y2={q.y}
                           stroke="#818cf8"
-                          strokeWidth={1.5}
+                          strokeWidth={edgeStrokeW}
                           strokeLinecap="round"
                         />
                       )
@@ -703,7 +721,7 @@ export default function CollabTopologyPanel({
                           x2={q.x}
                           y2={q.y}
                           stroke="#818cf8"
-                          strokeWidth={1.5}
+                          strokeWidth={edgeStrokeW}
                           strokeLinecap="round"
                         />
                       )
@@ -723,7 +741,7 @@ export default function CollabTopologyPanel({
                         x2={dragCur.x}
                         y2={dragCur.y}
                         stroke="#a5b4fc"
-                        strokeWidth={1.25}
+                        strokeWidth={dragStrokeW}
                         strokeDasharray="3 2"
                         strokeLinecap="round"
                       />
@@ -739,7 +757,7 @@ export default function CollabTopologyPanel({
                       x2={dragCur.x}
                       y2={dragCur.y}
                       stroke="#a5b4fc"
-                      strokeWidth={1.25}
+                      strokeWidth={dragStrokeW}
                       strokeDasharray="3 2"
                       strokeLinecap="round"
                     />
@@ -756,23 +774,37 @@ export default function CollabTopologyPanel({
                     <div
                       key={inst.id}
                       data-collab-node-slug={key}
-                      className="absolute -translate-x-1/2 -translate-y-1/2 z-[1]"
-                      style={{ left: `${x}%`, top: `${y}%`, width: '28%', maxWidth: '130px', minHeight: '56px' }}
+                      className="absolute -translate-x-1/2 -translate-y-1/2 z-[1] w-[38%] max-w-[176px] min-h-[68px] sm:w-[28%] sm:max-w-[130px] sm:min-h-[56px]"
+                      style={{ left: `${x}%`, top: `${y}%` }}
                     >
                       <button
                         type="button"
                         aria-pressed={selected}
                         disabled={!topologyReady}
                         onPointerDown={(e) => onNodePointerDown(key, e)}
-                        className={`w-full min-h-[52px] rounded-xl border-2 flex flex-col items-center justify-center px-1 py-1.5 text-center transition-shadow disabled:opacity-50 disabled:cursor-not-allowed ${
+                        className={`w-full min-h-[60px] sm:min-h-[52px] rounded-xl border-2 flex flex-col items-center justify-center px-1.5 py-2 sm:px-1 sm:py-1.5 text-center transition-shadow disabled:opacity-50 disabled:cursor-not-allowed ${
                           selected || nodeBusy
                             ? 'border-indigo-500 bg-indigo-50 shadow-md z-10'
                             : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-slate-50'
                         }`}
                         title={`${inst.name} — 拖拽到另一节点连线，或点击与另一节点配对`}
                       >
-                        <span className="text-[11px] font-medium text-slate-800 line-clamp-2 leading-tight">{inst.name}</span>
-                        <span className="text-[10px] text-slate-400 truncate w-full mt-0.5">#{inst.id}</span>
+                        <span
+                          className={`text-xs sm:text-[11px] font-medium line-clamp-2 leading-tight rounded-md px-1.5 py-0.5 shadow-sm max-w-full ${
+                            selected || nodeBusy
+                              ? 'text-indigo-950 bg-indigo-100/95'
+                              : 'text-slate-800 bg-white/95'
+                          }`}
+                        >
+                          {inst.name}
+                        </span>
+                        <span
+                          className={`text-[11px] sm:text-[10px] truncate w-full mt-1 sm:mt-0.5 rounded px-1.5 py-0.5 shadow-sm ${
+                            selected || nodeBusy ? 'text-indigo-700 bg-indigo-100/90' : 'text-slate-500 bg-slate-100/95'
+                          }`}
+                        >
+                          #{inst.id}
+                        </span>
                       </button>
                     </div>
                   )
@@ -786,23 +818,37 @@ export default function CollabTopologyPanel({
                     <div
                       key={`${a.id}-${slug}`}
                       data-collab-node-slug={slug}
-                      className="absolute -translate-x-1/2 -translate-y-1/2 z-[1]"
-                      style={{ left: `${x}%`, top: `${y}%`, width: '28%', maxWidth: '130px', minHeight: '56px' }}
+                      className="absolute -translate-x-1/2 -translate-y-1/2 z-[1] w-[38%] max-w-[176px] min-h-[68px] sm:w-[28%] sm:max-w-[130px] sm:min-h-[56px]"
+                      style={{ left: `${x}%`, top: `${y}%` }}
                     >
                       <button
                         type="button"
                         aria-pressed={selected}
                         disabled={!topologyReady}
                         onPointerDown={(e) => onNodePointerDown(slug, e)}
-                        className={`w-full min-h-[52px] rounded-xl border-2 flex flex-col items-center justify-center px-1 py-1.5 text-center transition-shadow disabled:opacity-50 disabled:cursor-not-allowed ${
+                        className={`w-full min-h-[60px] sm:min-h-[52px] rounded-xl border-2 flex flex-col items-center justify-center px-1.5 py-2 sm:px-1 sm:py-1.5 text-center transition-shadow disabled:opacity-50 disabled:cursor-not-allowed ${
                           selected || nodeBusy
                             ? 'border-indigo-500 bg-indigo-50 shadow-md z-10'
                             : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-slate-50'
                         }`}
                         title={`${a.agent_slug} — 拖拽到另一节点连线，或点击与另一节点配对`}
                       >
-                        <span className="text-[11px] font-medium text-slate-800 line-clamp-2 leading-tight">{a.display_name}</span>
-                        <span className="text-[10px] text-slate-400 truncate w-full mt-0.5">{a.agent_slug}</span>
+                        <span
+                          className={`text-xs sm:text-[11px] font-medium line-clamp-2 leading-tight rounded-md px-1.5 py-0.5 shadow-sm max-w-full ${
+                            selected || nodeBusy
+                              ? 'text-indigo-950 bg-indigo-100/95'
+                              : 'text-slate-800 bg-white/95'
+                          }`}
+                        >
+                          {a.display_name}
+                        </span>
+                        <span
+                          className={`text-[11px] sm:text-[10px] truncate w-full mt-1 sm:mt-0.5 rounded px-1.5 py-0.5 shadow-sm ${
+                            selected || nodeBusy ? 'text-indigo-700 bg-indigo-100/90' : 'text-slate-500 bg-slate-100/95'
+                          }`}
+                        >
+                          {a.agent_slug}
+                        </span>
                       </button>
                     </div>
                   )
