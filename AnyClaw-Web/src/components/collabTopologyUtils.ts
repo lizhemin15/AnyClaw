@@ -166,4 +166,207 @@ export function layoutAgents(n: number, opts?: LayoutAgentsOptions): { x: number
   })
 }
 
+/** FNV-1a 风格 32 位哈希，用于布局随机种子 */
+export function hashString(s: string): number {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+/** 画布世界坐标边长（节点与力导向布局使用同一空间） */
+export const TOPOLOGY_WORLD_SIZE = 1000
+
+export type ViewBoxRect = { x: number; y: number; w: number; h: number }
+
+function mulberry32(seed: number) {
+  return () => {
+    let t = (seed += 0x6d2b79f5)
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+function dedupeSortedIndexPairs(pairs: [number, number][]): [number, number][] {
+  pairs.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  const dedup: [number, number][] = []
+  let last = ''
+  for (const [i, j] of pairs) {
+    const k = `${i}\0${j}`
+    if (k === last) continue
+    last = k
+    dedup.push([i, j])
+  }
+  return dedup
+}
+
+/** 将 slug 边转为节点下标边（用于力导向） */
+export function indexEdgesFromSlugEdges(
+  edges: [string, string][],
+  slugToIndex: Map<string, number>
+): [number, number][] {
+  const out: [number, number][] = []
+  for (const [a, b] of edges) {
+    const i = slugToIndex.get(a.trim())
+    const j = slugToIndex.get(b.trim())
+    if (i == null || j == null || i === j) continue
+    out.push(i < j ? [i, j] : [j, i])
+  }
+  return dedupeSortedIndexPairs(out)
+}
+
+/** 将实例 id 边转为节点下标边（用于力导向） */
+export function indexEdgesFromInstanceEdges(
+  edges: [number, number][],
+  idToIndex: Map<number, number>
+): [number, number][] {
+  const out: [number, number][] = []
+  for (const [a, b] of edges) {
+    const i = idToIndex.get(a)
+    const j = idToIndex.get(b)
+    if (i == null || j == null || i === j) continue
+    out.push(i < j ? [i, j] : [j, i])
+  }
+  return dedupeSortedIndexPairs(out)
+}
+
+/**
+ * 力导向布局（Fruchterman–Reingold 风格），输出坐标在 [0, size]²。
+ * 边列表为无向、端点为 0..n-1。
+ */
+export function layoutForceDirected(
+  n: number,
+  indexEdges: [number, number][],
+  opts?: { size?: number; iterations?: number; seed?: number }
+): { x: number; y: number }[] {
+  const size = opts?.size ?? TOPOLOGY_WORLD_SIZE
+  const area = size * size
+  const k = Math.sqrt(area / Math.max(n, 1))
+  const iterations =
+    opts?.iterations ??
+    Math.min(400, Math.max(60, Math.floor(140000 / Math.max(n, 1))))
+  const rng = mulberry32(opts?.seed ?? 0x9e3779b9 ^ (n * 2654435761))
+
+  if (n <= 0) return []
+  if (n === 1) return [{ x: size / 2, y: size / 2 }]
+
+  const x = new Float64Array(n)
+  const y = new Float64Array(n)
+  const ring = (size / 2) * 0.38
+  const cx = size / 2
+  const cy = size / 2
+  for (let i = 0; i < n; i++) {
+    const ang = (2 * Math.PI * i) / n - Math.PI / 2 + (rng() - 0.5) * 0.15
+    const rad = ring * (0.85 + rng() * 0.3)
+    x[i] = cx + rad * Math.cos(ang)
+    y[i] = cy + rad * Math.sin(ang)
+  }
+
+  const t0 = 0.9
+  for (let iter = 0; iter < iterations; iter++) {
+    const t = t0 * (1 - iter / iterations)
+    const dispX = new Float64Array(n)
+    const dispY = new Float64Array(n)
+
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const dx = x[i] - x[j]
+        const dy = y[i] - y[j]
+        const dist = Math.hypot(dx, dy) || 0.01
+        const rep = (k * k) / dist
+        const rx = (rep * dx) / dist
+        const ry = (rep * dy) / dist
+        dispX[i] += rx
+        dispY[i] += ry
+        dispX[j] -= rx
+        dispY[j] -= ry
+      }
+    }
+
+    for (const [i, j] of indexEdges) {
+      const dx = x[j] - x[i]
+      const dy = y[j] - y[i]
+      const dist = Math.hypot(dx, dy) || 0.01
+      const att = ((dist * dist) / k) * 0.04
+      const ax = (att * dx) / dist
+      const ay = (att * dy) / dist
+      dispX[i] += ax
+      dispY[i] += ay
+      dispX[j] -= ax
+      dispY[j] -= ay
+    }
+
+    const g = 0.03 * t
+    for (let i = 0; i < n; i++) {
+      dispX[i] += (cx - x[i]) * g
+      dispY[i] += (cy - y[i]) * g
+    }
+
+    for (let i = 0; i < n; i++) {
+      const mag = Math.hypot(dispX[i], dispY[i]) || 0
+      const cap = t * k
+      const scale = mag > cap ? cap / mag : 1
+      x[i] += dispX[i] * scale
+      y[i] += dispY[i] * scale
+      const pad = k * 0.35
+      x[i] = Math.min(size - pad, Math.max(pad, x[i]))
+      y[i] = Math.min(size - pad, Math.max(pad, y[i]))
+    }
+  }
+
+  return Array.from({ length: n }, (_, i) => ({ x: x[i], y: y[i] }))
+}
+
+/** 根据节点位置计算初始 viewBox（含边距），使图整体可见 */
+export function fitViewBoxToPositions(
+  positions: { x: number; y: number }[],
+  paddingRatio = 0.12,
+  /** 世界坐标系下的节点半径，避免圆被裁切 */
+  nodeRadiusWorld = 0
+): ViewBoxRect {
+  if (positions.length === 0) {
+    return { x: 0, y: 0, w: TOPOLOGY_WORLD_SIZE, h: TOPOLOGY_WORLD_SIZE }
+  }
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const p of positions) {
+    minX = Math.min(minX, p.x)
+    minY = Math.min(minY, p.y)
+    maxX = Math.max(maxX, p.x)
+    maxY = Math.max(maxY, p.y)
+  }
+  const nr = nodeRadiusWorld
+  minX -= nr
+  minY -= nr
+  maxX += nr
+  maxY += nr
+  const padX = Math.max((maxX - minX) * paddingRatio, TOPOLOGY_WORLD_SIZE * 0.06)
+  const padY = Math.max((maxY - minY) * paddingRatio, TOPOLOGY_WORLD_SIZE * 0.06)
+  minX -= padX
+  minY -= padY
+  maxX += padX
+  maxY += padY
+  const w = Math.max(maxX - minX, 1)
+  const h = Math.max(maxY - minY, 1)
+  return { x: minX, y: minY, w, h }
+}
+
+/** 以某世界坐标为中心缩放 viewBox */
+export function zoomViewBoxAt(vb: ViewBoxRect, worldX: number, worldY: number, factor: number): ViewBoxRect {
+  const f = Math.min(Math.max(factor, 0.25), 4)
+  const newW = vb.w * f
+  const newH = vb.h * f
+  return {
+    x: worldX - (worldX - vb.x) * f,
+    y: worldY - (worldY - vb.y) * f,
+    w: newW,
+    h: newH,
+  }
+}
+
 export const DRAG_THRESHOLD_PX = 8

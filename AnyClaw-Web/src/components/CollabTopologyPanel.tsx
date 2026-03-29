@@ -16,20 +16,31 @@ import {
 } from '../api'
 import {
   DRAG_THRESHOLD_PX,
+  TOPOLOGY_WORLD_SIZE,
   canonPair,
   canonPairNum,
   edgeKey,
   edgeKeyNum,
   filterEdgesForInstanceIds,
   filterEdgesForSlugs,
-  layoutAgents,
+  fitViewBoxToPositions,
+  hashString,
+  indexEdgesFromInstanceEdges,
+  indexEdgesFromSlugEdges,
+  layoutForceDirected,
   ensureInstanceInList,
   instanceIdSetFromNodes,
   mergeInstanceTopologyEdgesWithPeers,
   mergeInstancesWithPeers,
   normalizeEdgesKey,
   normalizeEdgesKeyNum,
+  zoomViewBoxAt,
+  type ViewBoxRect,
 } from './collabTopologyUtils'
+
+/** 世界坐标系下半径，配合 fit 后约对应屏幕 10–15px 圆点 */
+const NODE_RADIUS_WORLD = 14
+const HIT_RADIUS_WORLD = 22
 
 export type CollabTopologyPanelProps = {
   instanceId: number
@@ -87,21 +98,22 @@ export default function CollabTopologyPanel({
 
   const panelRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
+  const panDraggingRef = useRef(false)
+  const panLastRef = useRef<{ x: number; y: number } | null>(null)
   const instanceIdRef = useRef(instanceId)
+
+  const [viewBox, setViewBox] = useState<ViewBoxRect>({
+    x: 0,
+    y: 0,
+    w: TOPOLOGY_WORLD_SIZE,
+    h: TOPOLOGY_WORLD_SIZE,
+  })
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null)
   instanceIdRef.current = instanceId
 
   const mergeLimits = useCallback((a?: CollabLimits, b?: CollabLimits) => {
     if (b) setLimits(b)
     else if (a) setLimits(a)
-  }, [])
-
-  const [isNarrowViewport, setIsNarrowViewport] = useState(false)
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 640px)')
-    const apply = () => setIsNarrowViewport(mq.matches)
-    apply()
-    mq.addEventListener('change', apply)
-    return () => mq.removeEventListener('change', apply)
   }, [])
 
   const load = useCallback(async () => {
@@ -314,17 +326,6 @@ export default function CollabTopologyPanel({
   }, [instanceId, load, isInstanceMode])
 
   const maxEdges = limits?.max_edges ?? 4096
-  const layoutRadius = isNarrowViewport ? 42 : 36
-  const edgeStrokeW = isNarrowViewport ? 2.75 : 1.5
-  const dragStrokeW = isNarrowViewport ? 2.25 : 1.25
-  const pos = useMemo(
-    () => layoutAgents(agents.length, { radius: layoutRadius }),
-    [agents.length, layoutRadius]
-  )
-  const posInst = useMemo(
-    () => layoutAgents(instanceNodes.length, { radius: layoutRadius }),
-    [instanceNodes.length, layoutRadius]
-  )
   const slugToIndex = useMemo(() => {
     const m = new Map<string, number>()
     agents.forEach((a, i) => m.set(a.agent_slug.trim(), i))
@@ -358,6 +359,42 @@ export default function CollabTopologyPanel({
     [instEdges, instanceIdSet]
   )
 
+  const layoutResetKey = useMemo(() => {
+    if (isInstanceMode) {
+      const ids = [...instanceNodes]
+        .map((n) => n.id)
+        .sort((a, b) => Number(a) - Number(b))
+        .join(',')
+      return `${instanceNodes.length}|${normalizeEdgesKeyNum(instEdges)}|${ids}`
+    }
+    const slugs = agents.map((a) => a.agent_slug.trim()).sort().join(',')
+    return `${agents.length}|${normalizeEdgesKey(edges)}|${slugs}`
+  }, [isInstanceMode, instanceNodes, agents, instEdges, edges])
+
+  const worldPos = useMemo(() => {
+    const n = isInstanceMode ? instanceNodes.length : agents.length
+    if (n === 0) return []
+    const indexEdges = isInstanceMode
+      ? indexEdgesFromInstanceEdges(displayInstEdges, instIdToIndex)
+      : indexEdgesFromSlugEdges(displayEdges, slugToIndex)
+    const seed = hashString(layoutResetKey)
+    return layoutForceDirected(n, indexEdges, { seed })
+  }, [
+    isInstanceMode,
+    instanceNodes.length,
+    agents.length,
+    displayInstEdges,
+    displayEdges,
+    slugToIndex,
+    instIdToIndex,
+    layoutResetKey,
+  ])
+
+  useEffect(() => {
+    if (!topologyReady || worldPos.length === 0) return
+    setViewBox(fitViewBoxToPositions(worldPos, 0.12, NODE_RADIUS_WORLD))
+  }, [topologyReady, layoutResetKey, worldPos])
+
   const clientToSvg = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
     const svg = svgRef.current
     if (!svg) return null
@@ -369,6 +406,109 @@ export default function CollabTopologyPanel({
     const loc = pt.matrixTransform(ctm.inverse())
     return { x: loc.x, y: loc.y }
   }, [])
+
+  useEffect(() => {
+    if (loading) return
+    const el = svgRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const svg = svgRef.current
+      if (!svg) return
+      const pt = svg.createSVGPoint()
+      pt.x = e.clientX
+      pt.y = e.clientY
+      const ctm = svg.getScreenCTM()
+      if (!ctm) return
+      const loc = pt.matrixTransform(ctm.inverse())
+      const factor = e.deltaY > 0 ? 1.08 : 0.92
+      setViewBox((vb) => {
+        const next = zoomViewBoxAt(vb, loc.x, loc.y, factor)
+        const minW = TOPOLOGY_WORLD_SIZE * 0.02
+        const maxW = TOPOLOGY_WORLD_SIZE * 2.5
+        if (next.w < minW || next.w > maxW) return vb
+        return next
+      })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [loading, topologyReady, layoutResetKey])
+
+  const handleFitView = useCallback(() => {
+    if (worldPos.length === 0) return
+    setViewBox(fitViewBoxToPositions(worldPos, 0.12, NODE_RADIUS_WORLD))
+  }, [worldPos])
+
+  const zoomAtCenter = useCallback((factor: number) => {
+    setViewBox((vb) => {
+      const cx = vb.x + vb.w / 2
+      const cy = vb.y + vb.h / 2
+      const next = zoomViewBoxAt(vb, cx, cy, factor)
+      const minW = TOPOLOGY_WORLD_SIZE * 0.02
+      const maxW = TOPOLOGY_WORLD_SIZE * 2.5
+      if (next.w < minW || next.w > maxW) return vb
+      return next
+    })
+  }, [])
+
+  const handlePanPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    panDraggingRef.current = true
+    panLastRef.current = { x: e.clientX, y: e.clientY }
+    try {
+      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    } catch {
+      /* noop */
+    }
+  }
+
+  const handlePanPointerMove = (e: React.PointerEvent) => {
+    if (!panDraggingRef.current || !panLastRef.current) return
+    const svg = svgRef.current
+    if (!svg) return
+    const rect = svg.getBoundingClientRect()
+    const dx = e.clientX - panLastRef.current.x
+    const dy = e.clientY - panLastRef.current.y
+    panLastRef.current = { x: e.clientX, y: e.clientY }
+    setViewBox((vb) => ({
+      x: vb.x - (dx / rect.width) * vb.w,
+      y: vb.y - (dy / rect.height) * vb.h,
+      w: vb.w,
+      h: vb.h,
+    }))
+  }
+
+  const handlePanPointerUp = (e: React.PointerEvent) => {
+    if (panDraggingRef.current) {
+      try {
+        ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+      } catch {
+        /* noop */
+      }
+    }
+    panDraggingRef.current = false
+    panLastRef.current = null
+  }
+
+  const handleMinimapClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    const svg = e.currentTarget
+    const pt = svg.createSVGPoint()
+    pt.x = e.clientX
+    pt.y = e.clientY
+    const ctm = svg.getScreenCTM()
+    if (!ctm) return
+    const loc = pt.matrixTransform(ctm.inverse())
+    setViewBox((vb) => {
+      let nx = loc.x - vb.w / 2
+      let ny = loc.y - vb.h / 2
+      const maxX = Math.max(0, TOPOLOGY_WORLD_SIZE - vb.w)
+      const maxY = Math.max(0, TOPOLOGY_WORLD_SIZE - vb.h)
+      nx = Math.max(0, Math.min(maxX, nx))
+      ny = Math.max(0, Math.min(maxY, ny))
+      return { x: nx, y: ny, w: vb.w, h: vb.h }
+    })
+  }
 
   const toggleEdge = useCallback(
     (slugA: string, slugB: string) => {
@@ -461,6 +601,7 @@ export default function CollabTopologyPanel({
     const { topologyReady: tr, nodeCount } = interactionRef.current
     if (!tr || nodeCount < 2) return
     e.preventDefault()
+    e.stopPropagation()
     pressRef.current = { slug, x: e.clientX, y: e.clientY }
     dragMovedRef.current = false
 
@@ -677,23 +818,94 @@ export default function CollabTopologyPanel({
 
           <div
             ref={panelRef}
-            className="relative mx-auto w-full min-h-0 min-w-0 max-w-[min(100%,min(80vh,28rem))] aspect-square max-h-[min(80vh,28rem)] overflow-hidden select-none touch-none rounded-xl border border-slate-200/80 bg-slate-50/50"
+            title="滚轮缩放；拖拽空白处平移；点击圆点或拖拽连线"
+            className="relative mx-auto w-full min-h-0 min-w-0 max-w-[min(100%,min(85vh,36rem))] aspect-[4/3] max-h-[min(85vh,36rem)] overflow-hidden select-none touch-none rounded-xl border border-slate-200/80 bg-[#f8fafc]"
           >
+            <div className="absolute top-2 right-2 z-10 flex flex-col gap-0.5 rounded-md border border-slate-200/90 bg-white/95 p-0.5 shadow-sm">
+              <button
+                type="button"
+                aria-label="放大"
+                onClick={() => zoomAtCenter(0.92)}
+                className="min-h-[32px] min-w-[32px] rounded text-lg leading-none text-slate-700 hover:bg-slate-100"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                aria-label="缩小"
+                onClick={() => zoomAtCenter(1.08)}
+                className="min-h-[32px] min-w-[32px] rounded text-lg leading-none text-slate-700 hover:bg-slate-100"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                aria-label="适应画布"
+                onClick={handleFitView}
+                className="min-h-[32px] min-w-[32px] rounded text-xs font-medium text-slate-700 hover:bg-slate-100"
+              >
+                适应
+              </button>
+            </div>
+            <div className="absolute bottom-2 right-2 z-10 rounded border border-slate-200/90 bg-white/95 p-0.5 shadow-sm">
+              <svg
+                viewBox={`0 0 ${TOPOLOGY_WORLD_SIZE} ${TOPOLOGY_WORLD_SIZE}`}
+                preserveAspectRatio="xMidYMid meet"
+                className="block h-[72px] w-[96px] sm:h-[88px] sm:w-[112px] cursor-pointer touch-manipulation"
+                onClick={handleMinimapClick}
+                role="img"
+                aria-label="缩略图：点击跳转视野"
+              >
+                <rect width={TOPOLOGY_WORLD_SIZE} height={TOPOLOGY_WORLD_SIZE} fill="#f1f5f9" />
+                {worldPos.map((p, i) => (
+                  <circle key={i} cx={p.x} cy={p.y} r={3} fill="#cbd5e1" />
+                ))}
+                <rect
+                  x={viewBox.x}
+                  y={viewBox.y}
+                  width={viewBox.w}
+                  height={viewBox.h}
+                  fill="none"
+                  stroke="#6366f1"
+                  strokeWidth={2}
+                  vectorEffect="nonScalingStroke"
+                  pointerEvents="none"
+                />
+              </svg>
+            </div>
             <svg
               ref={svgRef}
-              viewBox="0 0 100 100"
+              viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
               preserveAspectRatio="xMidYMid meet"
-              className="absolute inset-0 block h-full w-full"
+              className="absolute inset-0 block h-full w-full touch-manipulation"
               aria-hidden
             >
+              <rect
+                x={viewBox.x}
+                y={viewBox.y}
+                width={viewBox.w}
+                height={viewBox.h}
+                fill="transparent"
+                className="cursor-grab active:cursor-grabbing"
+                onPointerDown={handlePanPointerDown}
+                onPointerMove={handlePanPointerMove}
+                onPointerUp={handlePanPointerUp}
+                onPointerCancel={handlePanPointerUp}
+              />
               {topologyReady &&
                 (isInstanceMode
                   ? displayInstEdges.map(([lo, hi]) => {
                       const i = instIdToIndex.get(lo)
                       const j = instIdToIndex.get(hi)
                       if (i == null || j == null) return null
-                      const p = posInst[i]
-                      const q = posInst[j]
+                      const p = worldPos[i]
+                      const q = worldPos[j]
+                      if (!p || !q) return null
+                      const ka = String(lo)
+                      const kb = String(hi)
+                      const hiLn =
+                        (pendingSlug && (pendingSlug === ka || pendingSlug === kb)) ||
+                        (hoveredKey && (hoveredKey === ka || hoveredKey === kb))
                       return (
                         <line
                           key={`${lo}-${hi}`}
@@ -701,9 +913,12 @@ export default function CollabTopologyPanel({
                           y1={p.y}
                           x2={q.x}
                           y2={q.y}
-                          stroke="#818cf8"
-                          strokeWidth={edgeStrokeW}
+                          stroke={hiLn ? '#6366f1' : '#94a3b8'}
+                          strokeOpacity={hiLn ? 0.95 : 0.45}
+                          strokeWidth={1}
                           strokeLinecap="round"
+                          vectorEffect="nonScalingStroke"
+                          pointerEvents="none"
                         />
                       )
                     })
@@ -711,8 +926,12 @@ export default function CollabTopologyPanel({
                       const i = slugToIndex.get(lo)
                       const j = slugToIndex.get(hi)
                       if (i == null || j == null) return null
-                      const p = pos[i]
-                      const q = pos[j]
+                      const p = worldPos[i]
+                      const q = worldPos[j]
+                      if (!p || !q) return null
+                      const hiLn =
+                        (pendingSlug && (pendingSlug === lo || pendingSlug === hi)) ||
+                        (hoveredKey && (hoveredKey === lo || hoveredKey === hi))
                       return (
                         <line
                           key={`${lo}-${hi}`}
@@ -720,9 +939,12 @@ export default function CollabTopologyPanel({
                           y1={p.y}
                           x2={q.x}
                           y2={q.y}
-                          stroke="#818cf8"
-                          strokeWidth={edgeStrokeW}
+                          stroke={hiLn ? '#6366f1' : '#94a3b8'}
+                          strokeOpacity={hiLn ? 0.95 : 0.45}
+                          strokeWidth={1}
                           strokeLinecap="round"
+                          vectorEffect="nonScalingStroke"
+                          pointerEvents="none"
                         />
                       )
                     }))}
@@ -733,7 +955,8 @@ export default function CollabTopologyPanel({
                     const id = parseInt(dragFrom, 10)
                     const i = instIdToIndex.get(id)
                     if (i == null) return null
-                    const p = posInst[i]
+                    const p = worldPos[i]
+                    if (!p) return null
                     return (
                       <line
                         x1={p.x}
@@ -741,15 +964,18 @@ export default function CollabTopologyPanel({
                         x2={dragCur.x}
                         y2={dragCur.y}
                         stroke="#a5b4fc"
-                        strokeWidth={dragStrokeW}
-                        strokeDasharray="3 2"
+                        strokeWidth={1}
+                        strokeDasharray="4 3"
                         strokeLinecap="round"
+                        vectorEffect="nonScalingStroke"
+                        pointerEvents="none"
                       />
                     )
                   }
                   const i = slugToIndex.get(dragFrom)
                   if (i == null) return null
-                  const p = pos[i]
+                  const p = worldPos[i]
+                  if (!p) return null
                   return (
                     <line
                       x1={p.x}
@@ -757,102 +983,86 @@ export default function CollabTopologyPanel({
                       x2={dragCur.x}
                       y2={dragCur.y}
                       stroke="#a5b4fc"
-                      strokeWidth={dragStrokeW}
-                      strokeDasharray="3 2"
+                      strokeWidth={1}
+                      strokeDasharray="4 3"
                       strokeLinecap="round"
+                      vectorEffect="nonScalingStroke"
+                      pointerEvents="none"
                     />
                   )
                 })()}
+              {isInstanceMode
+                ? instanceNodes.map((inst, i) => {
+                    const p = worldPos[i]
+                    if (!p) return null
+                    const key = String(inst.id)
+                    const selected = pendingSlug === key
+                    const nodeBusy = dragFrom === key
+                    const label = `${inst.name} (#${inst.id})`
+                    return (
+                      <g key={inst.id} data-collab-node-slug={key}>
+                        <circle
+                          cx={p.x}
+                          cy={p.y}
+                          r={HIT_RADIUS_WORLD}
+                          fill="transparent"
+                          className={topologyReady ? 'cursor-pointer' : 'cursor-not-allowed'}
+                          aria-hidden
+                          pointerEvents={topologyReady ? 'auto' : 'none'}
+                          onPointerEnter={() => topologyReady && setHoveredKey(key)}
+                          onPointerLeave={() => setHoveredKey(null)}
+                          onPointerDown={(e) => onNodePointerDown(key, e)}
+                        />
+                        <circle
+                          cx={p.x}
+                          cy={p.y}
+                          r={NODE_RADIUS_WORLD}
+                          fill={selected ? '#4f46e5' : nodeBusy ? '#a5b4fc' : '#e2e8f0'}
+                          stroke={selected ? '#312e81' : '#94a3b8'}
+                          strokeWidth={selected ? 2 : 1}
+                          vectorEffect="nonScalingStroke"
+                          pointerEvents="none"
+                        />
+                        <title>{label}</title>
+                      </g>
+                    )
+                  })
+                : agents.map((a, i) => {
+                    const p = worldPos[i]
+                    if (!p) return null
+                    const slug = a.agent_slug.trim()
+                    const selected = pendingSlug === slug
+                    const nodeBusy = dragFrom === slug
+                    const label = `${a.display_name} (${slug})`
+                    return (
+                      <g key={`${a.id}-${slug}`} data-collab-node-slug={slug}>
+                        <circle
+                          cx={p.x}
+                          cy={p.y}
+                          r={HIT_RADIUS_WORLD}
+                          fill="transparent"
+                          className={topologyReady ? 'cursor-pointer' : 'cursor-not-allowed'}
+                          aria-hidden
+                          pointerEvents={topologyReady ? 'auto' : 'none'}
+                          onPointerEnter={() => topologyReady && setHoveredKey(slug)}
+                          onPointerLeave={() => setHoveredKey(null)}
+                          onPointerDown={(e) => onNodePointerDown(slug, e)}
+                        />
+                        <circle
+                          cx={p.x}
+                          cy={p.y}
+                          r={NODE_RADIUS_WORLD}
+                          fill={selected ? '#4f46e5' : nodeBusy ? '#a5b4fc' : '#e2e8f0'}
+                          stroke={selected ? '#312e81' : '#94a3b8'}
+                          strokeWidth={selected ? 2 : 1}
+                          vectorEffect="nonScalingStroke"
+                          pointerEvents="none"
+                        />
+                        <title>{label}</title>
+                      </g>
+                    )
+                  })}
             </svg>
-            {isInstanceMode
-              ? instanceNodes.map((inst, i) => {
-                  const { x, y } = posInst[i]
-                  const key = String(inst.id)
-                  const selected = pendingSlug === key
-                  const nodeBusy = dragFrom === key
-                  return (
-                    <div
-                      key={inst.id}
-                      data-collab-node-slug={key}
-                      className="absolute -translate-x-1/2 -translate-y-1/2 z-[1] w-[38%] max-w-[176px] min-h-[68px] sm:w-[28%] sm:max-w-[130px] sm:min-h-[56px]"
-                      style={{ left: `${x}%`, top: `${y}%` }}
-                    >
-                      <button
-                        type="button"
-                        aria-pressed={selected}
-                        disabled={!topologyReady}
-                        onPointerDown={(e) => onNodePointerDown(key, e)}
-                        className={`w-full min-h-[60px] sm:min-h-[52px] rounded-xl border-2 flex flex-col items-center justify-center px-1.5 py-2 sm:px-1 sm:py-1.5 text-center transition-shadow disabled:opacity-50 disabled:cursor-not-allowed ${
-                          selected || nodeBusy
-                            ? 'border-indigo-500 bg-indigo-50 shadow-md z-10'
-                            : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-slate-50'
-                        }`}
-                        title={`${inst.name} — 拖拽到另一节点连线，或点击与另一节点配对`}
-                      >
-                        <span
-                          className={`text-xs sm:text-[11px] font-medium line-clamp-2 leading-tight rounded-md px-1.5 py-0.5 shadow-sm max-w-full ${
-                            selected || nodeBusy
-                              ? 'text-indigo-950 bg-indigo-100/95'
-                              : 'text-slate-800 bg-white/95'
-                          }`}
-                        >
-                          {inst.name}
-                        </span>
-                        <span
-                          className={`text-[11px] sm:text-[10px] truncate w-full mt-1 sm:mt-0.5 rounded px-1.5 py-0.5 shadow-sm ${
-                            selected || nodeBusy ? 'text-indigo-700 bg-indigo-100/90' : 'text-slate-500 bg-slate-100/95'
-                          }`}
-                        >
-                          #{inst.id}
-                        </span>
-                      </button>
-                    </div>
-                  )
-                })
-              : agents.map((a, i) => {
-                  const { x, y } = pos[i]
-                  const slug = a.agent_slug.trim()
-                  const selected = pendingSlug === slug
-                  const nodeBusy = dragFrom === slug
-                  return (
-                    <div
-                      key={`${a.id}-${slug}`}
-                      data-collab-node-slug={slug}
-                      className="absolute -translate-x-1/2 -translate-y-1/2 z-[1] w-[38%] max-w-[176px] min-h-[68px] sm:w-[28%] sm:max-w-[130px] sm:min-h-[56px]"
-                      style={{ left: `${x}%`, top: `${y}%` }}
-                    >
-                      <button
-                        type="button"
-                        aria-pressed={selected}
-                        disabled={!topologyReady}
-                        onPointerDown={(e) => onNodePointerDown(slug, e)}
-                        className={`w-full min-h-[60px] sm:min-h-[52px] rounded-xl border-2 flex flex-col items-center justify-center px-1.5 py-2 sm:px-1 sm:py-1.5 text-center transition-shadow disabled:opacity-50 disabled:cursor-not-allowed ${
-                          selected || nodeBusy
-                            ? 'border-indigo-500 bg-indigo-50 shadow-md z-10'
-                            : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-slate-50'
-                        }`}
-                        title={`${a.agent_slug} — 拖拽到另一节点连线，或点击与另一节点配对`}
-                      >
-                        <span
-                          className={`text-xs sm:text-[11px] font-medium line-clamp-2 leading-tight rounded-md px-1.5 py-0.5 shadow-sm max-w-full ${
-                            selected || nodeBusy
-                              ? 'text-indigo-950 bg-indigo-100/95'
-                              : 'text-slate-800 bg-white/95'
-                          }`}
-                        >
-                          {a.display_name}
-                        </span>
-                        <span
-                          className={`text-[11px] sm:text-[10px] truncate w-full mt-1 sm:mt-0.5 rounded px-1.5 py-0.5 shadow-sm ${
-                            selected || nodeBusy ? 'text-indigo-700 bg-indigo-100/90' : 'text-slate-500 bg-slate-100/95'
-                          }`}
-                        >
-                          {a.agent_slug}
-                        </span>
-                      </button>
-                    </div>
-                  )
-                })}
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
