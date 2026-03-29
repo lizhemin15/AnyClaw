@@ -325,7 +325,9 @@ export function fitViewBoxToPositions(
   positions: { x: number; y: number }[],
   paddingRatio = 0.12,
   /** 世界坐标系下的节点半径，避免圆被裁切 */
-  nodeRadiusWorld = 0
+  nodeRadiusWorld = 0,
+  /** 节点下方额外空间（如常驻文字标签），避免被裁切 */
+  extraBottomWorld = 0
 ): ViewBoxRect {
   if (positions.length === 0) {
     return { x: 0, y: 0, w: TOPOLOGY_WORLD_SIZE, h: TOPOLOGY_WORLD_SIZE }
@@ -344,7 +346,7 @@ export function fitViewBoxToPositions(
   minX -= nr
   minY -= nr
   maxX += nr
-  maxY += nr
+  maxY += nr + extraBottomWorld
   const padX = Math.max((maxX - minX) * paddingRatio, TOPOLOGY_WORLD_SIZE * 0.06)
   const padY = Math.max((maxY - minY) * paddingRatio, TOPOLOGY_WORLD_SIZE * 0.06)
   minX -= padX

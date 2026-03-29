@@ -41,6 +41,17 @@ import {
 /** 世界坐标系下半径，配合 fit 后约对应屏幕 10–15px 圆点 */
 const NODE_RADIUS_WORLD = 14
 const HIT_RADIUS_WORLD = 22
+/** 节点下方常驻标签（世界坐标）：字号 + 与圆间距，供 fit 视野预留 */
+const NODE_LABEL_FONT_WORLD = 11
+const NODE_LABEL_GAP_WORLD = 3
+const NODE_LABEL_BELOW_WORLD = NODE_LABEL_GAP_WORLD + NODE_LABEL_FONT_WORLD + 2
+
+function truncateTopologyLabel(s: string, maxLen: number): string {
+  const t = s.trim()
+  if (t.length <= maxLen) return t
+  if (maxLen <= 1) return '…'
+  return `${t.slice(0, maxLen - 1)}…`
+}
 
 export type CollabTopologyPanelProps = {
   instanceId: number
@@ -451,7 +462,7 @@ export default function CollabTopologyPanel({
 
   useEffect(() => {
     if (!topologyReady || worldPos.length === 0) return
-    setViewBox(fitViewBoxToPositions(worldPos, 0.12, NODE_RADIUS_WORLD))
+    setViewBox(fitViewBoxToPositions(worldPos, 0.12, NODE_RADIUS_WORLD, NODE_LABEL_BELOW_WORLD))
   }, [topologyReady, layoutResetKey, worldPos])
 
   const clientToSvg = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
@@ -495,7 +506,7 @@ export default function CollabTopologyPanel({
 
   const handleFitView = useCallback(() => {
     if (worldPos.length === 0) return
-    setViewBox(fitViewBoxToPositions(worldPos, 0.12, NODE_RADIUS_WORLD))
+    setViewBox(fitViewBoxToPositions(worldPos, 0.12, NODE_RADIUS_WORLD, NODE_LABEL_BELOW_WORLD))
   }, [worldPos])
 
   const zoomAtCenter = useCallback((factor: number) => {
@@ -881,83 +892,13 @@ export default function CollabTopologyPanel({
               fullscreenWrapRef.current = el
             }}
             title="滚轮缩放；拖拽空白处平移；点击圆点或拖拽连线"
-            className="relative mx-auto w-full min-h-0 min-w-0 max-w-[min(100%,min(85vh,36rem))] aspect-[4/3] max-h-[min(85vh,36rem)] overflow-hidden select-none touch-none rounded-xl border border-slate-200/80 bg-[#f8fafc] fullscreen:mx-0 fullscreen:max-h-none fullscreen:max-w-none fullscreen:aspect-auto fullscreen:h-full fullscreen:min-h-[100dvh] fullscreen:w-full fullscreen:rounded-none fullscreen:border-0"
+            className="relative isolate mx-auto w-full min-h-0 min-w-0 max-w-[min(100%,min(85vh,36rem))] aspect-[4/3] max-h-[min(85vh,36rem)] overflow-hidden select-none touch-none rounded-xl border border-slate-200/80 bg-[#f8fafc] fullscreen:mx-0 fullscreen:max-h-none fullscreen:max-w-none fullscreen:aspect-auto fullscreen:h-full fullscreen:min-h-[100dvh] fullscreen:w-full fullscreen:rounded-none fullscreen:border-0"
           >
-            {!topologyFullscreen && (
-              <button
-                type="button"
-                onClick={() => void enterTopologyFullscreen()}
-                className="absolute top-2 left-2 z-20 min-h-[44px] min-w-[44px] rounded-lg border border-indigo-200 bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-md hover:bg-indigo-700 active:bg-indigo-800 touch-manipulation"
-              >
-                全屏
-              </button>
-            )}
-            {topologyFullscreen && (
-              <button
-                type="button"
-                onClick={() => void exitTopologyFullscreen()}
-                className="absolute top-2 left-2 z-20 min-h-[48px] rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-lg hover:bg-slate-50 active:bg-slate-100 touch-manipulation"
-              >
-                退出全屏
-              </button>
-            )}
-            <div className="absolute top-2 right-2 z-10 flex flex-col gap-0.5 rounded-md border border-slate-200/90 bg-white/95 p-0.5 shadow-sm">
-              <button
-                type="button"
-                aria-label="放大"
-                onClick={() => zoomAtCenter(0.92)}
-                className="min-h-[32px] min-w-[32px] rounded text-lg leading-none text-slate-700 hover:bg-slate-100"
-              >
-                +
-              </button>
-              <button
-                type="button"
-                aria-label="缩小"
-                onClick={() => zoomAtCenter(1.08)}
-                className="min-h-[32px] min-w-[32px] rounded text-lg leading-none text-slate-700 hover:bg-slate-100"
-              >
-                −
-              </button>
-              <button
-                type="button"
-                aria-label="适应画布"
-                onClick={handleFitView}
-                className="min-h-[32px] min-w-[32px] rounded text-xs font-medium text-slate-700 hover:bg-slate-100"
-              >
-                适应
-              </button>
-            </div>
-            <div className="absolute bottom-2 right-2 z-10 rounded border border-slate-200/90 bg-white/95 p-0.5 shadow-sm">
-              <svg
-                viewBox={`0 0 ${TOPOLOGY_WORLD_SIZE} ${TOPOLOGY_WORLD_SIZE}`}
-                preserveAspectRatio="xMidYMid meet"
-                className="block h-[72px] w-[96px] sm:h-[88px] sm:w-[112px] cursor-pointer touch-manipulation"
-                onClick={handleMinimapClick}
-                role="img"
-                aria-label="缩略图：点击跳转视野"
-              >
-                <rect width={TOPOLOGY_WORLD_SIZE} height={TOPOLOGY_WORLD_SIZE} fill="#f1f5f9" />
-                {worldPos.map((p, i) => (
-                  <circle key={i} cx={p.x} cy={p.y} r={3} fill="#cbd5e1" />
-                ))}
-                <rect
-                  x={viewBox.x}
-                  y={viewBox.y}
-                  width={viewBox.w}
-                  height={viewBox.h}
-                  fill="none"
-                  stroke="#6366f1"
-                  strokeWidth={2}
-                  vectorEffect="nonScalingStroke"
-                  pointerEvents="none"
-                />
-              </svg>
-            </div>
             <svg
               ref={svgRef}
               viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
               preserveAspectRatio="xMidYMid meet"
-              className="absolute inset-0 block h-full w-full touch-manipulation"
+              className="absolute inset-0 z-0 block h-full w-full touch-manipulation"
               aria-hidden
             >
               <rect
@@ -1104,6 +1045,18 @@ export default function CollabTopologyPanel({
                           pointerEvents="none"
                         />
                         <title>{label}</title>
+                        <text
+                          x={p.x}
+                          y={p.y + NODE_RADIUS_WORLD + NODE_LABEL_GAP_WORLD}
+                          textAnchor="middle"
+                          dominantBaseline="hanging"
+                          fontSize={NODE_LABEL_FONT_WORLD}
+                          fill="#475569"
+                          fontFamily="system-ui, -apple-system, sans-serif"
+                          pointerEvents="none"
+                        >
+                          {truncateTopologyLabel(label, 14)}
+                        </text>
                       </g>
                     )
                   })
@@ -1113,7 +1066,8 @@ export default function CollabTopologyPanel({
                     const slug = a.agent_slug.trim()
                     const selected = pendingSlug === slug
                     const nodeBusy = dragFrom === slug
-                    const label = `${a.display_name} (${slug})`
+                    const dn = a.display_name?.trim()
+                    const label = dn ? `${dn} (${slug})` : slug
                     return (
                       <g key={`${a.id}-${slug}`} data-collab-node-slug={slug}>
                         <circle
@@ -1139,10 +1093,94 @@ export default function CollabTopologyPanel({
                           pointerEvents="none"
                         />
                         <title>{label}</title>
+                        <text
+                          x={p.x}
+                          y={p.y + NODE_RADIUS_WORLD + NODE_LABEL_GAP_WORLD}
+                          textAnchor="middle"
+                          dominantBaseline="hanging"
+                          fontSize={NODE_LABEL_FONT_WORLD}
+                          fill="#475569"
+                          fontFamily="system-ui, -apple-system, sans-serif"
+                          pointerEvents="none"
+                        >
+                          {truncateTopologyLabel(label, 14)}
+                        </text>
                       </g>
                     )
                   })}
             </svg>
+            <div className="pointer-events-none absolute inset-0 z-10">
+              <div className="pointer-events-auto absolute top-2 right-2 flex flex-col gap-0.5 rounded-md border border-slate-200/90 bg-white/95 p-0.5 shadow-sm sm:top-2 sm:right-2">
+                <button
+                  type="button"
+                  aria-label="放大"
+                  onClick={() => zoomAtCenter(0.92)}
+                  className="min-h-[36px] min-w-[36px] rounded text-lg leading-none text-slate-700 hover:bg-slate-100 sm:min-h-[32px] sm:min-w-[32px]"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  aria-label="缩小"
+                  onClick={() => zoomAtCenter(1.08)}
+                  className="min-h-[36px] min-w-[36px] rounded text-lg leading-none text-slate-700 hover:bg-slate-100 sm:min-h-[32px] sm:min-w-[32px]"
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  aria-label="适应画布"
+                  onClick={handleFitView}
+                  className="min-h-[36px] min-w-[36px] rounded text-xs font-medium text-slate-700 hover:bg-slate-100 sm:min-h-[32px] sm:min-w-[32px]"
+                >
+                  适应
+                </button>
+              </div>
+              <div className="pointer-events-auto absolute bottom-2 right-2 rounded border border-slate-200/90 bg-white/95 p-0.5 shadow-sm">
+                <svg
+                  viewBox={`0 0 ${TOPOLOGY_WORLD_SIZE} ${TOPOLOGY_WORLD_SIZE}`}
+                  preserveAspectRatio="xMidYMid meet"
+                  className="block h-[72px] w-[96px] sm:h-[88px] sm:w-[112px] cursor-pointer touch-manipulation"
+                  onClick={handleMinimapClick}
+                  role="img"
+                  aria-label="缩略图：点击跳转视野"
+                >
+                  <rect width={TOPOLOGY_WORLD_SIZE} height={TOPOLOGY_WORLD_SIZE} fill="#f1f5f9" />
+                  {worldPos.map((p, i) => (
+                    <circle key={i} cx={p.x} cy={p.y} r={3} fill="#cbd5e1" />
+                  ))}
+                  <rect
+                    x={viewBox.x}
+                    y={viewBox.y}
+                    width={viewBox.w}
+                    height={viewBox.h}
+                    fill="none"
+                    stroke="#6366f1"
+                    strokeWidth={2}
+                    vectorEffect="nonScalingStroke"
+                    pointerEvents="none"
+                  />
+                </svg>
+              </div>
+            </div>
+            {!topologyFullscreen && (
+              <button
+                type="button"
+                onClick={() => void enterTopologyFullscreen()}
+                className="pointer-events-auto absolute left-[max(0.5rem,env(safe-area-inset-left))] top-[max(0.5rem,env(safe-area-inset-top))] z-[60] flex min-h-[48px] min-w-[48px] items-center justify-center rounded-xl border-2 border-white/80 bg-indigo-600 px-3 text-base font-semibold text-white shadow-lg ring-2 ring-indigo-900/10 hover:bg-indigo-700 active:bg-indigo-800 touch-manipulation"
+              >
+                全屏
+              </button>
+            )}
+            {topologyFullscreen && (
+              <button
+                type="button"
+                onClick={() => void exitTopologyFullscreen()}
+                className="pointer-events-auto absolute left-[max(0.5rem,env(safe-area-inset-left))] top-[max(0.5rem,env(safe-area-inset-top))] z-[60] min-h-[48px] rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-xl hover:bg-slate-50 active:bg-slate-100 touch-manipulation"
+              >
+                退出全屏
+              </button>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
