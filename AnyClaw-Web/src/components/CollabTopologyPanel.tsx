@@ -97,7 +97,9 @@ export default function CollabTopologyPanel({
   const pressRef = useRef<{ slug: string; x: number; y: number } | null>(null)
 
   const panelRef = useRef<HTMLDivElement>(null)
+  const fullscreenWrapRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
+  const [topologyFullscreen, setTopologyFullscreen] = useState(false)
   const panDraggingRef = useRef(false)
   const panLastRef = useRef<{ x: number; y: number } | null>(null)
   const instanceIdRef = useRef(instanceId)
@@ -290,6 +292,63 @@ export default function CollabTopologyPanel({
   useEffect(() => {
     onDirtyChange?.(dirty)
   }, [dirty, onDirtyChange])
+
+  useEffect(() => {
+    const fullscreenEl = (): Element | null =>
+      document.fullscreenElement ??
+      (document as Document & { webkitFullscreenElement?: Element | null }).webkitFullscreenElement ??
+      null
+    const onFullscreenChange = () => {
+      const wrap = fullscreenWrapRef.current
+      const active = wrap != null && fullscreenEl() === wrap
+      setTopologyFullscreen(active)
+      if (!active) {
+        try {
+          const o = screen.orientation as ScreenOrientation & { unlock?: () => void }
+          o?.unlock?.()
+        } catch {
+          /* noop */
+        }
+      }
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange as EventListener)
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange)
+      document.removeEventListener('webkitfullscreenchange', onFullscreenChange as EventListener)
+    }
+  }, [])
+
+  const enterTopologyFullscreen = useCallback(async () => {
+    const el = fullscreenWrapRef.current
+    if (!el) return
+    const req =
+      el.requestFullscreen?.bind(el) ??
+      (el as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> }).webkitRequestFullscreen?.bind(el)
+    if (!req) return
+    try {
+      await req()
+      try {
+        await screen.orientation?.lock?.('landscape')
+      } catch {
+        /* 部分环境不支持或需已全屏 */
+      }
+    } catch {
+      /* 用户拒绝或浏览器不支持 */
+    }
+  }, [])
+
+  const exitTopologyFullscreen = useCallback(async () => {
+    const exit =
+      document.exitFullscreen?.bind(document) ??
+      (document as Document & { webkitExitFullscreen?: () => Promise<void> }).webkitExitFullscreen?.bind(document)
+    if (!exit) return
+    try {
+      await exit()
+    } catch {
+      /* noop */
+    }
+  }, [])
 
   const dirtyRef = useRef(false)
   dirtyRef.current = dirty
@@ -817,10 +876,31 @@ export default function CollabTopologyPanel({
           )}
 
           <div
-            ref={panelRef}
+            ref={(el) => {
+              panelRef.current = el
+              fullscreenWrapRef.current = el
+            }}
             title="滚轮缩放；拖拽空白处平移；点击圆点或拖拽连线"
-            className="relative mx-auto w-full min-h-0 min-w-0 max-w-[min(100%,min(85vh,36rem))] aspect-[4/3] max-h-[min(85vh,36rem)] overflow-hidden select-none touch-none rounded-xl border border-slate-200/80 bg-[#f8fafc]"
+            className="relative mx-auto w-full min-h-0 min-w-0 max-w-[min(100%,min(85vh,36rem))] aspect-[4/3] max-h-[min(85vh,36rem)] overflow-hidden select-none touch-none rounded-xl border border-slate-200/80 bg-[#f8fafc] fullscreen:mx-0 fullscreen:max-h-none fullscreen:max-w-none fullscreen:aspect-auto fullscreen:h-full fullscreen:min-h-[100dvh] fullscreen:w-full fullscreen:rounded-none fullscreen:border-0"
           >
+            {!topologyFullscreen && (
+              <button
+                type="button"
+                onClick={() => void enterTopologyFullscreen()}
+                className="absolute top-2 left-2 z-20 min-h-[44px] min-w-[44px] rounded-lg border border-indigo-200 bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-md hover:bg-indigo-700 active:bg-indigo-800 touch-manipulation"
+              >
+                全屏
+              </button>
+            )}
+            {topologyFullscreen && (
+              <button
+                type="button"
+                onClick={() => void exitTopologyFullscreen()}
+                className="absolute top-2 left-2 z-20 min-h-[48px] rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-lg hover:bg-slate-50 active:bg-slate-100 touch-manipulation"
+              >
+                退出全屏
+              </button>
+            )}
             <div className="absolute top-2 right-2 z-10 flex flex-col gap-0.5 rounded-md border border-slate-200/90 bg-white/95 p-0.5 shadow-sm">
               <button
                 type="button"
