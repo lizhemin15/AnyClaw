@@ -140,6 +140,23 @@ export default function Hosts() {
     }
   }, [])
 
+  const checkInstanceImageStatus = useCallback(async (id: string) => {
+    try {
+      const res = await getHostInstanceImageStatus(id)
+      setInstanceImageStatus((prev) => ({
+        ...prev,
+        [id]: {
+          update_available: res.update_available,
+          image: res.image,
+          instance_count: res.instance_count,
+          message: res.message,
+        },
+      }))
+    } catch {
+      setInstanceImageStatus((prev) => ({ ...prev, [id]: { update_available: false, image: '', instance_count: 0 } }))
+    }
+  }, [])
+
   useEffect(() => {
     const entries = Object.entries(pullTaskByHost)
     if (entries.length === 0) return
@@ -190,23 +207,6 @@ export default function Hosts() {
       window.clearInterval(id)
     }
   }, [pullTaskByHost, hosts, checkInstanceImageStatus])
-
-  const checkInstanceImageStatus = useCallback(async (id: string) => {
-    try {
-      const res = await getHostInstanceImageStatus(id)
-      setInstanceImageStatus((prev) => ({
-        ...prev,
-        [id]: {
-          update_available: res.update_available,
-          image: res.image,
-          instance_count: res.instance_count,
-          message: res.message,
-        },
-      }))
-    } catch {
-      setInstanceImageStatus((prev) => ({ ...prev, [id]: { update_available: false, image: '', instance_count: 0 } }))
-    }
-  }, [])
 
   useEffect(() => {
     hosts.filter((h) => h.enabled).forEach((h) => {
