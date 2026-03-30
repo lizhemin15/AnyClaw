@@ -369,7 +369,7 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 
 				response, err := al.processMessage(ctx, msg)
 				if err != nil {
-					response = fmt.Sprintf("Error processing message: %v", err)
+					response = formatUserFacingProcessError(err)
 				}
 
 				if response != "" {
@@ -1064,6 +1064,57 @@ func (al *AgentLoop) handleReasoning(
 	}
 }
 
+// isTransientOverloadError reports whether the error is likely a recoverable
+// server-side busy/overload response (worth waiting and retrying).
+func isTransientOverloadError(errMsg string) bool {
+	m := strings.ToLower(errMsg)
+	if strings.Contains(m, "engine busy") || strings.Contains(m, "recvfromengineerror") {
+		return true
+	}
+	if strings.Contains(m, "status 429") || strings.Contains(m, "status 502") ||
+		strings.Contains(m, "status 503") || strings.Contains(m, "status 504") {
+		return true
+	}
+	if strings.Contains(m, "status 500") &&
+		(strings.Contains(m, "busy") || strings.Contains(m, "engine") ||
+			strings.Contains(m, "overload") || strings.Contains(m, "xunfei") ||
+			strings.Contains(m, "one_api_error")) {
+		return true
+	}
+	if strings.Contains(m, "rate limit") || strings.Contains(m, "too many requests") ||
+		strings.Contains(m, "overloaded") || strings.Contains(m, "service unavailable") ||
+		strings.Contains(m, "bad gateway") {
+		return true
+	}
+	return false
+}
+
+// formatUserFacingProcessError maps internal errors to short, non-technical copy for chat.
+func formatUserFacingProcessError(err error) string {
+	if err == nil {
+		return ""
+	}
+	if errors.Is(err, context.Canceled) {
+		return "操作已取消。"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "请求超时，请稍后再试。"
+	}
+	msg := err.Error()
+	low := strings.ToLower(msg)
+	if strings.Contains(low, "deadline exceeded") || strings.Contains(low, "timed out") {
+		return "请求超时，请稍后再试。"
+	}
+	if isTransientOverloadError(msg) {
+		return "模型服务暂时繁忙，请稍后再试。"
+	}
+	if strings.Contains(low, "context_length") || strings.Contains(low, "token limit") ||
+		strings.Contains(low, "too many tokens") || strings.Contains(low, "maximum context") {
+		return "对话过长，请新开对话或精简内容后再试。"
+	}
+	return "暂时无法完成回复，请稍后再试。"
+}
+
 // runLLMIteration executes the LLM call loop with tool handling.
 // outCh/outCID are the user-visible routing targets (see resolveOutboundRouting).
 func (al *AgentLoop) runLLMIteration(
@@ -1163,8 +1214,27 @@ func (al *AgentLoop) runLLMIteration(
 
 		// Retry loop for context/token errors
 		maxRetries := 2
+		const maxOverloadRetries = 8
 		for retry := 0; retry <= maxRetries; retry++ {
 			response, err = callLLM()
+			for overloadAttempt := 0; err != nil && isTransientOverloadError(err.Error()) && overloadAttempt < maxOverloadRetries; overloadAttempt++ {
+				backoff := time.Duration(overloadAttempt+1) * 3 * time.Second
+				if backoff > 20*time.Second {
+					backoff = 20 * time.Second
+				}
+				logger.WarnCF("agent", "LLM transient overload, waiting before retry",
+					map[string]any{
+						"error":   err.Error(),
+						"attempt": overloadAttempt + 1,
+						"wait":    backoff.String(),
+					})
+				select {
+				case <-ctx.Done():
+					return "", iteration, ctx.Err()
+				case <-time.After(backoff):
+				}
+				response, err = callLLM()
+			}
 			if err == nil {
 				break
 			}
