@@ -27,6 +27,30 @@ func New(database *db.DB, hub *ws.Hub, sched *scheduler.Scheduler) *Handler {
 	return &Handler{db: database, hub: hub, sched: sched}
 }
 
+// parseListPaging 解析 limit/offset；page 与 page_size 为可选（与 limit/offset 二选一）。
+// 若提供 page，则 offset = (page-1)*每页条数；page_size 与 limit 同义。
+func parseListPaging(r *http.Request) (limit, offset int) {
+	q := r.URL.Query()
+	limit, _ = strconv.Atoi(q.Get("limit"))
+	offset, _ = strconv.Atoi(q.Get("offset"))
+	if ps := q.Get("page_size"); ps != "" {
+		if n, err := strconv.Atoi(ps); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	if q.Get("page") != "" {
+		p, _ := strconv.Atoi(q.Get("page"))
+		if p < 1 {
+			p = 1
+		}
+		if limit <= 0 {
+			limit = 20
+		}
+		offset = (p - 1) * limit
+	}
+	return limit, offset
+}
+
 func collaborationLimitsPayload() map[string]int {
 	return map[string]int{
 		"max_agents":                       db.MaxCollaborationAgentsPerInstance,
@@ -313,8 +337,7 @@ func (h *Handler) GetInstanceInstanceMail(w http.ResponseWriter, r *http.Request
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	limit, offset := parseListPaging(r)
 	var peerID *int64
 	if ps := strings.TrimSpace(r.URL.Query().Get("peer")); ps != "" {
 		p, err := strconv.ParseInt(ps, 10, 64)
@@ -412,11 +435,10 @@ func (h *Handler) pushUserInstanceMessage(fromInstanceID, toInstanceID, messageI
 	}
 }
 
-// serveListInternalMails 与 JWT ListMails、容器 bridge 共用（query: thread_id, limit, offset）。
+// serveListInternalMails 与 JWT ListMails、容器 bridge 共用（query: thread_id, limit, offset, page, page_size）。
 func (h *Handler) serveListInternalMails(w http.ResponseWriter, iid int64, r *http.Request) {
 	thread := r.URL.Query().Get("thread_id")
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	limit, offset := parseListPaging(r)
 	list, err := h.db.ListInternalMails(iid, thread, limit, offset)
 	if err != nil {
 		if errors.Is(err, db.ErrInternalMailListOffsetTooLarge) || errors.Is(err, db.ErrInternalMailInvalidThreadFilter) {
@@ -635,8 +657,7 @@ func (h *Handler) ContainerListInstanceMail(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	limit, offset := parseListPaging(r)
 	var peerID *int64
 	if ps := strings.TrimSpace(r.URL.Query().Get("peer")); ps != "" {
 		p, err := strconv.ParseInt(ps, 10, 64)

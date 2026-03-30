@@ -15,8 +15,7 @@ type Props = {
   onClose: () => void
 }
 
-const INTERNAL_PAGE = 80
-const CROSS_PAGE = 120
+const PAGE_SIZE = 20
 const READ_STORAGE = 'anyclaw-mailbox-read-v1'
 
 type UnifiedItem =
@@ -72,7 +71,11 @@ export default function MailboxModal({ open, instances, onClose }: Props) {
 
   const [crossRows, setCrossRows] = useState<UserInstanceMessageRow[]>([])
   const [crossLoading, setCrossLoading] = useState(false)
+  const [crossLoadingMore, setCrossLoadingMore] = useState(false)
   const [crossErr, setCrossErr] = useState<string | null>(null)
+  const [crossHasMore, setCrossHasMore] = useState(false)
+  const crossOffsetRef = useRef<Record<number, number>>({})
+  const crossExhaustedRef = useRef<Set<number>>(new Set())
   const [sendFrom, setSendFrom] = useState<number | null>(null)
   const [sendTo, setSendTo] = useState<number | null>(null)
   const [sendBody, setSendBody] = useState('')
@@ -109,7 +112,7 @@ export default function MailboxModal({ open, instances, onClose }: Props) {
           return
         }
         const settled = await Promise.allSettled(
-          ids.map((id) => getCollabMails(id, { limit: INTERNAL_PAGE, offset: offs[id] ?? 0 }))
+          ids.map((id) => getCollabMails(id, { limit: PAGE_SIZE, offset: offs[id] ?? 0 }))
         )
         const batch: InternalMailRow[] = []
         for (let i = 0; i < settled.length; i++) {
@@ -120,7 +123,7 @@ export default function MailboxModal({ open, instances, onClose }: Props) {
           const total = r.value.total
           offs[id] = (offs[id] ?? 0) + list.length
           batch.push(...list)
-          if (list.length < INTERNAL_PAGE || (typeof total === 'number' && offs[id] >= total)) {
+          if (list.length < PAGE_SIZE || (typeof total === 'number' && offs[id] >= total)) {
             internalExhaustedRef.current.add(id)
           }
         }
@@ -142,30 +145,61 @@ export default function MailboxModal({ open, instances, onClose }: Props) {
     [instanceIds]
   )
 
-  const loadCrossAll = useCallback(async () => {
-    if (instanceIds.length === 0) {
-      setCrossRows([])
-      return
-    }
-    setCrossLoading(true)
-    setCrossErr(null)
-    try {
-      const settled = await Promise.allSettled(
-        instanceIds.map((id) => getCollabInstanceMails(id, { limit: CROSS_PAGE, offset: 0 }))
-      )
-      const batches: UserInstanceMessageRow[][] = []
-      for (let i = 0; i < settled.length; i++) {
-        const r = settled[i]
-        if (r.status === 'fulfilled') batches.push(r.value.messages || [])
+  const loadCrossPage = useCallback(
+    async (reset: boolean) => {
+      if (instanceIds.length === 0) {
+        setCrossRows([])
+        setCrossHasMore(false)
+        if (reset) setCrossLoading(false)
+        return
       }
-      setCrossRows(mergeDedupe(batches))
-    } catch (e) {
-      setCrossErr(e instanceof Error ? e.message : String(e))
-      setCrossRows([])
-    } finally {
-      setCrossLoading(false)
-    }
-  }, [instanceIds])
+      if (reset) {
+        crossOffsetRef.current = {}
+        crossExhaustedRef.current = new Set()
+        setCrossLoading(true)
+        setCrossErr(null)
+      }
+      try {
+        const offs = crossOffsetRef.current
+        const ids = instanceIds.filter((id) => !crossExhaustedRef.current.has(id))
+        if (ids.length === 0) {
+          setCrossHasMore(false)
+          if (reset) setCrossRows([])
+          return
+        }
+        const settled = await Promise.allSettled(
+          ids.map((id) => getCollabInstanceMails(id, { limit: PAGE_SIZE, offset: offs[id] ?? 0 }))
+        )
+        const batch: UserInstanceMessageRow[] = []
+        for (let i = 0; i < settled.length; i++) {
+          const id = ids[i]
+          const r = settled[i]
+          if (r.status !== 'fulfilled') continue
+          const list = r.value.messages || []
+          const total = r.value.total
+          offs[id] = (offs[id] ?? 0) + list.length
+          batch.push(...list)
+          if (list.length < PAGE_SIZE || (typeof total === 'number' && offs[id] >= total)) {
+            crossExhaustedRef.current.add(id)
+          }
+        }
+        if (reset) {
+          setCrossRows(mergeDedupe([batch]))
+        } else {
+          setCrossRows((prev) => mergeDedupe([prev, batch]))
+        }
+        const anyLeft = instanceIds.some((id) => !crossExhaustedRef.current.has(id))
+        setCrossHasMore(anyLeft)
+        setCrossErr(null)
+      } catch (e) {
+        setCrossErr(e instanceof Error ? e.message : String(e))
+        if (reset) setCrossRows([])
+      } finally {
+        if (reset) setCrossLoading(false)
+      }
+    },
+    [instanceIds]
+  )
 
   useEffect(() => {
     if (!open) return
@@ -174,8 +208,8 @@ export default function MailboxModal({ open, instances, onClose }: Props) {
 
   useEffect(() => {
     if (!open) return
-    void loadCrossAll()
-  }, [open, loadCrossAll])
+    void loadCrossPage(true)
+  }, [open, loadCrossPage])
 
   useEffect(() => {
     if (!open) {
@@ -276,7 +310,7 @@ export default function MailboxModal({ open, instances, onClose }: Props) {
     if (!still) setSelectedKey(null)
   }, [unifiedList, selectedKey])
 
-  const loadMoreInternal = async () => {
+  const loadMoreInternal = useCallback(async () => {
     if (internalLoadingMore || internalLoading || !internalHasMore) return
     setInternalLoadingMore(true)
     try {
@@ -284,7 +318,26 @@ export default function MailboxModal({ open, instances, onClose }: Props) {
     } finally {
       setInternalLoadingMore(false)
     }
-  }
+  }, [internalLoadingMore, internalLoading, internalHasMore, loadInternalPage])
+
+  const loadMoreCross = useCallback(async () => {
+    if (crossLoadingMore || crossLoading || !crossHasMore) return
+    setCrossLoadingMore(true)
+    try {
+      await loadCrossPage(false)
+    } finally {
+      setCrossLoadingMore(false)
+    }
+  }, [crossLoadingMore, crossLoading, crossHasMore, loadCrossPage])
+
+  const listScrollRef = useRef<HTMLDivElement>(null)
+  const handleListScroll = useCallback(() => {
+    const el = listScrollRef.current
+    if (!el) return
+    if (el.scrollHeight - el.scrollTop - el.clientHeight > 80) return
+    void loadMoreInternal()
+    void loadMoreCross()
+  }, [loadMoreInternal, loadMoreCross])
 
   const selectedItem = useMemo(() => {
     if (!selectedKey) return null
@@ -303,7 +356,7 @@ export default function MailboxModal({ open, instances, onClose }: Props) {
       broadcastCollabEvent('instance_mail', sendFrom)
       broadcastCollabEvent('instance_mail', sendTo)
       setSendBody('')
-      await loadCrossAll()
+      await loadCrossPage(true)
     } catch (e2) {
       setCrossErr(e2 instanceof Error ? e2.message : String(e2))
     } finally {
@@ -312,6 +365,8 @@ export default function MailboxModal({ open, instances, onClose }: Props) {
   }
 
   const listLoading = internalLoading || crossLoading
+  const listLoadingMore = internalLoadingMore || crossLoadingMore
+  const listHasMore = internalHasMore || crossHasMore
 
   const listEmpty = !listLoading && unifiedList.length === 0
 
@@ -359,7 +414,7 @@ export default function MailboxModal({ open, instances, onClose }: Props) {
                 disabled={internalLoading || crossLoading}
                 onClick={() => {
                   void loadInternalPage(true)
-                  void loadCrossAll()
+                  void loadCrossPage(true)
                 }}
                 className="text-xs px-2.5 py-1 rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
               >
@@ -371,7 +426,11 @@ export default function MailboxModal({ open, instances, onClose }: Props) {
                 {[internalErr, crossErr].filter(Boolean).join(' ')}
               </div>
             )}
-            <div className="flex-1 overflow-y-auto min-h-0">
+            <div
+              ref={listScrollRef}
+              onScroll={handleListScroll}
+              className="flex-1 overflow-y-auto min-h-0"
+            >
               {listLoading && unifiedList.length === 0 ? (
                 <p className="text-slate-500 text-sm py-16 text-center">加载邮件…</p>
               ) : listEmpty ? (
@@ -469,19 +528,10 @@ export default function MailboxModal({ open, instances, onClose }: Props) {
                   })}
                 </ul>
               )}
+              {listLoadingMore && listHasMore && unifiedList.length > 0 ? (
+                <div className="py-3 text-center text-xs text-slate-500">加载更多…</div>
+              ) : null}
             </div>
-            {internalHasMore && internalMergedSorted.length > 0 && (
-              <div className="p-2 border-t border-slate-200 bg-white">
-                <button
-                  type="button"
-                  disabled={internalLoadingMore}
-                  onClick={() => void loadMoreInternal()}
-                  className="w-full py-2 rounded-lg border border-slate-200 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  {internalLoadingMore ? '加载中…' : '加载更多内部邮件'}
-                </button>
-              </div>
-            )}
           </aside>
 
           <section className="flex-1 flex flex-col min-w-0 min-h-[240px] md:min-h-0 bg-white">
