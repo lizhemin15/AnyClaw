@@ -537,9 +537,33 @@ func (d *DB) ReplaceInstanceAgents(instanceID, userID int64, agents []InstanceAg
 	return tx.Commit()
 }
 
-// ListTopologyEdges 列出无向边（返回规范化 lo/hi）
+// ListTopologyEdges 列出无向边（返回规范化 lo/hi）。读前会删除端点已不在 instance_agents 中的边，
+// 与 ReplaceInstanceAgents 中「先清空拓扑再换员工」一致，避免脏边残留导致解析/展示引用已解雇 slug。
 func (d *DB) ListTopologyEdges(instanceID int64) ([]TopologyEdgeRow, error) {
-	rows, err := d.Query(
+	tx, err := d.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	res, err := tx.Exec(`
+		DELETE e FROM instance_topology_edges e
+		WHERE e.instance_id = ?
+		AND (
+			NOT EXISTS (SELECT 1 FROM instance_agents ia WHERE ia.instance_id = e.instance_id AND ia.agent_slug = e.agent_slug_lo)
+			OR NOT EXISTS (SELECT 1 FROM instance_agents ia WHERE ia.instance_id = e.instance_id AND ia.agent_slug = e.agent_slug_hi)
+		)`, instanceID)
+	if err != nil {
+		return nil, err
+	}
+	pruned, _ := res.RowsAffected()
+	if pruned > 0 {
+		if err := d.bumpAgentTopologyVersion(tx, instanceID); err != nil {
+			return nil, err
+		}
+	}
+
+	rows, err := tx.Query(
 		`SELECT agent_slug_lo, agent_slug_hi FROM instance_topology_edges WHERE instance_id = ? ORDER BY agent_slug_lo, agent_slug_hi`,
 		instanceID,
 	)
@@ -555,7 +579,13 @@ func (d *DB) ListTopologyEdges(instanceID int64) ([]TopologyEdgeRow, error) {
 		}
 		list = append(list, r)
 	}
-	return list, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
 // ReplaceTopologyEdges 全量替换边；slug 须已存在于 instance_agents
