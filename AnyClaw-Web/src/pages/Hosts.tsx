@@ -9,6 +9,7 @@ import {
   getHostInstanceImageStatus,
   getHostMetrics,
   pullAndRestartInstances,
+  getHostPullTask,
   pruneHostImages,
   drainHost,
   getAdminInstances,
@@ -44,7 +45,8 @@ export default function Hosts() {
   const [submitting, setSubmitting] = useState(false)
   const [checking, setChecking] = useState<string | null>(null)
   const [instanceImageStatus, setInstanceImageStatus] = useState<Record<string, { update_available: boolean; image: string; instance_count: number; message?: string }>>({})
-  const [pullingInstances, setPullingInstances] = useState<string | null>(null)
+  /** 后台更新任务：hostId -> taskId，离开页面后仍可从 sessionStorage 恢复轮询 */
+  const [pullTaskByHost, setPullTaskByHost] = useState<Record<string, number>>({})
   const [pruningImages, setPruningImages] = useState<string | null>(null)
   const [draining, setDraining] = useState<string | null>(null)
   const [instances, setInstances] = useState<AdminInstance[]>([])
@@ -122,6 +124,72 @@ export default function Hosts() {
     loadHosts()
     loadInstances()
   }, [])
+
+  useEffect(() => {
+    const next: Record<string, number> = {}
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const k = sessionStorage.key(i)
+      if (k?.startsWith('anyclaw_pull_task_')) {
+        const hostId = k.slice('anyclaw_pull_task_'.length)
+        const tid = parseInt(sessionStorage.getItem(k) || '', 10)
+        if (!Number.isNaN(tid)) next[hostId] = tid
+      }
+    }
+    if (Object.keys(next).length > 0) {
+      setPullTaskByHost((prev) => ({ ...next, ...prev }))
+    }
+  }, [])
+
+  useEffect(() => {
+    const entries = Object.entries(pullTaskByHost)
+    if (entries.length === 0) return
+    let cancelled = false
+    const tick = async () => {
+      for (const [hostId, taskId] of Object.entries(pullTaskByHost)) {
+        try {
+          const t = await getHostPullTask(hostId, taskId)
+          if (cancelled) return
+          if (t.status !== 'succeeded' && t.status !== 'failed') continue
+          setPullTaskByHost((prev) => {
+            const next = { ...prev }
+            delete next[hostId]
+            return next
+          })
+          sessionStorage.removeItem(`anyclaw_pull_task_${hostId}`)
+          const hostLabel = hosts.find((x) => x.id === hostId)?.name ?? hostId
+          if (t.ok) {
+            setError('')
+            setInstanceImageStatus((prev) => ({
+              ...prev,
+              [hostId]: {
+                ...prev[hostId],
+                update_available: false,
+                image: prev[hostId]?.image ?? '',
+                instance_count: prev[hostId]?.instance_count ?? 0,
+              },
+            }))
+            alert(`${hostLabel}：${t.message}`)
+          } else {
+            const reasons = t.failed_reasons
+            const detail = t.failed_ids?.length
+              ? t.failed_ids.map((id) => (reasons?.[id] ? `#${id}: ${reasons[id]}` : `#${id}`)).join('；')
+              : ''
+            setError(`${hostLabel}：${t.message}${detail ? `（${detail}）` : ''}`)
+          }
+          loadInstances()
+          checkInstanceImageStatus(hostId)
+        } catch {
+          // 忽略瞬时网络错误
+        }
+      }
+    }
+    const id = window.setInterval(tick, 2000)
+    void tick()
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [pullTaskByHost, hosts, checkInstanceImageStatus])
 
   const checkInstanceImageStatus = useCallback(async (id: string) => {
     try {
@@ -245,35 +313,13 @@ export default function Hosts() {
       ? `确定在「${h.name}」上拉取最新实例镜像并重启 ${count} 个实例？`
       : `确定在「${h.name}」上拉取最新实例镜像？（该主机暂无运行中的实例）`
     if (!confirm(msg)) return
-    setPullingInstances(h.id)
     setError('')
     try {
       const res = await pullAndRestartInstances(h.id)
-      if (res.ok) {
-        setError('')
-        // 乐观更新：更新成功后立即标记为已最新，避免 digest 比较差异导致仍显示可更新
-        setInstanceImageStatus((prev) => ({
-          ...prev,
-          [h.id]: {
-            ...prev[h.id],
-            update_available: false,
-            image: prev[h.id]?.image ?? '',
-            instance_count: prev[h.id]?.instance_count ?? 0,
-          },
-        }))
-        alert(res.message)
-        loadInstances()
-      } else {
-        const reasons = res.failed_reasons
-        const detail = res.failed_ids?.length
-          ? res.failed_ids.map((id) => reasons?.[id] ? `#${id}: ${reasons[id]}` : `#${id}`).join('；')
-          : res.message
-        setError(`${res.message}${detail ? `（${detail}）` : ''}`)
-      }
+      setPullTaskByHost((prev) => ({ ...prev, [h.id]: res.task_id }))
+      sessionStorage.setItem(`anyclaw_pull_task_${h.id}`, String(res.task_id))
     } catch (err) {
       setError(err instanceof Error ? err.message : '更新失败')
-    } finally {
-      setPullingInstances(null)
     }
   }
 
@@ -510,7 +556,7 @@ export default function Hosts() {
                 </button>
                 <button
                   onClick={() => handleDrain(h)}
-                  disabled={!!draining || !!pullingInstances || (instanceImageStatus[h.id]?.instance_count ?? 0) === 0}
+                  disabled={!!draining || Object.keys(pullTaskByHost).length > 0 || (instanceImageStatus[h.id]?.instance_count ?? 0) === 0}
                   title="将该主机上所有实例迁移到其他主机"
                   className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 text-sm border border-amber-300 text-amber-700 rounded-lg active:bg-amber-50 disabled:opacity-50 min-h-[44px] touch-target"
                 >
@@ -519,19 +565,21 @@ export default function Hosts() {
                 <button
                   onClick={() => handlePullAndRestartInstances(h)}
                   disabled={
-                    !!pullingInstances ||
+                    !!pullTaskByHost[h.id] ||
                     (instanceImageStatus[h.id] && !instanceImageStatus[h.id].update_available)
                   }
                   title={
-                    instanceImageStatus[h.id]?.message ||
-                    (instanceImageStatus[h.id] && !instanceImageStatus[h.id].update_available
-                      ? `实例镜像已是最新 (${instanceImageStatus[h.id]?.image || ''})`
-                      : `拉取 ${instanceImageStatus[h.id]?.image || ''} 并重启该主机上 ${instanceImageStatus[h.id]?.instance_count ?? 0} 个实例`)
+                    pullTaskByHost[h.id]
+                      ? '后台更新中，可离开本页；完成后将提示结果'
+                      : instanceImageStatus[h.id]?.message ||
+                        (instanceImageStatus[h.id] && !instanceImageStatus[h.id].update_available
+                          ? `实例镜像已是最新 (${instanceImageStatus[h.id]?.image || ''})`
+                          : `拉取 ${instanceImageStatus[h.id]?.image || ''} 并重启该主机上 ${instanceImageStatus[h.id]?.instance_count ?? 0} 个实例`)
                   }
                   className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 text-sm bg-emerald-600 text-white rounded-lg active:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] touch-target"
                 >
-                  {pullingInstances === h.id
-                    ? '拉取中...'
+                  {pullTaskByHost[h.id]
+                    ? '更新中…'
                     : instanceImageStatus[h.id] === undefined
                       ? '检查中...'
                       : instanceImageStatus[h.id].update_available

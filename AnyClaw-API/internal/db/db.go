@@ -354,6 +354,21 @@ func (d *DB) migrate() error {
 	} else if n > 0 {
 		log.Printf("[db] backfilled collab_roster_slugs snapshot for %d instance(s)", n)
 	}
+	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS host_pull_tasks (
+		id BIGINT AUTO_INCREMENT PRIMARY KEY,
+		host_id VARCHAR(255) NOT NULL,
+		status VARCHAR(32) NOT NULL DEFAULT 'pending',
+		phase VARCHAR(64) NOT NULL DEFAULT '',
+		message TEXT,
+		instance_total INT NOT NULL DEFAULT 0,
+		instance_done INT NOT NULL DEFAULT 0,
+		failed_json TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+		INDEX idx_host_pull_tasks_host_status (host_id, status)
+	)`); err != nil {
+		log.Printf("[db] create host_pull_tasks: %v", err)
+	}
 	return nil
 }
 
@@ -368,6 +383,7 @@ func (d *DB) Reset() error {
 	tables := []string{
 		"instance_subscriptions", "internal_mails", "user_instance_messages", "user_instance_topology_edges", "instance_topology_edges", "instance_agents",
 		"usage_corrections", "usage_log", "activation_codes", "orders", "verification_codes", "messages", "invitations",
+		"host_pull_tasks",
 		"instances", "hosts", "users", "system_config",
 	}
 	if _, err := d.Exec("SET FOREIGN_KEY_CHECKS = 0"); err != nil {

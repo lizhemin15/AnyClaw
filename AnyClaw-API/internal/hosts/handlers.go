@@ -1,6 +1,7 @@
 package hosts
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -594,7 +595,12 @@ func (h *Handler) Drain(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"ok": failed == 0, "message": msg, "migrated": migrated, "failed": failed})
 }
 
-// PullAndRestartInstances 拉取最新镜像并重启该主机上的所有实例
+type pullTaskFailedPayload struct {
+	FailedIDs     []int64           `json:"failed_ids"`
+	FailedReasons map[int64]string `json:"failed_reasons"`
+}
+
+// PullAndRestartInstances 异步拉取最新镜像并重启该主机上的所有实例（立即返回 task_id，任务在后台执行）
 func (h *Handler) PullAndRestartInstances(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	host, err := h.db.GetHost(id)
@@ -606,6 +612,102 @@ func (h *Handler) PullAndRestartInstances(w http.ResponseWriter, r *http.Request
 		http.Error(w, `{"error":"SSH 或调度器未配置"}`, http.StatusInternalServerError)
 		return
 	}
+	if existingID, active, err := h.db.ActiveHostPullTaskID(id); err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	} else if active {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"async":           true,
+			"task_id":         existingID,
+			"already_running": true,
+			"message":         "该主机已有进行中的更新任务",
+		})
+		return
+	}
+	taskID, err := h.db.InsertHostPullTask(id)
+	if err != nil {
+		http.Error(w, `{"error":"failed to create task"}`, http.StatusInternalServerError)
+		return
+	}
+	go h.runPullAndRestartJob(taskID)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]any{
+		"async":           true,
+		"task_id":         taskID,
+		"already_running": false,
+		"message":         "已启动后台更新，可离开本页，稍后在同页查看进度",
+	})
+}
+
+// GetPullTask 查询拉取/重启任务状态
+func (h *Handler) GetPullTask(w http.ResponseWriter, r *http.Request) {
+	hostID := chi.URLParam(r, "id")
+	taskIDStr := chi.URLParam(r, "taskId")
+	taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
+	if err != nil || taskID <= 0 {
+		http.Error(w, `{"error":"invalid task id"}`, http.StatusBadRequest)
+		return
+	}
+	t, err := h.db.GetHostPullTask(taskID)
+	if err != nil || t == nil {
+		http.Error(w, `{"error":"task not found"}`, http.StatusNotFound)
+		return
+	}
+	if t.HostID != hostID {
+		http.Error(w, `{"error":"task not found"}`, http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	out := map[string]any{
+		"id":             t.ID,
+		"host_id":        t.HostID,
+		"status":         t.Status,
+		"phase":          t.Phase,
+		"message":        t.Message,
+		"instance_total": t.InstanceTotal,
+		"instance_done":  t.InstanceDone,
+	}
+	var p pullTaskFailedPayload
+	if t.FailedJSON != "" {
+		_ = json.Unmarshal([]byte(t.FailedJSON), &p)
+		if len(p.FailedIDs) > 0 {
+			out["failed_ids"] = p.FailedIDs
+		}
+		if len(p.FailedReasons) > 0 {
+			out["failed_reasons"] = p.FailedReasons
+		}
+	}
+	switch t.Status {
+	case "succeeded":
+		out["ok"] = true
+	case "failed":
+		nFail := len(p.FailedIDs)
+		if nFail == 0 {
+			out["ok"] = false
+		} else if t.InstanceTotal > 0 && nFail < t.InstanceTotal {
+			// 与旧版一致：部分实例失败但仍有成功时 ok=true
+			out["ok"] = true
+		} else {
+			out["ok"] = false
+		}
+	}
+	json.NewEncoder(w).Encode(out)
+}
+
+// runPullAndRestartJob 使用独立 context，避免用户断开 HTTP 后取消更新
+func (h *Handler) runPullAndRestartJob(taskID int64) {
+	ctx := context.Background()
+	t, err := h.db.GetHostPullTask(taskID)
+	if err != nil || t == nil {
+		return
+	}
+	host, err := h.db.GetHost(t.HostID)
+	if err != nil || host == nil {
+		_ = h.db.FinishHostPullTask(taskID, "failed", "done", "宿主机不存在", 0, 0, "")
+		return
+	}
 	image := host.DockerImage
 	if image == "" {
 		image = h.defaultInstanceImage
@@ -613,32 +715,33 @@ func (h *Handler) PullAndRestartInstances(w http.ResponseWriter, r *http.Request
 	if !strings.Contains(image, ":") {
 		image = image + ":latest"
 	}
-	instances, err := h.db.ListRunningInstancesByHostID(id)
+	instances, err := h.db.ListRunningInstancesByHostID(host.ID)
 	if err != nil {
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		_ = h.db.FinishHostPullTask(taskID, "failed", "done", "读取实例列表失败", 0, 0, "")
 		return
 	}
-	// 1. 拉取最新镜像
+	_ = h.db.UpdateHostPullTask(taskID, "running", "pulling", "正在拉取镜像…", len(instances), 0)
 	if _, err := h.checker.RunCommand(host, "docker pull "+image); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"ok": false, "message": "拉取镜像失败: " + err.Error()})
+		_ = h.db.FinishHostPullTask(taskID, "failed", "done", "拉取镜像失败: "+err.Error(), len(instances), 0, "")
 		return
 	}
-	// 2. 逐个停止并重启
-	ctx := r.Context()
 	var failed []int64
 	failedReasons := make(map[int64]string)
-	for _, inst := range instances {
+	total := len(instances)
+	for i, inst := range instances {
+		_ = h.db.UpdateHostPullTask(taskID, "running", "restarting",
+			fmt.Sprintf("正在重启实例 %d/%d (#%d)", i+1, total, inst.ID), total, i)
 		if err := h.sched.Stop(ctx, host.ID, inst.ContainerID, inst.ID, false, true); err != nil {
 			log.Printf("[hosts] stop instance %d failed: %v", inst.ID, err)
 			failed = append(failed, inst.ID)
 			failedReasons[inst.ID] = "停止容器失败: " + err.Error()
+			_ = h.db.UpdateHostPullTask(taskID, "running", "restarting",
+				fmt.Sprintf("实例 #%d 停止失败，继续后续实例", inst.ID), total, i+1)
 			continue
 		}
 		_ = h.db.UpdateInstanceStatus(inst.ID, "creating")
 		cid, err := h.sched.RunOnHost(ctx, host.ID, inst.ID, inst.Token, h.apiURL)
 		if err != nil {
-			// 重试一次（可能是瞬时网络/资源问题）
 			cid, err = h.sched.RunOnHost(ctx, host.ID, inst.ID, inst.Token, h.apiURL)
 		}
 		if err != nil {
@@ -646,19 +749,26 @@ func (h *Handler) PullAndRestartInstances(w http.ResponseWriter, r *http.Request
 			failed = append(failed, inst.ID)
 			failedReasons[inst.ID] = "启动容器失败: " + err.Error()
 			_ = h.db.UpdateInstanceStatus(inst.ID, "error")
+			_ = h.db.UpdateHostPullTask(taskID, "running", "restarting",
+				fmt.Sprintf("实例 #%d 启动失败", inst.ID), total, i+1)
 			continue
 		}
 		_ = h.db.UpdateInstanceContainer(inst.ID, cid, host.ID)
+		_ = h.db.UpdateHostPullTask(taskID, "running", "restarting",
+			fmt.Sprintf("已重启 %d/%d", i+1, total), total, i+1)
 	}
-	// 3. 清理悬空镜像（<none> 的旧版本）
+	_ = h.db.UpdateHostPullTask(taskID, "running", "pruning", "正在清理悬空镜像…", total, total)
 	pruneImagesOnHost(h.checker, host)
-	msg := "已完成"
+	payload := pullTaskFailedPayload{FailedIDs: failed, FailedReasons: failedReasons}
+	failedBytes, _ := json.Marshal(payload)
+	failedStr := string(failedBytes)
 	if len(failed) > 0 {
-		msg = "部分实例重启失败"
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"ok": len(failed) < len(instances), "message": msg, "failed_ids": failed, "failed_reasons": failedReasons})
+		msg := "部分实例重启失败"
+		if len(failed) == total {
+			msg = "全部实例重启失败"
+		}
+		_ = h.db.FinishHostPullTask(taskID, "failed", "done", msg, total, total, failedStr)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"ok": true, "message": msg})
+	_ = h.db.FinishHostPullTask(taskID, "succeeded", "done", "已完成", total, total, "")
 }

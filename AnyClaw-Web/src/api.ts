@@ -585,8 +585,30 @@ export async function getHostMetrics(id: string): Promise<HostMetrics> {
   return fetchApi<HostMetrics>(`/admin/hosts/${id}/metrics`);
 }
 
-export async function pullAndRestartInstances(id: string): Promise<{ ok: boolean; message: string; failed_ids?: number[]; failed_reasons?: Record<number, string> }> {
-  return fetchApi<{ ok: boolean; message: string; failed_ids?: number[]; failed_reasons?: Record<number, string> }>(`/admin/hosts/${id}/pull-and-restart-instances`, { method: 'POST' });
+export async function pullAndRestartInstances(id: string): Promise<{
+  async: boolean;
+  task_id: number;
+  already_running?: boolean;
+  message: string;
+}> {
+  return fetchApi(`/admin/hosts/${id}/pull-and-restart-instances`, { method: 'POST' });
+}
+
+export interface HostPullTaskStatus {
+  id: number;
+  host_id: string;
+  status: 'pending' | 'running' | 'succeeded' | 'failed';
+  phase: string;
+  message: string;
+  instance_total: number;
+  instance_done: number;
+  ok?: boolean;
+  failed_ids?: number[];
+  failed_reasons?: Record<number, string>;
+}
+
+export async function getHostPullTask(hostId: string, taskId: number): Promise<HostPullTaskStatus> {
+  return fetchApi<HostPullTaskStatus>(`/admin/hosts/${hostId}/pull-tasks/${taskId}`);
 }
 
 export async function pruneHostImages(id: string): Promise<{ ok: boolean; message: string }> {

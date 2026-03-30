@@ -301,6 +301,7 @@ func runApp(configPath string, cfg *config.Config, database *db.DB) {
 		r.Get("/{id}/instance-image-status", hostHandler.InstanceImageStatus)
 		r.Get("/{id}/metrics", hostHandler.HostMetrics)
 		r.Post("/{id}/pull-and-restart-instances", hostHandler.PullAndRestartInstances)
+		r.Get("/{id}/pull-tasks/{taskId}", hostHandler.GetPullTask)
 		r.Post("/{id}/prune-images", hostHandler.PruneImages)
 		r.Post("/{id}/drain", hostHandler.Drain)
 	})
