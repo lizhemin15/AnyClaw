@@ -16,8 +16,8 @@ type UsageByProvider interface {
 // ModelScheduler 模型渠道调度器。
 // 选渠道逻辑：
 //  1. 过滤日 tokens 超限的渠道
-//  2. 负载 = token 用量/上限比例 + 进行中请求数；各渠道上限不同，用比例比较
-//  3. 负载接近时轮转，避免只薅同一渠道
+//  2. 按「已使用 token / 日 token 上限」比例选最低者；无上限时比例视为接近 0
+//  3. 比例相同（或浮点视为相等）时轮转，避免总打同一渠道
 //  4. 通过 QPS 令牌桶做最后过滤；全部 QPS 受限时仍选一个（允许上游 429）
 //
 // 不再因上游 5xx/429/保活失败等自动进入冷却；管理端「系统自动关闭」已取消。
@@ -186,41 +186,25 @@ func (s *ModelScheduler) Pick(model string, candidates []config.ChannelEndpoint)
 
 	healthy := available
 
-	// 负载 = token 用量/上限比例 + 进行中请求数；各渠道上限不同，用比例才能比较
 	tokenUsage := s.getTokenUsageToday(healthy)
-	var minLoad float64 = -1
+	minRatio := -1.0
 	for _, ep := range healthy {
-		used := tokenUsage[providerKey(ep)]
-		limit := ep.DailyTokensLimit
-		if limit <= 0 {
-			limit = 1e12 // 无上限视为超大，比例趋近 0
-		}
-		ratio := float64(used) / float64(limit)
-		inFlight := s.usage[s.endpointKey(ep)]
-		load := ratio + float64(inFlight)*0.1 // 比例为主，进行中请求为辅
-		if minLoad < 0 || load < minLoad {
-			minLoad = load
+		r := dailyUsageRatio(tokenUsage, ep)
+		if minRatio < 0 || r < minRatio {
+			minRatio = r
 		}
 	}
 
-	// 收集负载接近最低的候选（允许差距 0.2，避免只薅同一渠道）
-	loadTolerance := 0.2
+	const ratioEpsilon = 1e-9
 	best := make([]config.ChannelEndpoint, 0, len(healthy))
 	for _, ep := range healthy {
-		used := tokenUsage[providerKey(ep)]
-		limit := ep.DailyTokensLimit
-		if limit <= 0 {
-			limit = 1e12
-		}
-		ratio := float64(used) / float64(limit)
-		inFlight := s.usage[s.endpointKey(ep)]
-		load := ratio + float64(inFlight)*0.1
-		if load <= minLoad+loadTolerance {
+		r := dailyUsageRatio(tokenUsage, ep)
+		if r <= minRatio+ratioEpsilon {
 			best = append(best, ep)
 		}
 	}
 
-	// 用 counter 轮转起始位，避免等负载时永远选同一个渠道
+	// 用 counter 轮转起始位，避免比例相同时永远选同一个渠道
 	n := uint64(len(best))
 	start := int(s.counter % n)
 	s.counter++
@@ -260,6 +244,16 @@ func providerKey(ep config.ChannelEndpoint) string {
 		return ep.ChannelName
 	}
 	return ep.APIBase
+}
+
+// dailyUsageRatio 返回 已使用 token / 日上限；无上限时视为极大分母，比例趋近 0。
+func dailyUsageRatio(usage map[string]int64, ep config.ChannelEndpoint) float64 {
+	used := usage[providerKey(ep)]
+	limit := ep.DailyTokensLimit
+	if limit <= 0 {
+		limit = 1e12
+	}
+	return float64(used) / float64(limit)
 }
 
 func (s *ModelScheduler) getTokenUsageToday(candidates []config.ChannelEndpoint) map[string]int64 {
