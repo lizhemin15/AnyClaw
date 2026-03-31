@@ -21,7 +21,7 @@ func (t *InternalMailSendTool) Name() string {
 }
 
 func (t *InternalMailSendTool) Description() string {
-	return "Send an internal mail to another agent. Only direct neighbors in the configured topology can receive. Use collab_resolve_peer first if you only have a display name. Size limits (thread_id, subject, body in KB) are in collab_get_roster.limits."
+	return "Send an internal mail to another agent. Only direct neighbors in the configured topology can receive. Use collab_resolve_peer first if you only have a display name. Size limits (thread_id, subject, body in KB) are in collab_get_roster.limits. Do not use for automatic multi-round ping-pong with a neighbor unless the user explicitly asked for continued back-and-forth; one-shot delivery or a single acknowledgment is enough when the user only asked to pass one message."
 }
 
 func (t *InternalMailSendTool) Parameters() map[string]any {
@@ -404,7 +404,7 @@ func (t *CollabSendInstanceMessageTool) Name() string {
 }
 
 func (t *CollabSendInstanceMessageTool) Description() string {
-	return "Send a message to another instance (another lobster) linked in peer_instances (account instance-to-instance topology). API enforces that link—not the same-instance edges array. Body size cap: collab_get_roster.limits (max_instance_message_body_kb). Resolve to_instance_id via collab_get_roster or collab_find_peer_instance."
+	return "Send a message to another instance (another lobster) linked in peer_instances (account instance-to-instance topology). API enforces that link—not the same-instance edges array. Body size cap: collab_get_roster.limits (max_instance_message_body_kb). Resolve to_instance_id via collab_get_roster or collab_find_peer_instance. Do not use for automatic multi-round ping-pong with a peer instance unless the user explicitly asked for continued back-and-forth; one-shot delivery or a single acknowledgment is enough when the user only asked to pass one message."
 }
 
 func (t *CollabSendInstanceMessageTool) Parameters() map[string]any {

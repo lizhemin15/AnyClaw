@@ -638,7 +638,7 @@ func (al *AgentLoop) ProcessHeartbeat(
 	}
 	userMsg := content
 	if al.cfg.Channels.AnyClawBridge.IsEnabled() {
-		userMsg = `[跨实例收件] 若 collab_get_roster 的 peer_instances 非空：请先 collab_list_instance_messages（limit 20）检查是否有未处理的跨实例消息；若有，向用户简要汇报或代为回复（collab_send_instance_message）。无新消息且 HEARTBEAT.md 无其它事项则 HEARTBEAT_OK。
+		userMsg = `[跨实例收件] 若 collab_get_roster 的 peer_instances 非空：请先 collab_list_instance_messages（limit 20）检查是否有未处理的跨实例消息；若有，向用户简要汇报。仅在用户曾明确要求代答或单次任务必须回对方一句时，才可使用 collab_send_instance_message；禁止在未获用户要求时与对方多轮互发。无新消息且 HEARTBEAT.md 无其它事项则 HEARTBEAT_OK。
 
 ` + content
 	}
@@ -773,7 +773,7 @@ func (al *AgentLoop) processInternalMailMessage(ctx context.Context, msg bus.Inb
 		Channel:         "internal_mail",
 		ChatID:          msg.ChatID,
 		UserMessage:     msg.Content,
-		DefaultResponse: "Internal mail processed. Use internal_mail_send to reply or forward (neighbor only).",
+		DefaultResponse: "Internal mail processed. Brief the user if needed; do not use internal_mail_send to continue with the neighbor unless the user explicitly asked for back-and-forth.",
 		EnableSummary:   false,
 		SendResponse:    false,
 	})
@@ -809,7 +809,7 @@ func (al *AgentLoop) processInstanceMailMessage(ctx context.Context, msg bus.Inb
 		Channel:         "instance_mail",
 		ChatID:          msg.ChatID,
 		UserMessage:     msg.Content,
-		DefaultResponse: "跨实例消息已处理。回复对方请使用 collab_send_instance_message 或 collab_find_peer_instance。",
+		DefaultResponse: "跨实例消息已处理。向用户简要说明即可；除非用户明确要求与对方来回沟通，勿再用 collab_send_instance_message 主动续写多轮。",
 		EnableSummary:   false,
 		SendResponse:    false,
 	})
