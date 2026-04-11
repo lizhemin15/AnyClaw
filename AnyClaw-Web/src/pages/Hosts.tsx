@@ -386,7 +386,7 @@ export default function Hosts() {
     s === 'online' ? 'bg-green-100 text-green-800' : s === 'error' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-700'
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="w-full min-w-0">
       <div className="flex flex-col gap-4 mb-4">
         <h1 className="text-xl font-semibold text-slate-800">服务器</h1>
         <div className="flex flex-col sm:flex-row gap-2 sm:justify-end sm:items-center">

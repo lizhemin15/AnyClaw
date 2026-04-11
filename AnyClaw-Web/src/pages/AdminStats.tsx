@@ -70,7 +70,7 @@ export default function AdminStats() {
   )
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="w-full min-w-0">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
         <div>
           <h1 className="text-xl font-semibold text-slate-800">使用统计</h1>

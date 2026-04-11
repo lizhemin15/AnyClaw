@@ -419,7 +419,7 @@ export default function AdminConfig() {
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto">
+      <div className="w-full min-w-0">
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-8">
           <div className="animate-pulse space-y-4">
             <div className="h-6 bg-slate-200 rounded w-1/4" />
@@ -432,7 +432,7 @@ export default function AdminConfig() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="w-full min-w-0">
       <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold text-slate-800">AI配置</h1>

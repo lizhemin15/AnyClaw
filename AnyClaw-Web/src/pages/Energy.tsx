@@ -130,7 +130,7 @@ export default function Energy() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="w-full min-w-0">
       <h1 className="text-xl font-semibold text-slate-800 mb-4">用户管理</h1>
       <p className="text-sm text-slate-500 mb-4">
         添加用户、设置权限（普通用户/管理员）、充值金币。用户扫码付款并备注邮箱后，在此根据付款记录人工审核并充值。
